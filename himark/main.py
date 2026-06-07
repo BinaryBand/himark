@@ -1,44 +1,105 @@
-test_cases = [
-    "[a]",
-    "[abc]",
-    "[a||c]",
-    "[hello||world]",
-    "[hello][ ..][world]",
-    "[a..z][.][a..z]",
-    "[a..z]",
-    "[A..Z]",
-    "[a..Z]",
-    "[a..c||H]",
-    "[a..c||F..H]",
-    "[..]",
-    "[0..]",
-    "[a..]",
-    "[ ..]",
-    "[5..99]",
-    "[0..9](b10)",
-    "[0..f](hex)",
-    "[0..v](b32)",
-    "[1..z](b58)",
-    "[A../](b64)",
-    "[hello](i)",
-    "[0..99]",
-    "[0..ff](hex)",
-    "[0..99](pad:2)",
-    "[0..ff](hex, pad:2)",
-    "[f..fff](hex, pad:4)",
-    "[[a]]",
-    "[[a..z]]",
-    "[[abc]]",
-    "[[hello||world]]",
-    "[a](1..3)",
-    "<<foo>>",
-    "{{ . }}",
-    "{{ 1 }}",
-    "{{ 1.2 }}",
-    "{{ 1.2..3.1 }}",
-    "{{ :tada: }}",
-    "{{ $\pi$ }}"
-]
+test_cases = {
+    "Basic literals": [
+        "[a]",
+        "[abc]",
+        "[a||c]",
+        "[hello||world]",
+    ],
+    "Multi-token sequences": [
+        "[hello][ ..][world]",
+        "[a..z][.][a..z]",
+        "[hello][ ..][world]",
+    ],
+    "Ranges": [
+        "[a..z]",
+        "[A..Z]",
+        "[a..Z]",
+        "[a..c||H]",
+        "[a..c||F..H]",
+        "[A..z]",       # includes punctuation codepoints 91-96
+    ],
+    "Shortcuts": [
+        "[..]",
+        "[0..]",
+        "[a..]",
+        "[ ..]",
+    ],
+    "Integer value ranges": [
+        "[5..99]",
+        "[0..99]",
+    ],
+    "Alternate alphabets": [
+        "[0..9](b10)",
+        "[0..f](hex)",
+        "[0..v](b32)",
+        "[1..z](b58)",
+        "[A../](b64)",
+        "[hello](i)",
+    ],
+    "Padded ranges": [
+        "[0..ff](hex)",
+        "[0..99](pad:2)",
+        "[0..ff](hex, pad:2)",
+        "[f..fff](hex, pad:4)",
+    ],
+    "Negation": [
+        "[[a]]",
+        "[[a..z]]",
+        "[[abc]]",
+        "[[hello||world]]",
+        "[[a||b||c]]",
+    ],
+    "Repetition": [
+        "[a]",
+        "[a](2)",
+        "[a](1..)",
+        "[a](0..)",
+        "[a](1..3)",
+        "[a](..3)",
+        "[a||b](2)",
+        "[a](0.., ?)",
+    ],
+    "Varied repetition": [
+        "[a](n)[b](n)",
+        "[a](2..n)[b](n..3)",
+        "[a](n)[b](n)[c](m)[d](m)",
+    ],
+    "Escapes": [
+        r"[\[]",
+        r"[\]]",
+        r"[\\]",
+        r"[\t]",
+        r"[\n]",
+        r"[\r]",
+    ],
+    "Anchors": [
+        "^[a..z]",
+        "[a..z]$",
+        "^^[a..z]$$",
+    ],
+    "Separators": [
+        "<</>>",
+        "<<foo>>",
+        "[W<</>>Ex]",
+        "[W]<</>>[Ex]",
+    ],
+    "Template variables": [
+        "{{ . }}",
+        "{{ 1 }}",
+        "{{ 1.2 }}",
+        "{{ 1.2..3.1 }}",
+        "{{ :tada: }}",
+        "{{ $\\pi$ }}",
+        "{{ n }}",
+    ],
+    "Transformer statements": [
+        "[selector] => <template>{{ . }}</template>",
+        "^<<#>>$ => <h1>{{ . }}</h1>",
+        "[a..z](n) => <b>{{ . }}</b>",
+        "[done] => {{ . }} {{ :tada: }}",
+        "[0..][px||em||rem] => {{ 1 }}",
+    ],
+}
 
 
 class HMKNode:
@@ -62,8 +123,8 @@ def parse_hmk_recursive(text):
     import re
 
     parenthesis = r"\(([^)]+)\)"
-    single_brackets = r"\[([^\]]+)\]"
-    double_brackets = r"\[\[([^\]]+)\]\]"
+    single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"
+    double_brackets = r"\[\[((?:[^\]\\]|\\.)+)\]\]"
     brackets = f"{double_brackets}|{single_brackets}"
     brackets_with_opts = f"{brackets}(?:{parenthesis})?"
     double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
@@ -124,13 +185,14 @@ def main():
     print("=" * 70)
     print("HMK Recursive Parser - AST Output")
     print("=" * 70)
-    print()
 
-    for test in test_cases:
-        print(f"Input: {test!r}")
-        ast = parse_hmk_recursive(test)
-        print_tree(ast)
-        print()
+    for group, cases in test_cases.items():
+        print(f"\n--- {group} ---\n")
+        for test in cases:
+            print(f"Input: {test!r}")
+            ast = parse_hmk_recursive(test)
+            print_tree(ast)
+            print()
 
 
 if __name__ == "__main__":
