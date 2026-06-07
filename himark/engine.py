@@ -2,6 +2,10 @@
 
 from dataclasses import dataclass, field
 from himark.node import HMKNode
+from himark.utils.alphabet import ALPHABETS as _ALPHABETS
+from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
+from himark.utils.alphabet import alpha_value as _alpha_value
+from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
 
 
 @dataclass
@@ -273,13 +277,6 @@ def _match_integer_range(lo: int, hi: int, text: str, pos: int, pad: int | None 
     return None
 
 
-def _alpha_value(s: str, alphabet: str) -> int:
-    v = 0
-    for c in s:
-        v = v * len(alphabet) + alphabet.index(c)
-    return v
-
-
 def _match_alphabet_range(
     start: str,
     end: str,
@@ -294,7 +291,7 @@ def _match_alphabet_range(
     if not start or not end:
         return None
     # Endpoints may be multi-character values (e.g. 0..ff in hex).
-    if not all(c in alpha for c in start) or not all(c in alpha for c in end):
+    if not _all_in_alphabet(start, alpha) or not _all_in_alphabet(end, alpha):
         return None
     lo, hi = _alpha_value(start, alpha), _alpha_value(end, alpha)
     zero = alpha[0]
