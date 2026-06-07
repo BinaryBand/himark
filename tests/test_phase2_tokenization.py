@@ -2,16 +2,15 @@ import pytest
 pytest.importorskip("hypothesis")
 from hypothesis import given, strategies as st
 
-from himark.parser import parse
+from himark.parser import parse, phase2
 
 
 @given(st.text(min_size=1, max_size=30, alphabet=st.characters(blacklist_characters="[]{}<>", min_codepoint=32, max_codepoint=126)))
 def test_plain_text_becomes_leaf(s):
-    tree, _ = parse(s)
-    # If there are no bracket/chevron/brace matches, the root should contain a single leaf
-    # Note: phase2 returns a root with either children or a single leaf child
+    # Tests phase2 tokenization in isolation — bypasses phase1 stripping.
+    # (The full parse() pipeline strips outer whitespace per spec, so it cannot round-trip strings like '0 '.)
+    tree = phase2.parse(s)
     assert tree.type == "root"
-    # The concatenation of leaf children should equal input when no special tokens are present
     reconstructed = "".join(c.content for c in tree.children)
     assert reconstructed == s
 
