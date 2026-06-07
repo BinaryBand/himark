@@ -19,8 +19,8 @@ def test_sequence_of_bracketed_tokens_preserves_order(tokens):
     assert contents == tokens
 
 
-def test_group_numbering_placeholder_xfail():
-    # Placeholder for future group-numbering semantics described in docs/HMK.md
-    import pytest
-
-    pytest.xfail("Phase 3 (group numbering) not implemented yet; placeholder test.")
+def test_group_numbering_basic():
+    from himark.engine import execute
+    pattern_tree, template_tree = parse("[0..9](1..)[px||em||rem] => {{ 1 }}")
+    results = execute(pattern_tree, "12px solid", template_tree)
+    assert results == ["12"]
