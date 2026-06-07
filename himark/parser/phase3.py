@@ -34,7 +34,9 @@ def _refine_child(node: HMKNode, parent_type: str) -> HMKNode:
     if parent_type == "double_braces":
         return _parse_template_expr(node.content)
 
-    return node  # double_chevrons, root — deferred
+    if parent_type == "double_chevrons":
+        return HMKNode("literal", node.content)
+    return node  # root — deferred
 
 
 def _parse_bracket_leaf(content: str) -> HMKNode:

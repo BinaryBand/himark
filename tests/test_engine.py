@@ -203,3 +203,70 @@ def test_full_match_template_is_identity(s):
     plain       = run("[a..z](1..)", s)
     transformed = run("[a..z](1..) => {{ . }}", s)
     assert plain == transformed
+
+
+# ---------------------------------------------------------------------------
+# Separators
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    ("<<,>>",   "a,b,c",             ["a", "b", "c"]),
+    ("<<,>>",   ",a,",               ["", "a", ""]),
+    ("<</>>",   "red/green/blue",     ["red", "green", "blue"]),
+    ("<<foo>>", "redfoogreenfooblue", ["red", "green", "blue"]),
+])
+def test_separator(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.lists(st.text(min_size=1, alphabet="abcde"), min_size=1))
+def test_separator_parts_reassemble(parts):
+    target = ",".join(parts)
+    assert run("<<,>>", target) == parts
+
+
+# ---------------------------------------------------------------------------
+# Negation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    ("[[a]]",     "bcde",            ["bcde"]),
+    ("[[a]]",     "bcade",           ["bc", "de"]),
+    ("[[a]]",     "a",               []),
+    ("[[a..z]]",  "ABCdeF",          ["ABC", "F"]),
+    ("[[hello]]", "say hello world", ["say ", " world"]),
+    ("[[a||b]]",  "cdab",            ["cd"]),
+])
+def test_negation(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1))
+def test_negation_single_char_never_contains_excluded(s):
+    for m in run("[[a]]", s):
+        assert "a" not in m
+
+
+@given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1))
+def test_negation_lowercase_range_never_contains_lowercase(s):
+    for m in run("[[a..z]]", s):
+        assert all(not c.islower() for c in m)
+
+
+# ---------------------------------------------------------------------------
+# Captures
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    ("[0..9](1..)[px||em||rem] => {{ 1 }}",           "12px solid",  ["12"]),
+    ("[0..9](1..)[px||em||rem] => {{ 2 }}",           "12px solid",  ["px"]),
+    ("[a..z](1..)[.][a..z](1..) => {{ 1 }}.{{ 3 }}", "word.word ok", ["word.word"]),
+    ("[a..z](1..) => {{ 1 }}",                        "hello world", ["hello", "world"]),
+])
+def test_captures(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1))
+def test_capture_group1_identity(s):
+    assert run("[a..z](1..)", s) == run("[a..z](1..) => {{ 1 }}", s)

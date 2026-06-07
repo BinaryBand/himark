@@ -12,6 +12,13 @@ class Match:
     groups: list[str] = field(default_factory=list)
 
 
+class _SkipTo:
+    """Sentinel: negation found its excluded content at the scan start; skip past it."""
+    __slots__ = ("pos",)
+    def __init__(self, pos: int) -> None:
+        self.pos = pos
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -32,50 +39,86 @@ def execute(
 # ---------------------------------------------------------------------------
 
 def _find_matches(tree: HMKNode, text: str) -> list[Match]:
+    # Separator-only root: split mode
+    if (
+        tree.type == "root"
+        and len(tree.children) == 1
+        and tree.children[0].type == "double_chevrons"
+    ):
+        return _split_by_separator(tree.children[0], text)
+
     matches = []
     pos = 0
     while pos < len(text):
-        end = _match_node(tree, text, pos)
-        if end is not None and end > pos:
-            matches.append(Match(text[pos:end], pos, end))
+        captures: list[str] = []
+        end = _match_node(tree, text, pos, captures)
+        if isinstance(end, _SkipTo):
+            pos = end.pos
+        elif end is not None and end > pos:
+            matches.append(Match(text[pos:end], pos, end, captures))
             pos = end
         else:
             pos += 1
     return matches
 
 
-def _match_node(node: HMKNode, text: str, pos: int) -> int | None:
+def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
+    if not node.children:
+        return []
+    sep = node.children[0].content
+    parts = text.split(sep)
+    matches, pos = [], 0
+    for part in parts:
+        matches.append(Match(part, pos, pos + len(part)))
+        pos += len(part) + len(sep)
+    return matches
+
+
+def _match_node(
+    node: HMKNode, text: str, pos: int, captures: list[str] | None = None
+) -> int | _SkipTo | None:
     if node.type == "root":
-        return _match_sequence(node.children, text, pos)
+        return _match_sequence(node.children, text, pos, captures)
     if node.type == "single_brackets":
-        return _match_bracket(node, text, pos)
+        return _match_bracket(node, text, pos, captures)
     if node.type == "double_brackets":
-        raise NotImplementedError("Negation [[...]] not yet supported")
+        return _match_bracket_negated(node, text, pos)
     if node.type == "double_chevrons":
-        raise NotImplementedError("Separators <<...>> not yet supported")
+        # Sequence context: match the separator literal and advance past it
+        if not node.children:
+            return None
+        s = node.children[0].content
+        return pos + len(s) if text[pos : pos + len(s)] == s else None
     if node.type == "leaf":
         s = node.content
-        return pos + len(s) if text[pos:pos + len(s)] == s else None
+        return pos + len(s) if text[pos : pos + len(s)] == s else None
     return None
 
 
-def _match_sequence(nodes: list[HMKNode], text: str, pos: int) -> int | None:
+def _match_sequence(
+    nodes: list[HMKNode], text: str, pos: int, captures: list[str] | None = None
+) -> int | _SkipTo | None:
     current = pos
     for node in nodes:
-        end = _match_node(node, text, current)
+        end = _match_node(node, text, current, captures)
         if end is None:
             return None
+        if isinstance(end, _SkipTo):
+            return end  # propagate to _find_matches to skip past excluded content
         current = end
     return current
 
 
-def _match_bracket(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_bracket(
+    node: HMKNode, text: str, pos: int, captures: list[str] | None = None
+) -> int | None:
     if not node.children:
         return None
     content = node.children[0]
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options)
 
+    start_pos = pos
     positions = [pos]
     current = pos
     count = 0
@@ -89,7 +132,29 @@ def _match_bracket(node: HMKNode, text: str, pos: int) -> int | None:
 
     if count < min_count:
         return None
-    return positions[min_count] if lazy else positions[-1]
+    result = positions[min_count] if lazy else positions[-1]
+    if captures is not None:
+        captures.append(text[start_pos:result])
+    return result
+
+
+def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo | None:
+    if not node.children:
+        return None
+    content = node.children[0]
+    start = pos
+    while pos < len(text):
+        inner_end = _match_content(content, text, pos)
+        if inner_end is not None:
+            break  # excluded content found — stop the run
+        pos += 1
+    if pos > start:
+        return pos
+    # Zero-length run: excluded content is right here — skip past it atomically
+    inner_end = _match_content(content, text, start)
+    if inner_end is not None and inner_end > start:
+        return _SkipTo(inner_end)
+    return _SkipTo(start + 1)
 
 
 def _match_content(node: HMKNode, text: str, pos: int) -> int | None:
