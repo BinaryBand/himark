@@ -15,6 +15,7 @@ class Match:
     start: int
     end: int
     groups: list[str] = field(default_factory=list)
+    group_spans: list[tuple[int, int]] = field(default_factory=list)  # (start, end) relative to match.start
     bindings: dict[str, int] = field(default_factory=dict)
 
 
@@ -77,13 +78,15 @@ def _find_matches(tree: HMKNode, text: str) -> list[Match]:
         found = False
         for bindings in iter_bindings(specs, remaining):
             captures: list[str] = []
-            end = _match_node(tree, text, pos, captures, bindings)
+            capture_spans: list[tuple[int, int]] = []
+            end = _match_node(tree, text, pos, captures, bindings, capture_spans)
             if isinstance(end, _SkipTo):
                 pos = end.pos
                 found = True
                 break
             if end is not None and end > pos:
-                matches.append(Match(text[pos:end], pos, end, captures, bindings))
+                rel_spans = [(s - pos, e - pos) for s, e in capture_spans]
+                matches.append(Match(text[pos:end], pos, end, captures, rel_spans, bindings))
                 pos = end
                 found = True
                 break
@@ -110,11 +113,12 @@ def _match_node(
     pos: int,
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
+    capture_spans: list[tuple[int, int]] | None = None,
 ) -> int | _SkipTo | None:
     if node.type == "root":
-        return _match_sequence(node.children, text, pos, captures, bindings)
+        return _match_sequence(node.children, text, pos, captures, bindings, capture_spans)
     if node.type == "single_brackets":
-        return _match_bracket(node, text, pos, captures, bindings)
+        return _match_bracket(node, text, pos, captures, bindings, capture_spans)
     if node.type == "double_brackets":
         return _match_bracket_negated(node, text, pos)
     if node.type == "double_chevrons":
@@ -143,10 +147,11 @@ def _match_sequence(
     pos: int,
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
+    capture_spans: list[tuple[int, int]] | None = None,
 ) -> int | _SkipTo | None:
     current = pos
     for node in nodes:
-        end = _match_node(node, text, current, captures, bindings)
+        end = _match_node(node, text, current, captures, bindings, capture_spans)
         if end is None:
             return None
         if isinstance(end, _SkipTo):
@@ -161,6 +166,7 @@ def _match_bracket(
     pos: int,
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
+    capture_spans: list[tuple[int, int]] | None = None,
 ) -> int | None:
     if not node.children:
         return None
@@ -188,6 +194,8 @@ def _match_bracket(
     result = positions[min_count] if lazy else positions[-1]
     if captures is not None:
         captures.append(text[start_pos:result])
+    if capture_spans is not None:
+        capture_spans.append((start_pos, result))
     return result
 
 
@@ -456,6 +464,15 @@ def _render(template_tree: HMKNode, match: Match) -> str:
             elif expr.type == "group_ref":
                 idx = expr.metadata["index"][0] - 1
                 parts.append(match.groups[idx] if idx < len(match.groups) else "")
+            elif expr.type == "span_ref":
+                s_idx = expr.metadata["start"][0] - 1  # top-level group index (0-based)
+                e_idx = expr.metadata["end"][0] - 1
+                if s_idx < len(match.group_spans) and e_idx < len(match.group_spans):
+                    s = match.group_spans[s_idx][0]
+                    e = match.group_spans[e_idx][1]
+                    parts.append(match.text[s:e])
+                else:
+                    parts.append("")
             elif expr.type == "var_ref":
                 val = match.bindings.get(expr.content)
                 parts.append(str(val) if val is not None else "")

@@ -350,8 +350,8 @@ class TestCaptures:
         assert run("[a..z](1..)[0..9](1..) => {{ 1 }}", "abc123") == ["abc"]
         # Note: group 1 is the first [...] bracket, not a wrapper
 
-    # def test_span_reference(self):  # span-ref rendering not yet implemented
-    #     assert run("[a][b][c] => {{ 1.1..3.1 }}", "abc") == ["abc"]
+    def test_span_reference(self):
+        assert run("[a][b][c] => {{ 1.1..3.1 }}", "abc") == ["abc"]
 
 
 # ── Separators ───────────────────────────────────────────────────────────────
