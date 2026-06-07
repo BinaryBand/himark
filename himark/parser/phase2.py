@@ -7,16 +7,16 @@ _parenthesis = r"\(([^)]+)\)"
 _single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"
 _double_brackets = r"\[\[((?:[^\]\\]|\\.)+)\]\]"
 _brackets = f"{_double_brackets}|{_single_brackets}"
-_brackets_with_opts = f"{_brackets}(?:{_parenthesis})?"
 _double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
 _double_braces = r"{{((?:[^}]|}[^}])*)}}"
 
 _PATTERN = re.compile(
-    f"{_brackets_with_opts}|{_double_chevrons}|{_double_braces}"
+    f"{_brackets}|{_double_chevrons}|{_double_braces}"
 )
+_OPTION_GROUP = re.compile(_parenthesis)
 
-# Maps regex group index → node type (group 3 is options, handled separately)
-_GROUP_TYPES = ["double_brackets", "single_brackets", "options", "double_chevrons", "double_braces"]
+# Maps regex group index → node type
+_GROUP_TYPES = ["double_brackets", "single_brackets", "double_chevrons", "double_braces"]
 
 
 def parse(text: str) -> HMKNode:
@@ -47,11 +47,23 @@ def parse(text: str) -> HMKNode:
 
         node = HMKNode(node_type, content, parse(content).children)
 
-        if matched_idx == 1 and groups[2]:  # single_brackets with options
-            node.metadata["options"] = parse(groups[2]).children
+        if node_type == "single_brackets":
+            # Consume one or more trailing option groups, e.g. [a](hex)(1..)
+            option_pos = match.end()
+            option_nodes = []
+            while True:
+                opt_match = _OPTION_GROUP.match(text, option_pos)
+                if not opt_match:
+                    break
+                option_nodes.extend(parse(opt_match.group(1)).children)
+                option_pos = opt_match.end()
+            if option_nodes:
+                node.metadata["options"] = option_nodes
+            pos = option_pos
+        else:
+            pos = match.end()
 
         nodes.append(node)
-        pos = match.end()
 
     if leaf_start is not None:
         nodes.append(HMKNode("leaf", text[leaf_start:]))

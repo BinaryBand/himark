@@ -137,13 +137,15 @@ def _match_bracket(
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options)
 
-    ci = _parse_case_insensitive(options)
+    ci       = _parse_case_insensitive(options)
+    alphabet = _parse_alphabet(options)
+    pad      = _parse_pad(options)
     start_pos = pos
     positions = [pos]
     current = pos
     count = 0
     while max_count is None or count < max_count:
-        end = _match_content(content, text, current, ci)
+        end = _match_content(content, text, current, ci, alphabet, pad)
         if end is None or end == current:
             break
         count += 1
@@ -177,7 +179,14 @@ def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo 
     return _SkipTo(start + 1)
 
 
-def _match_content(node: HMKNode, text: str, pos: int, ci: bool = False) -> int | None:
+def _match_content(
+    node: HMKNode,
+    text: str,
+    pos: int,
+    ci: bool = False,
+    alphabet: str | None = None,
+    pad: int | None = None,
+) -> int | None:
     if pos >= len(text):
         return None
     if node.type == "literal":
@@ -188,10 +197,10 @@ def _match_content(node: HMKNode, text: str, pos: int, ci: bool = False) -> int 
     if node.type == "shortcut":
         return _match_shortcut(node.metadata["kind"], text, pos)
     if node.type == "range":
-        return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ci)
+        return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ci, alphabet, pad)
     if node.type == "alternation":
         for arm in node.children:
-            end = _match_content(arm, text, pos, ci)
+            end = _match_content(arm, text, pos, ci, alphabet, pad)
             if end is not None:
                 return end
         return None
@@ -217,12 +226,24 @@ def _match_shortcut(kind: str, text: str, pos: int) -> int | None:
     return end
 
 
-def _match_range(start: str, end: str, text: str, pos: int, ci: bool = False) -> int | None:
+def _match_range(
+    start: str,
+    end: str,
+    text: str,
+    pos: int,
+    ci: bool = False,
+    alphabet: str | None = None,
+    pad: int | None = None,
+) -> int | None:
     if not start or not end:
         return None
-    # Integer range: both endpoints are decimal digit strings
+    if alphabet is not None and alphabet not in ("b10", "dec"):
+        alpha = _ALPHABETS[alphabet]
+        case_agnostic = alphabet in _CASE_AGNOSTIC_ALPHABETS
+        return _match_alphabet_range(start, end, alpha, case_agnostic, text, pos, pad)
+    # Decimal / default
     if start.isdigit() and end.isdigit():
-        return _match_integer_range(int(start), int(end), text, pos)
+        return _match_integer_range(int(start), int(end), text, pos, pad)
     ch = text[pos]
     # cross-case shorthand: [a..Z] = a-z | A-Z (already case-inclusive, ci is redundant)
     if start.islower() and end.isupper():
@@ -232,13 +253,17 @@ def _match_range(start: str, end: str, text: str, pos: int, ci: bool = False) ->
     return pos + 1 if start <= ch <= end else None
 
 
-def _match_integer_range(lo: int, hi: int, text: str, pos: int) -> int | None:
+def _match_integer_range(lo: int, hi: int, text: str, pos: int, pad: int | None = None) -> int | None:
+    if pad is not None:
+        candidate = text[pos : pos + pad]
+        if len(candidate) != pad or not candidate.isdigit():
+            return None
+        return (pos + pad) if lo <= int(candidate) <= hi else None
     end = pos
     while end < len(text) and text[end].isdigit():
         end += 1
     if end == pos:
         return None
-    # Try longest match first (greedy), fall back to shorter
     for length in range(end - pos, 0, -1):
         candidate = text[pos : pos + length]
         if length > 1 and candidate[0] == "0":
@@ -248,11 +273,79 @@ def _match_integer_range(lo: int, hi: int, text: str, pos: int) -> int | None:
     return None
 
 
+def _alpha_value(s: str, alphabet: str) -> int:
+    v = 0
+    for c in s:
+        v = v * len(alphabet) + alphabet.index(c)
+    return v
+
+
+def _match_alphabet_range(
+    start: str,
+    end: str,
+    alpha: str,
+    case_agnostic: bool,
+    text: str,
+    pos: int,
+    pad: int | None,
+) -> int | None:
+    if case_agnostic:
+        start, end = start.lower(), end.lower()
+    if not start or not end:
+        return None
+    # Endpoints may be multi-character values (e.g. 0..ff in hex).
+    if not all(c in alpha for c in start) or not all(c in alpha for c in end):
+        return None
+    lo, hi = _alpha_value(start, alpha), _alpha_value(end, alpha)
+    zero = alpha[0]
+
+    if pad is not None:
+        candidate = text[pos : pos + pad]
+        if len(candidate) != pad:
+            return None
+        if case_agnostic:
+            candidate = candidate.lower()
+        if not all(c in alpha for c in candidate):
+            return None
+        return (pos + pad) if lo <= _alpha_value(candidate, alpha) <= hi else None
+
+    # Collect alphabet chars greedily
+    end_pos = pos
+    while end_pos < len(text):
+        ch = text[end_pos].lower() if case_agnostic else text[end_pos]
+        if ch not in alpha:
+            break
+        end_pos += 1
+    if end_pos == pos:
+        return None
+    # Try longest first; skip leading "zeros" (index-0 char) for canonical form
+    for length in range(end_pos - pos, 0, -1):
+        candidate = text[pos : pos + length]
+        if case_agnostic:
+            candidate = candidate.lower()
+        if length > 1 and candidate[0] == zero:
+            continue
+        if lo <= _alpha_value(candidate, alpha) <= hi:
+            return pos + length
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Option parsing helpers
 # ---------------------------------------------------------------------------
 
-_IGNORED_OPTIONS = {"hex", "b10", "dec", "b16", "b32", "b58", "b64"}
+_IGNORED_OPTIONS: frozenset[str] = frozenset()  # all formerly-ignored options are now handled
+
+_ALPHABETS: dict[str, str] = {
+    "b10": "0123456789",
+    "dec": "0123456789",
+    "hex": "0123456789abcdef",
+    "b16": "0123456789abcdef",
+    "b32": "0123456789abcdefghijklmnopqrstuv",  # RFC 4648 §7 Extended Hex, lowercase
+    "b58": "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
+    "b64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+}
+_CASE_AGNOSTIC_ALPHABETS: frozenset[str] = frozenset({"hex", "b16", "b32"})
 
 
 def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
@@ -269,6 +362,21 @@ def _parse_case_insensitive(options: list[HMKNode]) -> bool:
     return any(opt.type == "option" and opt.content == "i" for opt in options)
 
 
+def _parse_alphabet(options: list[HMKNode]) -> str | None:
+    for opt in options:
+        if opt.type == "option" and opt.content in _ALPHABETS:
+            return opt.content
+    return None
+
+
+def _parse_pad(options: list[HMKNode]) -> int | None:
+    for opt in options:
+        if opt.type == "pad":
+            w = opt.metadata.get("width", "")
+            return int(w) if w.isdigit() else None
+    return None
+
+
 def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
     min_count, max_count, lazy = 1, 1, False
     for opt in options:
@@ -279,13 +387,13 @@ def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
         elif opt.type == "option":
             if opt.content.isdigit():
                 min_count = max_count = int(opt.content)
-            elif opt.content == "i":
-                pass  # handled by _parse_case_insensitive
-            elif opt.content not in _IGNORED_OPTIONS:
+            elif opt.content in _ALPHABETS or opt.content == "i":
+                pass  # handled by _parse_alphabet / _parse_case_insensitive
+            else:
                 raise NotImplementedError(f"Varied repetition variable '{opt.content}' not yet supported")
         elif opt.type == "lazy":
             lazy = True
-        # pad and alphabet modifiers are silently ignored by the matcher
+        # pad is handled by _parse_pad; does not affect repetition counts
     return min_count, max_count, lazy
 
 

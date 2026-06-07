@@ -336,6 +336,43 @@ def test_chain(hmk, target, expected):
 
 
 # ---------------------------------------------------------------------------
+# Alternate alphabets and padding
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    # hex single-char: [0..f](hex) matches one hex digit at a time
+    ("[0..f](hex)(1..)",    "1a2B",         ["1a2B"]),      # hex is case-agnostic per spec
+    ("[0..f](hex)(1..)",    "1a2b",         ["1a2b"]),
+    ("[0..f](hex)",         "g1h",          ["1"]),          # 'g' and 'h' outside hex range
+    # hex multi-char value range
+    ("[0..ff](hex)",        "1a2b",         ["1a", "2b"]),   # each pair is a valid 0-255 hex value
+    ("[0..ff](hex)",        "fff",          ["ff", "f"]),    # non-overlapping scan continues; trailing 'f' is still in range
+    # hex with pad
+    ("[0..ff](hex, pad:2)", "0a1bgg2c",     ["0a", "1b", "2c"]),
+    ("[0..99](pad:2)",      "05abc42",      ["05", "42"]),   # decimal with pad
+    ("[0..9](b10)(1..)",    "abc123",       ["123"]),        # b10 explicit — same as default
+    # b64: [A../](b64) is the full base64 alphabet
+    ("[A../](b64)(1..)",    "SGVs",         ["SGVs"]),
+    ("[A../](b64)(1..)",    "abc!def",      ["abc", "def"]), # '!' breaks the run
+])
+def test_alternate_alphabets(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(alphabet="0123456789abcdef", min_size=1))
+def test_hex_single_char_matches_all_hex(s):
+    matches = run("[0..f](hex)(1..)", s)
+    assert "".join(matches) == s
+
+
+@given(st.text(alphabet="0123456789", min_size=2, max_size=4))
+def test_decimal_pad2_matches_exactly_2_chars(s):
+    # With pad:2, only strings of exactly 2 digits that are valid values match
+    matches = run("[0..99](pad:2)", s)
+    assert all(len(m) == 2 for m in matches)
+
+
+# ---------------------------------------------------------------------------
 # Case-insensitive (i)
 # ---------------------------------------------------------------------------
 
