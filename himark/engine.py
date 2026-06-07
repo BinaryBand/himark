@@ -6,6 +6,7 @@ from himark.utils.alphabet import ALPHABETS as _ALPHABETS
 from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
 from himark.utils.alphabet import alpha_value as _alpha_value
 from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
+from himark.utils.varied_rep import collect_var_specs, iter_bindings
 
 
 @dataclass
@@ -14,6 +15,7 @@ class Match:
     start: int
     end: int
     groups: list[str] = field(default_factory=list)
+    bindings: dict[str, int] = field(default_factory=dict)
 
 
 class _SkipTo:
@@ -66,17 +68,26 @@ def _find_matches(tree: HMKNode, text: str) -> list[Match]:
     ):
         return _split_by_separator(tree.children[0], text)
 
+    specs = collect_var_specs(tree)
+
     matches = []
     pos = 0
     while pos < len(text):
-        captures: list[str] = []
-        end = _match_node(tree, text, pos, captures)
-        if isinstance(end, _SkipTo):
-            pos = end.pos
-        elif end is not None and end > pos:
-            matches.append(Match(text[pos:end], pos, end, captures))
-            pos = end
-        else:
+        remaining = len(text) - pos
+        found = False
+        for bindings in iter_bindings(specs, remaining):
+            captures: list[str] = []
+            end = _match_node(tree, text, pos, captures, bindings)
+            if isinstance(end, _SkipTo):
+                pos = end.pos
+                found = True
+                break
+            if end is not None and end > pos:
+                matches.append(Match(text[pos:end], pos, end, captures, bindings))
+                pos = end
+                found = True
+                break
+        if not found:
             pos += 1
     return matches
 
@@ -94,12 +105,16 @@ def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
 
 
 def _match_node(
-    node: HMKNode, text: str, pos: int, captures: list[str] | None = None
+    node: HMKNode,
+    text: str,
+    pos: int,
+    captures: list[str] | None = None,
+    bindings: dict[str, int] | None = None,
 ) -> int | _SkipTo | None:
     if node.type == "root":
-        return _match_sequence(node.children, text, pos, captures)
+        return _match_sequence(node.children, text, pos, captures, bindings)
     if node.type == "single_brackets":
-        return _match_bracket(node, text, pos, captures)
+        return _match_bracket(node, text, pos, captures, bindings)
     if node.type == "double_brackets":
         return _match_bracket_negated(node, text, pos)
     if node.type == "double_chevrons":
@@ -123,11 +138,15 @@ def _match_node(
 
 
 def _match_sequence(
-    nodes: list[HMKNode], text: str, pos: int, captures: list[str] | None = None
+    nodes: list[HMKNode],
+    text: str,
+    pos: int,
+    captures: list[str] | None = None,
+    bindings: dict[str, int] | None = None,
 ) -> int | _SkipTo | None:
     current = pos
     for node in nodes:
-        end = _match_node(node, text, current, captures)
+        end = _match_node(node, text, current, captures, bindings)
         if end is None:
             return None
         if isinstance(end, _SkipTo):
@@ -137,13 +156,17 @@ def _match_sequence(
 
 
 def _match_bracket(
-    node: HMKNode, text: str, pos: int, captures: list[str] | None = None
+    node: HMKNode,
+    text: str,
+    pos: int,
+    captures: list[str] | None = None,
+    bindings: dict[str, int] | None = None,
 ) -> int | None:
     if not node.children:
         return None
     content = node.children[0]
     options = _flatten_options(node.metadata.get("options", []))
-    min_count, max_count, lazy = _parse_repetition(options)
+    min_count, max_count, lazy = _parse_repetition(options, bindings)
 
     ci = _parse_case_insensitive(options)
     alphabet = _parse_alphabet(options)
@@ -376,22 +399,40 @@ def _parse_pad(options: list[HMKNode]) -> int | None:
     return None
 
 
-def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
+def _is_var(s: str) -> bool:
+    return len(s) == 1 and s.isalpha()
+
+
+def _resolve(s: str, bindings: dict[str, int] | None) -> int | None:
+    """Return int if s is a digit string or a bound variable; else None."""
+    if s.isdigit():
+        return int(s)
+    if bindings and _is_var(s) and s in bindings:
+        return bindings[s]
+    return None
+
+
+def _parse_repetition(
+    options: list[HMKNode],
+    bindings: dict[str, int] | None = None,
+) -> tuple[int, int | None, bool]:
     min_count, max_count, lazy = 1, 1, False
     for opt in options:
         if opt.type == "repetition_range":
             mn, mx = opt.metadata["min"], opt.metadata["max"]
-            min_count = int(mn) if mn else 0
-            max_count = int(mx) if mx else None
+            resolved_mn = _resolve(mn, bindings) if mn else None
+            resolved_mx = _resolve(mx, bindings) if mx else None
+            min_count = resolved_mn if resolved_mn is not None else (0 if not mn else min_count)
+            max_count = resolved_mx  # None means unbounded
         elif opt.type == "option":
             if opt.content.isdigit():
                 min_count = max_count = int(opt.content)
             elif opt.content in _ALPHABETS or opt.content == "i":
                 pass  # handled by _parse_alphabet / _parse_case_insensitive
+            elif _is_var(opt.content) and bindings and opt.content in bindings:
+                min_count = max_count = bindings[opt.content]
             else:
-                raise NotImplementedError(
-                    f"Varied repetition variable '{opt.content}' not yet supported"
-                )
+                pass  # unresolved variable — collect_var_specs handles enumeration
         elif opt.type == "lazy":
             lazy = True
         # pad is handled by _parse_pad; does not affect repetition counts
@@ -416,7 +457,6 @@ def _render(template_tree: HMKNode, match: Match) -> str:
                 idx = expr.metadata["index"][0] - 1
                 parts.append(match.groups[idx] if idx < len(match.groups) else "")
             elif expr.type == "var_ref":
-                raise NotImplementedError(
-                    f"Varied repetition var '{{{{ {expr.content} }}}}' not yet supported"
-                )
+                val = match.bindings.get(expr.content)
+                parts.append(str(val) if val is not None else "")
     return "".join(parts)
