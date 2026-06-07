@@ -16,6 +16,7 @@ class Match:
     end: int
     groups: list[str] = field(default_factory=list)
     group_spans: list[tuple[int, int]] = field(default_factory=list)  # (start, end) relative to match.start
+    sub_groups: list[list[str]] = field(default_factory=list)  # sub_groups[i] = per-repetition texts for group i
     bindings: dict[str, int] = field(default_factory=dict)
 
 
@@ -79,14 +80,15 @@ def _find_matches(tree: HMKNode, text: str) -> list[Match]:
         for bindings in iter_bindings(specs, remaining):
             captures: list[str] = []
             capture_spans: list[tuple[int, int]] = []
-            end = _match_node(tree, text, pos, captures, bindings, capture_spans)
+            sub_capture_lists: list[list[str]] = []
+            end = _match_node(tree, text, pos, captures, bindings, capture_spans, sub_capture_lists)
             if isinstance(end, _SkipTo):
                 pos = end.pos
                 found = True
                 break
             if end is not None and end > pos:
                 rel_spans = [(s - pos, e - pos) for s, e in capture_spans]
-                matches.append(Match(text[pos:end], pos, end, captures, rel_spans, bindings))
+                matches.append(Match(text[pos:end], pos, end, captures, rel_spans, sub_capture_lists, bindings))
                 pos = end
                 found = True
                 break
@@ -114,11 +116,12 @@ def _match_node(
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
     capture_spans: list[tuple[int, int]] | None = None,
+    sub_capture_lists: list[list[str]] | None = None,
 ) -> int | _SkipTo | None:
     if node.type == "root":
-        return _match_sequence(node.children, text, pos, captures, bindings, capture_spans)
+        return _match_sequence(node.children, text, pos, captures, bindings, capture_spans, sub_capture_lists)
     if node.type == "single_brackets":
-        return _match_bracket(node, text, pos, captures, bindings, capture_spans)
+        return _match_bracket(node, text, pos, captures, bindings, capture_spans, sub_capture_lists)
     if node.type == "double_brackets":
         return _match_bracket_negated(node, text, pos)
     if node.type == "double_chevrons":
@@ -148,10 +151,11 @@ def _match_sequence(
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
     capture_spans: list[tuple[int, int]] | None = None,
+    sub_capture_lists: list[list[str]] | None = None,
 ) -> int | _SkipTo | None:
     current = pos
     for node in nodes:
-        end = _match_node(node, text, current, captures, bindings, capture_spans)
+        end = _match_node(node, text, current, captures, bindings, capture_spans, sub_capture_lists)
         if end is None:
             return None
         if isinstance(end, _SkipTo):
@@ -167,6 +171,7 @@ def _match_bracket(
     captures: list[str] | None = None,
     bindings: dict[str, int] | None = None,
     capture_spans: list[tuple[int, int]] | None = None,
+    sub_capture_lists: list[list[str]] | None = None,
 ) -> int | None:
     if not node.children:
         return None
@@ -196,6 +201,10 @@ def _match_bracket(
         captures.append(text[start_pos:result])
     if capture_spans is not None:
         capture_spans.append((start_pos, result))
+    if sub_capture_lists is not None:
+        end_idx = min_count if lazy else len(positions) - 1
+        subs = [text[positions[i]:positions[i + 1]] for i in range(end_idx)]
+        sub_capture_lists.append(subs)
     return result
 
 
@@ -462,8 +471,14 @@ def _render(template_tree: HMKNode, match: Match) -> str:
             if expr.type == "full_match":
                 parts.append(match.text)
             elif expr.type == "group_ref":
-                idx = expr.metadata["index"][0] - 1
-                parts.append(match.groups[idx] if idx < len(match.groups) else "")
+                path = expr.metadata["index"]
+                g_idx = path[0] - 1
+                if len(path) == 1:
+                    parts.append(match.groups[g_idx] if g_idx < len(match.groups) else "")
+                else:
+                    s_idx = path[1] - 1
+                    subs = match.sub_groups[g_idx] if g_idx < len(match.sub_groups) else []
+                    parts.append(subs[s_idx] if s_idx < len(subs) else "")
             elif expr.type == "span_ref":
                 s_idx = expr.metadata["start"][0] - 1  # top-level group index (0-based)
                 e_idx = expr.metadata["end"][0] - 1

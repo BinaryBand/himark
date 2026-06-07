@@ -353,6 +353,27 @@ class TestCaptures:
     def test_span_reference(self):
         assert run("[a][b][c] => {{ 1.1..3.1 }}", "abc") == ["abc"]
 
+    def test_subgroup_first_rep(self):
+        assert run("[a..z](1..) => {{ 1.1 }}", "hello") == ["h"]
+
+    def test_subgroup_third_rep(self):
+        assert run("[a..z](1..) => {{ 1.3 }}", "hello") == ["l"]
+
+    def test_subgroup_exact_count(self):
+        assert run("[a..z](3) => {{ 1.2 }}", "abc") == ["b"]
+
+    def test_subgroup_second_group(self):
+        assert run("[a..z](1..)[0..9](1..) => {{ 2.1 }}", "abc123") == ["1"]
+
+    def test_subgroup_cross_groups(self):
+        assert run("[a..z](1..)[0..9](1..) => {{ 1.2 }}-{{ 2.3 }}", "abc123") == ["b-3"]
+
+    def test_subgroup_out_of_bounds_is_empty(self):
+        assert run("[a..z](1..) => {{ 1.9 }}", "hi") == [""]
+
+    def test_subgroup_reconstruct_via_subs(self):
+        assert run("[a..z](1..) => {{ 1.1 }}{{ 1.2 }}{{ 1.3 }}", "abc") == ["abc"]
+
 
 # ── Separators ───────────────────────────────────────────────────────────────
 
