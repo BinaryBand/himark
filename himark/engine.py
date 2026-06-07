@@ -1,14 +1,24 @@
 """Direct execution engine for parsed HMK expressions."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import NamedTuple
 from himark.node import HMKNode
 from himark.utils.alphabet import ALPHABETS as _ALPHABETS
 from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
 from himark.utils.alphabet import alpha_value as _alpha_value
 from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
 from himark.utils.varied_rep import collect_var_specs, iter_bindings
-from himark.utils import emoji as _emoji
-from himark.utils import latex as _latex
+from himark.utils import emoji as _emoji  # noqa: F401 — side-effect: registers emoji resolver
+from himark.utils import latex as _latex  # noqa: F401 — side-effect: registers latex resolver
+from himark.utils.resolver import RESOLVERS as _RESOLVERS
+
+
+class MatchCtx(NamedTuple):
+    """Immutable per-bracket matching context threaded through content matchers."""
+    ci: bool = False
+    alphabet: str | None = None
+    pad: int | None = None
 
 
 @dataclass
@@ -181,15 +191,13 @@ def _match_bracket(
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options, bindings)
 
-    ci = _parse_case_insensitive(options)
-    alphabet = _parse_alphabet(options)
-    pad = _parse_pad(options)
+    ctx = MatchCtx(_parse_case_insensitive(options), _parse_alphabet(options), _parse_pad(options))
     start_pos = pos
     positions = [pos]
     current = pos
     count = 0
     while max_count is None or count < max_count:
-        end = _match_content(content, text, current, ci, alphabet, pad)
+        end = _match_content(content, text, current, ctx)
         if end is None or end == current:
             break
         count += 1
@@ -216,49 +224,55 @@ def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo 
     content = node.children[0]
     start = pos
     while pos < len(text):
-        inner_end = _match_content(content, text, pos)
+        inner_end = _match_content(content, text, pos, MatchCtx())
         if inner_end is not None:
             break  # excluded content found — stop the run
         pos += 1
     if pos > start:
         return pos
     # Zero-length run: excluded content is right here — skip past it atomically
-    inner_end = _match_content(content, text, start)
+    inner_end = _match_content(content, text, start, MatchCtx())
     if inner_end is not None and inner_end > start:
         return _SkipTo(inner_end)
     return _SkipTo(start + 1)
 
 
-def _match_content(
-    node: HMKNode,
-    text: str,
-    pos: int,
-    ci: bool = False,
-    alphabet: str | None = None,
-    pad: int | None = None,
-) -> int | None:
+def _match_literal_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
+    s = node.content
+    if ctx.ci:
+        return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
+    return pos + len(s) if text[pos : pos + len(s)] == s else None
+
+
+def _match_shortcut_node(node: HMKNode, text: str, pos: int, _ctx: MatchCtx) -> int | None:
+    return _match_shortcut(node.metadata["kind"], text, pos)
+
+
+def _match_range_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
+    return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ctx.ci, ctx.alphabet, ctx.pad)
+
+
+def _match_alternation_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
+    for arm in node.children:
+        end = _match_content(arm, text, pos, ctx)
+        if end is not None:
+            return end
+    return None
+
+
+_CONTENT_MATCHERS: dict[str, Callable[[HMKNode, str, int, MatchCtx], int | None]] = {
+    "literal":     _match_literal_node,
+    "shortcut":    _match_shortcut_node,
+    "range":       _match_range_node,
+    "alternation": _match_alternation_node,
+}
+
+
+def _match_content(node: HMKNode, text: str, pos: int, ctx: MatchCtx = MatchCtx()) -> int | None:
     if pos >= len(text):
         return None
-    if node.type == "literal":
-        s = node.content
-        if ci:
-            return (
-                pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
-            )
-        return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if node.type == "shortcut":
-        return _match_shortcut(node.metadata["kind"], text, pos)
-    if node.type == "range":
-        return _match_range(
-            node.metadata["start"], node.metadata["end"], text, pos, ci, alphabet, pad
-        )
-    if node.type == "alternation":
-        for arm in node.children:
-            end = _match_content(arm, text, pos, ci, alphabet, pad)
-            if end is not None:
-                return end
-        return None
-    return None
+    matcher = _CONTENT_MATCHERS.get(node.type)
+    return matcher(node, text, pos, ctx) if matcher is not None else None
 
 
 _SHORTCUT_PREDS = {
@@ -463,6 +477,43 @@ def _parse_repetition(
 # ---------------------------------------------------------------------------
 
 
+def _render_full_match(expr: HMKNode, match: Match) -> str:
+    return match.text
+
+
+def _render_group_ref(expr: HMKNode, match: Match) -> str:
+    path = expr.metadata["index"]
+    g_idx = path[0] - 1
+    if len(path) == 1:
+        return match.groups[g_idx] if g_idx < len(match.groups) else ""
+    s_idx = path[1] - 1
+    subs = match.sub_groups[g_idx] if g_idx < len(match.sub_groups) else []
+    return subs[s_idx] if s_idx < len(subs) else ""
+
+
+def _render_span_ref(expr: HMKNode, match: Match) -> str:
+    s_idx = expr.metadata["start"][0] - 1  # top-level group index (0-based)
+    e_idx = expr.metadata["end"][0] - 1
+    if s_idx < len(match.group_spans) and e_idx < len(match.group_spans):
+        s = match.group_spans[s_idx][0]
+        e = match.group_spans[e_idx][1]
+        return match.text[s:e]
+    return ""
+
+
+def _render_var_ref(expr: HMKNode, match: Match) -> str:
+    val = match.bindings.get(expr.content)
+    return str(val) if val is not None else ""
+
+
+_EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {
+    "full_match": _render_full_match,
+    "group_ref": _render_group_ref,
+    "span_ref": _render_span_ref,
+    "var_ref": _render_var_ref,
+}
+
+
 def _render(template_tree: HMKNode, match: Match) -> str:
     parts = []
     for node in template_tree.children:
@@ -470,31 +521,10 @@ def _render(template_tree: HMKNode, match: Match) -> str:
             parts.append(node.content)
         elif node.type == "double_braces" and node.children:
             expr = node.children[0]
-            if expr.type == "full_match":
-                parts.append(match.text)
-            elif expr.type == "group_ref":
-                path = expr.metadata["index"]
-                g_idx = path[0] - 1
-                if len(path) == 1:
-                    parts.append(match.groups[g_idx] if g_idx < len(match.groups) else "")
-                else:
-                    s_idx = path[1] - 1
-                    subs = match.sub_groups[g_idx] if g_idx < len(match.sub_groups) else []
-                    parts.append(subs[s_idx] if s_idx < len(subs) else "")
-            elif expr.type == "span_ref":
-                s_idx = expr.metadata["start"][0] - 1  # top-level group index (0-based)
-                e_idx = expr.metadata["end"][0] - 1
-                if s_idx < len(match.group_spans) and e_idx < len(match.group_spans):
-                    s = match.group_spans[s_idx][0]
-                    e = match.group_spans[e_idx][1]
-                    parts.append(match.text[s:e])
-                else:
-                    parts.append("")
-            elif expr.type == "var_ref":
-                val = match.bindings.get(expr.content)
-                parts.append(str(val) if val is not None else "")
-            elif expr.type == "emoji":
-                parts.append(_emoji.resolve(expr.metadata["code"]))
-            elif expr.type == "latex":
-                parts.append(_latex.resolve(expr.metadata["expr"]))
+            renderer = _EXPR_RENDERERS.get(expr.type)
+            if renderer is not None:
+                parts.append(renderer(expr, match))
+            elif expr.type in _RESOLVERS:
+                r = _RESOLVERS[expr.type]
+                parts.append(r.resolve(expr.metadata[r.metadata_key]))
     return "".join(parts)

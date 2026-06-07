@@ -1,6 +1,7 @@
 """Phase 3: Refine leaf node contents based on their parent container type."""
 
 import re
+from collections.abc import Callable
 from himark.node import HMKNode
 from himark.models import CompileError
 
@@ -146,27 +147,43 @@ def _parse_capture_path(dotted: str) -> list[int]:
     return [int(p) for p in dotted.split(".")]
 
 
+# Registry of template expression rules evaluated in order.
+# Each entry: (node_type, pattern_or_None, metadata_fn(match, expr_str) -> dict)
+# pattern=None signals an exact-string sentinel check ("." for full_match).
+_TemplateRule = tuple[str, re.Pattern | None, Callable[[re.Match, str], dict]]
+
+
+def _meta_noop(_m: re.Match, _e: str) -> dict: return {}
+def _meta_span(m: re.Match, _e: str) -> dict:
+    return {"start": _parse_capture_path(m.group(1)), "end": _parse_capture_path(m.group(2))}
+def _meta_group(_m: re.Match, e: str) -> dict:
+    return {"index": _parse_capture_path(e)}
+def _meta_emoji(m: re.Match, _e: str) -> dict:
+    return {"code": m.group(1)}
+def _meta_latex(m: re.Match, _e: str) -> dict:
+    return {"expr": m.group(1)}
+
+
+_TEMPLATE_EXPR_RULES: list[_TemplateRule] = [
+    ("full_match", None,      _meta_noop),
+    ("span_ref",   _SPAN_RE,  _meta_span),
+    ("group_ref",  _GROUP_RE, _meta_group),
+    ("emoji",      _EMOJI_RE, _meta_emoji),
+    ("latex",      _LATEX_RE, _meta_latex),
+    ("var_ref",    _VAR_RE,   _meta_noop),
+]
+
+
 def _parse_template_expr(content: str) -> HMKNode:
     expr = content.strip()
-    if expr == ".":
-        return HMKNode("full_match", expr)
-    if m := _SPAN_RE.match(expr):
-        return HMKNode(
-            "span_ref",
-            expr,
-            metadata={
-                "start": _parse_capture_path(m.group(1)),
-                "end": _parse_capture_path(m.group(2)),
-            },
-        )
-    if _GROUP_RE.match(expr):
-        return HMKNode("group_ref", expr, metadata={"index": _parse_capture_path(expr)})
-    if m := _EMOJI_RE.match(expr):
-        return HMKNode("emoji", expr, metadata={"code": m.group(1)})
-    if m := _LATEX_RE.match(expr):
-        return HMKNode("latex", expr, metadata={"expr": m.group(1)})
-    if _VAR_RE.match(expr):
-        return HMKNode("var_ref", expr)
+    for node_type, pattern, meta_fn in _TEMPLATE_EXPR_RULES:
+        if pattern is None:
+            if expr != ".":
+                continue
+            return HMKNode(node_type, expr)
+        m = pattern.match(expr)
+        if m:
+            return HMKNode(node_type, expr, metadata=meta_fn(m, expr))
     return HMKNode("leaf", content)
 
 
