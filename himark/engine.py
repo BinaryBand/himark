@@ -7,6 +7,8 @@ from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPH
 from himark.utils.alphabet import alpha_value as _alpha_value
 from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
 from himark.utils.varied_rep import collect_var_specs, iter_bindings
+from himark.utils import emoji as _emoji
+from himark.utils import latex as _latex
 
 
 @dataclass
@@ -491,4 +493,8 @@ def _render(template_tree: HMKNode, match: Match) -> str:
             elif expr.type == "var_ref":
                 val = match.bindings.get(expr.content)
                 parts.append(str(val) if val is not None else "")
+            elif expr.type == "emoji":
+                parts.append(_emoji.resolve(expr.metadata["code"]))
+            elif expr.type == "latex":
+                parts.append(_latex.resolve(expr.metadata["expr"]))
     return "".join(parts)

@@ -157,7 +157,7 @@ class TestMultiCharRanges:
         assert result == ["0a", "ff"]
 
     def test_padded_width_is_multiple(self):
-        # "fff" is 3 chars → pad:4 pads to next multiple of 4 → width 4
+        # pad:4 fixes the output width to 4 characters
         result = run("[f..fff](hex, pad:4)", "000f 0fff 00ff")
         assert result == ["000f", "0fff", "00ff"]
 
@@ -420,12 +420,12 @@ class TestTransformers:
     def test_count_template_var(self):
         assert run("[a](n) => {{ n }}x", "aaa aa a") == ["3x", "2x", "1x"]
 
-    # def test_emoji_shortcode(self):  # emoji rendering not yet implemented
-    #     result = run("[done] => {{ . }} {{ :white_check_mark: }}", "done")
-    #     assert result == ["done ✅"]
+    def test_emoji_shortcode(self):
+        result = run("[done] => {{ . }} {{ :white_check_mark: }}", "done")
+        assert result == ["done ✅"]
 
-    # def test_latex_pi(self):  # LaTeX rendering not yet implemented
-    #     assert run("[pi] => {{ $\\pi$ }}", "pi") == ["π"]
+    def test_latex_pi(self):
+        assert run("[pi] => {{ $\\pi$ }}", "pi") == ["π"]
 
     # def test_template_lone_brace_is_literal(self):  # brace escaping not yet implemented
     #     assert run("[a] => {{{ . }}}", "x") == ["{x}"]

@@ -128,6 +128,8 @@ Repetition is a count modifier on any `[...]` group. A bare group without a coun
 
 The lazy flag `?` is a second argument to the count modifier and may be combined with any count: `[a](1.., ?)` = one or more, lazy.
 
+Multiple option groups are accepted as equivalent to comma separation: `[0..f](hex)(1..)` is the same as `[0..f](hex, 1..)`. The two-group form can be easier to read when combining an alphabet modifier with a repetition modifier.
+
 ### Varied repetition
 
 Variable letters (single alphabetic characters) bind to the count at their first occurrence (left-to-right). All uses of the same variable must resolve to the same count. When a numeric literal appears adjacent to a variable in the min or max position of a count modifier, the literal is a **bound on the variable** — the variable still enforces exact equality across all its occurrences.

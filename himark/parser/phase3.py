@@ -78,6 +78,16 @@ _SHORTCUTS = {
 }
 
 
+def _flatten(opts: list[HMKNode]) -> list[HMKNode]:
+    out: list[HMKNode] = []
+    for o in opts:
+        if o.type == "option_list":
+            out.extend(_flatten(o.children))
+        else:
+            out.append(o)
+    return out
+
+
 def _parse_range_or_literal(
     content: str, options: list[HMKNode] | None = None
 ) -> HMKNode:
@@ -87,17 +97,14 @@ def _parse_range_or_literal(
         parts = content.split("..", 1)
         start, end = parts[0], parts[1]
 
-        # Flatten option_list nodes so we can inspect individual options
-        def _flatten(opts: list[HMKNode]) -> list[HMKNode]:
-            out: list[HMKNode] = []
-            for o in opts:
-                if o.type == "option_list":
-                    out.extend(_flatten(o.children))
-                else:
-                    out.append(o)
-            return out
-
         flat_options = _flatten(options or [])
+
+        # Open-ended range with no matching shortcut is a compile error
+        if not start or not end:
+            raise CompileError(
+                f"Undefined range shortcut: [{content}]. "
+                f"Known open-ended shortcuts: [..], [0..], [a..], [ ..]"
+            )
 
         # Determine if an explicit alphabet option is present; this permits
         # non-digit endpoints when an alphabet like 'hex' is specified.
