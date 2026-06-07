@@ -13,7 +13,9 @@ from himark.parser import parse
         ("hello", "leaf", "hello"),
     ],
 )
-def test_basic_tokenization_shapes(text, expected_first_child_type, expected_first_child_content):
+def test_basic_tokenization_shapes(
+    text, expected_first_child_type, expected_first_child_content
+):
     trees = parse(text)
     pattern_tree = trees[0]
 

@@ -27,7 +27,7 @@ def print_tree(node, indent=0):
         print(f"{prefix}group_ref: {idx}")
     elif node.type == "span_ref":
         start = ".".join(str(i) for i in node.metadata["start"])
-        end   = ".".join(str(i) for i in node.metadata["end"])
+        end = ".".join(str(i) for i in node.metadata["end"])
         print(f"{prefix}span_ref: {start}..{end}")
     elif node.type == "var_ref":
         print(f"{prefix}var_ref: {node.content!r}")

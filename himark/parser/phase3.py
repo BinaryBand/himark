@@ -2,13 +2,13 @@
 
 import re
 from himark.node import HMKNode
-from himark.parser import CompileError
+from himark.models import CompileError
 
-_SPAN_RE  = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
+_SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
 _GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
 _EMOJI_RE = re.compile(r"^:([^:]+):$")
 _LATEX_RE = re.compile(r"^\$(.+)\$$", re.DOTALL)
-_VAR_RE   = re.compile(r"^[a-z]$")
+_VAR_RE = re.compile(r"^[a-z]$")
 
 
 def parse(node: HMKNode) -> HMKNode:
@@ -25,24 +25,25 @@ def parse(node: HMKNode) -> HMKNode:
         # Nested [[: the regex for [[...]] stops at the first ]], so [[[[a]]]]
         # produces content "[[a". Detecting this via content prefix is reliable.
         if node.content.startswith("[["):
-            raise CompileError(
-                "Negation of negation [[[[...]]]] is not supported"
-            )
+            raise CompileError("Negation of negation [[[[...]]]] is not supported")
         for child in node.children:
             if child.type == "double_brackets":
-                raise CompileError(
-                    "Negation of negation [[[[...]]]] is not supported"
-                )
+                raise CompileError("Negation of negation [[[[...]]]] is not supported")
     if node.metadata.get("options"):
         node.metadata["options"] = [
             _refine_child(child, parent_type="options")
             for child in node.metadata["options"]
         ]
-    node.children = [_refine_child(child, parent_type=node.type, parent=node) for child in node.children]
+    node.children = [
+        _refine_child(child, parent_type=node.type, parent=node)
+        for child in node.children
+    ]
     return node
 
 
-def _refine_child(node: HMKNode, parent_type: str, parent: HMKNode | None = None) -> HMKNode:
+def _refine_child(
+    node: HMKNode, parent_type: str, parent: HMKNode | None = None
+) -> HMKNode:
     if node.type != "leaf":
         return parse(node)  # recurse into non-leaf nodes
 
@@ -70,14 +71,16 @@ def _parse_bracket_leaf(content: str, options: list[HMKNode] | None = None) -> H
 
 
 _SHORTCUTS = {
-    "..":  "any_char",    # [..]  — any single character
-    "0..": "digits",      # [0..] — one or more decimal digits
+    "..": "any_char",  # [..]  — any single character
+    "0..": "digits",  # [0..] — one or more decimal digits
     "a..": "word_chars",  # [a..] — one or more word characters [a-zA-Z0-9_]
     " ..": "whitespace",  # [ ..] — one or more whitespace characters
 }
 
 
-def _parse_range_or_literal(content: str, options: list[HMKNode] | None = None) -> HMKNode:
+def _parse_range_or_literal(
+    content: str, options: list[HMKNode] | None = None
+) -> HMKNode:
     if content in _SHORTCUTS:
         return HMKNode("shortcut", content, metadata={"kind": _SHORTCUTS[content]})
     if ".." in content:
@@ -106,7 +109,9 @@ def _parse_range_or_literal(content: str, options: list[HMKNode] | None = None) 
                 break
 
         # Mixed-type endpoints (one decimal digit endpoint, the other not) are a compile error
-        if (start.isdigit() and not end.isdigit()) or (end.isdigit() and not start.isdigit()):
+        if (start.isdigit() and not end.isdigit()) or (
+            end.isdigit() and not start.isdigit()
+        ):
             if not explicit_alph:
                 raise CompileError(f"Mixed-type range endpoints: {content}")
 
@@ -116,7 +121,12 @@ def _parse_range_or_literal(content: str, options: list[HMKNode] | None = None) 
         if start and end and not explicit_alph:
             try:
                 if start > end:
-                    if not (len(start) == 1 and len(end) == 1 and start.islower() and end.isupper()):
+                    if not (
+                        len(start) == 1
+                        and len(end) == 1
+                        and start.islower()
+                        and end.isupper()
+                    ):
                         raise CompileError(f"Descending range endpoints: {content}")
             except TypeError:
                 raise CompileError(f"Invalid range endpoints: {content}")
@@ -134,10 +144,14 @@ def _parse_template_expr(content: str) -> HMKNode:
     if expr == ".":
         return HMKNode("full_match", expr)
     if m := _SPAN_RE.match(expr):
-        return HMKNode("span_ref", expr, metadata={
-            "start": _parse_capture_path(m.group(1)),
-            "end":   _parse_capture_path(m.group(2)),
-        })
+        return HMKNode(
+            "span_ref",
+            expr,
+            metadata={
+                "start": _parse_capture_path(m.group(1)),
+                "end": _parse_capture_path(m.group(2)),
+            },
+        )
     if _GROUP_RE.match(expr):
         return HMKNode("group_ref", expr, metadata={"index": _parse_capture_path(expr)})
     if m := _EMOJI_RE.match(expr):
@@ -162,7 +176,9 @@ def _parse_single_option(content: str) -> HMKNode:
         return HMKNode("lazy", content)
     if ".." in content:
         parts = content.split("..", 1)
-        return HMKNode("repetition_range", content, metadata={"min": parts[0], "max": parts[1]})
+        return HMKNode(
+            "repetition_range", content, metadata={"min": parts[0], "max": parts[1]}
+        )
     if content.startswith("pad:"):
         return HMKNode("pad", content, metadata={"width": content[4:]})
     return HMKNode("option", content)

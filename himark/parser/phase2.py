@@ -10,13 +10,16 @@ _brackets = f"{_double_brackets}|{_single_brackets}"
 _double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
 _double_braces = r"{{((?:[^}]|}[^}])*)}}"
 
-_PATTERN = re.compile(
-    f"{_brackets}|{_double_chevrons}|{_double_braces}"
-)
+_PATTERN = re.compile(f"{_brackets}|{_double_chevrons}|{_double_braces}")
 _OPTION_GROUP = re.compile(_parenthesis)
 
 # Maps regex group index → node type
-_GROUP_TYPES = ["double_brackets", "single_brackets", "double_chevrons", "double_braces"]
+_GROUP_TYPES = [
+    "double_brackets",
+    "single_brackets",
+    "double_chevrons",
+    "double_braces",
+]
 
 
 def parse(text: str) -> HMKNode:
@@ -60,7 +63,7 @@ def parse(text: str) -> HMKNode:
             leaf_start = None
 
         if match.start() > pos:
-            nodes.append(HMKNode("leaf", text[pos:match.start()]))
+            nodes.append(HMKNode("leaf", text[pos : match.start()]))
 
         groups = match.groups()
         matched_idx = next(i for i, g in enumerate(groups) if g is not None)

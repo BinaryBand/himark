@@ -22,7 +22,7 @@ def split_statement(text: str) -> Statement:
             steps.append(remaining.strip())
             break
         steps.append(remaining[:idx].rstrip())
-        remaining = remaining[idx + 2:].lstrip()
+        remaining = remaining[idx + 2 :].lstrip()
     return Statement(steps=steps)
 
 
@@ -31,7 +31,7 @@ def _find_arrow(text: str) -> int | None:
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch == "=" and text[i + 1:i + 2] == ">" and depth == 0:
+        if ch == "=" and text[i + 1 : i + 2] == ">" and depth == 0:
             return i
         if ch in ("[", "<", "{"):
             depth += 1

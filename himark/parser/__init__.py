@@ -1,8 +1,3 @@
-class CompileError(Exception):
-    """Raised when an HMK pattern fails to compile due to invalid syntax or
-    unsupported constructs.
-    """
-
 from himark.parser import phase1, phase2, phase3
 from himark.node import HMKNode
 

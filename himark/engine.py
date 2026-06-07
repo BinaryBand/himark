@@ -18,7 +18,9 @@ class Match:
 
 class _SkipTo:
     """Sentinel: negation found its excluded content at the scan start; skip past it."""
+
     __slots__ = ("pos",)
+
     def __init__(self, pos: int) -> None:
         self.pos = pos
 
@@ -26,6 +28,7 @@ class _SkipTo:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def execute(steps: list[HMKNode], target: str) -> list[str]:
     """Execute an ordered list of HMK step trees against target.
@@ -52,6 +55,7 @@ def execute(steps: list[HMKNode], target: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Matching
 # ---------------------------------------------------------------------------
+
 
 def _find_matches(tree: HMKNode, text: str) -> list[Match]:
     # Separator-only root: split mode
@@ -141,9 +145,9 @@ def _match_bracket(
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options)
 
-    ci       = _parse_case_insensitive(options)
+    ci = _parse_case_insensitive(options)
     alphabet = _parse_alphabet(options)
-    pad      = _parse_pad(options)
+    pad = _parse_pad(options)
     start_pos = pos
     positions = [pos]
     current = pos
@@ -196,12 +200,16 @@ def _match_content(
     if node.type == "literal":
         s = node.content
         if ci:
-            return pos + len(s) if text[pos:pos + len(s)].lower() == s.lower() else None
-        return pos + len(s) if text[pos:pos + len(s)] == s else None
+            return (
+                pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
+            )
+        return pos + len(s) if text[pos : pos + len(s)] == s else None
     if node.type == "shortcut":
         return _match_shortcut(node.metadata["kind"], text, pos)
     if node.type == "range":
-        return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ci, alphabet, pad)
+        return _match_range(
+            node.metadata["start"], node.metadata["end"], text, pos, ci, alphabet, pad
+        )
     if node.type == "alternation":
         for arm in node.children:
             end = _match_content(arm, text, pos, ci, alphabet, pad)
@@ -212,7 +220,7 @@ def _match_content(
 
 
 _SHORTCUT_PREDS = {
-    "digits":     lambda c: c.isdigit(),
+    "digits": lambda c: c.isdigit(),
     "word_chars": lambda c: c.isalnum() or c == "_",
     "whitespace": str.isspace,
 }
@@ -258,7 +266,9 @@ def _match_range(
     return pos + 1 if start <= ch <= end else None
 
 
-def _match_integer_range(lo: int, hi: int, text: str, pos: int, pad: int | None = None) -> int | None:
+def _match_integer_range(
+    lo: int, hi: int, text: str, pos: int, pad: int | None = None
+) -> int | None:
     if pad is not None:
         candidate = text[pos : pos + pad]
         if len(candidate) != pad or not candidate.isdigit():
@@ -332,18 +342,9 @@ def _match_alphabet_range(
 # Option parsing helpers
 # ---------------------------------------------------------------------------
 
-_IGNORED_OPTIONS: frozenset[str] = frozenset()  # all formerly-ignored options are now handled
-
-_ALPHABETS: dict[str, str] = {
-    "b10": "0123456789",
-    "dec": "0123456789",
-    "hex": "0123456789abcdef",
-    "b16": "0123456789abcdef",
-    "b32": "0123456789abcdefghijklmnopqrstuv",  # RFC 4648 §7 Extended Hex, lowercase
-    "b58": "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
-    "b64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
-}
-_CASE_AGNOSTIC_ALPHABETS: frozenset[str] = frozenset({"hex", "b16", "b32"})
+_IGNORED_OPTIONS: frozenset[str] = (
+    frozenset()
+)  # all formerly-ignored options are now handled
 
 
 def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
@@ -388,7 +389,9 @@ def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
             elif opt.content in _ALPHABETS or opt.content == "i":
                 pass  # handled by _parse_alphabet / _parse_case_insensitive
             else:
-                raise NotImplementedError(f"Varied repetition variable '{opt.content}' not yet supported")
+                raise NotImplementedError(
+                    f"Varied repetition variable '{opt.content}' not yet supported"
+                )
         elif opt.type == "lazy":
             lazy = True
         # pad is handled by _parse_pad; does not affect repetition counts
@@ -398,6 +401,7 @@ def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
 # ---------------------------------------------------------------------------
 # Template rendering
 # ---------------------------------------------------------------------------
+
 
 def _render(template_tree: HMKNode, match: Match) -> str:
     parts = []
@@ -412,5 +416,7 @@ def _render(template_tree: HMKNode, match: Match) -> str:
                 idx = expr.metadata["index"][0] - 1
                 parts.append(match.groups[idx] if idx < len(match.groups) else "")
             elif expr.type == "var_ref":
-                raise NotImplementedError(f"Varied repetition var '{{{{ {expr.content} }}}}' not yet supported")
+                raise NotImplementedError(
+                    f"Varied repetition var '{{{{ {expr.content} }}}}' not yet supported"
+                )
     return "".join(parts)

@@ -3,6 +3,7 @@
 This module centralizes alphabet definitions and small helpers so the
 engine can focus on matching semantics.
 """
+
 from typing import Dict, FrozenSet
 
 

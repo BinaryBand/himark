@@ -21,21 +21,27 @@ def run(hmk: str, target: str) -> list[str]:
 
 printable = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126))
 lowercase = st.text(alphabet="abcdefghijklmnopqrstuvwxyz")
-digits    = st.text(alphabet="0123456789")
-word      = st.text(alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+digits = st.text(alphabet="0123456789")
+word = st.text(
+    alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+)
 
 
 # ---------------------------------------------------------------------------
 # Literals
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[a]",   "cat",   ["a"]),
-    ("[a]",   "b",     []),
-    ("[abc]", "xabcy", ["abc"]),
-    ("[abc]", "abcabc", ["abc", "abc"]),
-    ("[abc]", "ab",    []),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[a]", "cat", ["a"]),
+        ("[a]", "b", []),
+        ("[abc]", "xabcy", ["abc"]),
+        ("[abc]", "abcabc", ["abc", "abc"]),
+        ("[abc]", "ab", []),
+    ],
+)
 def test_literal(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -57,11 +63,15 @@ def test_literal_match_content_is_correct(target):
 # Alternation
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[a||c]",       "abcde",          ["a", "c"]),
-    ("[hello||world]", "say hello world", ["hello", "world"]),
-    ("[a||b||c]",    "abc",            ["a", "b", "c"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[a||c]", "abcde", ["a", "c"]),
+        ("[hello||world]", "say hello world", ["hello", "world"]),
+        ("[a||b||c]", "abc", ["a", "b", "c"]),
+    ],
+)
 def test_alternation(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -76,12 +86,16 @@ def test_alternation_matches_only_valid_arms(target):
 # Ranges
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[a..z](1..)", "hello world",   ["hello", "world"]),
-    ("[A..Z](1..)", "Hello World",   ["H", "W"]),
-    ("[0..9](1..)", "abc123def456",  ["123", "456"]),
-    ("[a..Z](1..)", "Hello World",   ["Hello", "World"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[a..z](1..)", "hello world", ["hello", "world"]),
+        ("[A..Z](1..)", "Hello World", ["H", "W"]),
+        ("[0..9](1..)", "abc123def456", ["123", "456"]),
+        ("[a..Z](1..)", "Hello World", ["Hello", "World"]),
+    ],
+)
 def test_range(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -112,11 +126,15 @@ def test_single_digit_always_matches_digit_range(ch):
 # Shortcuts
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[0..]",  "abc123",     ["123"]),
-    ("[a..]",  "hello world", ["hello", "world"]),  # word_chars matches both
-    ("[ ..]",  "a  b",       ["  "]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[0..]", "abc123", ["123"]),
+        ("[a..]", "hello world", ["hello", "world"]),  # word_chars matches both
+        ("[ ..]", "a  b", ["  "]),
+    ],
+)
 def test_shortcut(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -144,13 +162,17 @@ def test_whitespace_shortcut_consumes_entire_run(s):
 # Repetition
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[a](2)",    "aaa",    ["aa"]),
-    ("[a](1..)",  "aaabbb", ["aaa"]),
-    ("[a](0..)",  "bbb",    []),
-    ("[a](1..3)", "aaaa",   ["aaa", "a"]),
-    ("[a](..3)",  "aaaa",   ["aaa", "a"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[a](2)", "aaa", ["aa"]),
+        ("[a](1..)", "aaabbb", ["aaa"]),
+        ("[a](0..)", "bbb", []),
+        ("[a](1..3)", "aaaa", ["aaa", "a"]),
+        ("[a](..3)", "aaaa", ["aaa", "a"]),
+    ],
+)
 def test_repetition(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -175,11 +197,15 @@ def test_range_repetition_respects_bounds(lo, hi_offset):
 # Sequences
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[hello][ ..][world]", "hello world",   ["hello world"]),
-    ("[hello][ ..][world]", "hello  world",  ["hello  world"]),
-    ("[a..z](1..)[.][a..z](1..)", "word.word ok", ["word.word"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[hello][ ..][world]", "hello world", ["hello world"]),
+        ("[hello][ ..][world]", "hello  world", ["hello  world"]),
+        ("[a..z](1..)[.][a..z](1..)", "word.word ok", ["word.word"]),
+    ],
+)
 def test_sequence(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -188,18 +214,26 @@ def test_sequence(hmk, target, expected):
 # Transformers
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[a..z](1..) => <b>{{ . }}</b>",       "hello world",  ["<b>hello</b>", "<b>world</b>"]),
-    ("[0..9](1..) => num:{{ . }}",           "abc123",       ["num:123"]),
-    ("[hello||world] => {{ . }}!",          "say hello",    ["hello!"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        (
+            "[a..z](1..) => <b>{{ . }}</b>",
+            "hello world",
+            ["<b>hello</b>", "<b>world</b>"],
+        ),
+        ("[0..9](1..) => num:{{ . }}", "abc123", ["num:123"]),
+        ("[hello||world] => {{ . }}!", "say hello", ["hello!"]),
+    ],
+)
 def test_transformer(hmk, target, expected):
     assert run(hmk, target) == expected
 
 
 @given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1))
 def test_full_match_template_is_identity(s):
-    plain       = run("[a..z](1..)", s)
+    plain = run("[a..z](1..)", s)
     transformed = run("[a..z](1..) => {{ . }}", s)
     assert plain == transformed
 
@@ -208,12 +242,16 @@ def test_full_match_template_is_identity(s):
 # Separators
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("<<,>>",   "a,b,c",             ["a", "b", "c"]),
-    ("<<,>>",   ",a,",               ["", "a", ""]),
-    ("<</>>",   "red/green/blue",     ["red", "green", "blue"]),
-    ("<<foo>>", "redfoogreenfooblue", ["red", "green", "blue"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("<<,>>", "a,b,c", ["a", "b", "c"]),
+        ("<<,>>", ",a,", ["", "a", ""]),
+        ("<</>>", "red/green/blue", ["red", "green", "blue"]),
+        ("<<foo>>", "redfoogreenfooblue", ["red", "green", "blue"]),
+    ],
+)
 def test_separator(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -228,14 +266,18 @@ def test_separator_parts_reassemble(parts):
 # Negation
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[[a]]",     "bcde",            ["bcde"]),
-    ("[[a]]",     "bcade",           ["bc", "de"]),
-    ("[[a]]",     "a",               []),
-    ("[[a..z]]",  "ABCdeF",          ["ABC", "F"]),
-    ("[[hello]]", "say hello world", ["say ", " world"]),
-    ("[[a||b]]",  "cdab",            ["cd"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[[a]]", "bcde", ["bcde"]),
+        ("[[a]]", "bcade", ["bc", "de"]),
+        ("[[a]]", "a", []),
+        ("[[a..z]]", "ABCdeF", ["ABC", "F"]),
+        ("[[hello]]", "say hello world", ["say ", " world"]),
+        ("[[a||b]]", "cdab", ["cd"]),
+    ],
+)
 def test_negation(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -256,12 +298,16 @@ def test_negation_lowercase_range_never_contains_lowercase(s):
 # Captures
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[0..9](1..)[px||em||rem] => {{ 1 }}",           "12px solid",  ["12"]),
-    ("[0..9](1..)[px||em||rem] => {{ 2 }}",           "12px solid",  ["px"]),
-    ("[a..z](1..)[.][a..z](1..) => {{ 1 }}.{{ 3 }}", "word.word ok", ["word.word"]),
-    ("[a..z](1..) => {{ 1 }}",                        "hello world", ["hello", "world"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[0..9](1..)[px||em||rem] => {{ 1 }}", "12px solid", ["12"]),
+        ("[0..9](1..)[px||em||rem] => {{ 2 }}", "12px solid", ["px"]),
+        ("[a..z](1..)[.][a..z](1..) => {{ 1 }}.{{ 3 }}", "word.word ok", ["word.word"]),
+        ("[a..z](1..) => {{ 1 }}", "hello world", ["hello", "world"]),
+    ],
+)
 def test_captures(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -275,15 +321,19 @@ def test_capture_group1_identity(s):
 # Integer ranges
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[5..99]",    "12px",         ["12"]),
-    ("[5..99]",    "100",          ["10"]),     # 100 > 99; "10" is in range
-    ("[5..99]",    "4",            []),          # below range
-    ("[0..99]",    "0",            ["0"]),
-    ("[0..99]",    "00",           ["0", "0"]), # leading-zero string isn't canonical
-    ("[10..999]",  "5abc42xyz100", ["42", "100"]),
-    ("[0..9](1..)", "abc123",      ["123"]),     # existing behaviour unchanged
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[5..99]", "12px", ["12"]),
+        ("[5..99]", "100", ["10"]),  # 100 > 99; "10" is in range
+        ("[5..99]", "4", []),  # below range
+        ("[0..99]", "0", ["0"]),
+        ("[0..99]", "00", ["0", "0"]),  # leading-zero string isn't canonical
+        ("[10..999]", "5abc42xyz100", ["42", "100"]),
+        ("[0..9](1..)", "abc123", ["123"]),  # existing behaviour unchanged
+    ],
+)
 def test_integer_range(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -305,32 +355,36 @@ def test_integer_range_rejects_value_out_of_bounds(n):
 # Chained transformations
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    # Two-step: filter then template (same as single => but exercises the chain path)
-    (
-        "[a..z](1..) => {{ . }}!",
-        "hello world",
-        ["hello!", "world!"],
-    ),
-    # Two-step: intermediate pattern narrows, template renders
-    (
-        "[hello||world] => {{ . }}?",
-        "say hello",
-        ["hello?"],
-    ),
-    # Three-step: separator splits, pattern filters, template wraps
-    (
-        "<<,>> => [a..z](1..) => <b>{{ . }}</b>",
-        "red,42,blue",
-        ["<b>red</b>", "<b>blue</b>"],
-    ),
-    # Three-step: separator, match heading pattern, extract group
-    (
-        "<<\n>> => [#][ ..][a..Z](1..) => {{ 3 }}",
-        "# Hello\nnot a heading\n# World",
-        ["Hello", "World"],
-    ),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # Two-step: filter then template (same as single => but exercises the chain path)
+        (
+            "[a..z](1..) => {{ . }}!",
+            "hello world",
+            ["hello!", "world!"],
+        ),
+        # Two-step: intermediate pattern narrows, template renders
+        (
+            "[hello||world] => {{ . }}?",
+            "say hello",
+            ["hello?"],
+        ),
+        # Three-step: separator splits, pattern filters, template wraps
+        (
+            "<<,>> => [a..z](1..) => <b>{{ . }}</b>",
+            "red,42,blue",
+            ["<b>red</b>", "<b>blue</b>"],
+        ),
+        # Three-step: separator, match heading pattern, extract group
+        (
+            "<<\n>> => [#][ ..][a..Z](1..) => {{ 3 }}",
+            "# Hello\nnot a heading\n# World",
+            ["Hello", "World"],
+        ),
+    ],
+)
 def test_chain(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -339,22 +393,30 @@ def test_chain(hmk, target, expected):
 # Alternate alphabets and padding
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    # hex single-char: [0..f](hex) matches one hex digit at a time
-    ("[0..f](hex)(1..)",    "1a2B",         ["1a2B"]),      # hex is case-agnostic per spec
-    ("[0..f](hex)(1..)",    "1a2b",         ["1a2b"]),
-    ("[0..f](hex)",         "g1h",          ["1"]),          # 'g' and 'h' outside hex range
-    # hex multi-char value range
-    ("[0..ff](hex)",        "1a2b",         ["1a", "2b"]),   # each pair is a valid 0-255 hex value
-    ("[0..ff](hex)",        "fff",          ["ff", "f"]),    # non-overlapping scan continues; trailing 'f' is still in range
-    # hex with pad
-    ("[0..ff](hex, pad:2)", "0a1bgg2c",     ["0a", "1b", "2c"]),
-    ("[0..99](pad:2)",      "05abc42",      ["05", "42"]),   # decimal with pad
-    ("[0..9](b10)(1..)",    "abc123",       ["123"]),        # b10 explicit — same as default
-    # b64: [A../](b64) is the full base64 alphabet
-    ("[A../](b64)(1..)",    "SGVs",         ["SGVs"]),
-    ("[A../](b64)(1..)",    "abc!def",      ["abc", "def"]), # '!' breaks the run
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # hex single-char: [0..f](hex) matches one hex digit at a time
+        ("[0..f](hex)(1..)", "1a2B", ["1a2B"]),  # hex is case-agnostic per spec
+        ("[0..f](hex)(1..)", "1a2b", ["1a2b"]),
+        ("[0..f](hex)", "g1h", ["1"]),  # 'g' and 'h' outside hex range
+        # hex multi-char value range
+        ("[0..ff](hex)", "1a2b", ["1a", "2b"]),  # each pair is a valid 0-255 hex value
+        (
+            "[0..ff](hex)",
+            "fff",
+            ["ff", "f"],
+        ),  # non-overlapping scan continues; trailing 'f' is still in range
+        # hex with pad
+        ("[0..ff](hex, pad:2)", "0a1bgg2c", ["0a", "1b", "2c"]),
+        ("[0..99](pad:2)", "05abc42", ["05", "42"]),  # decimal with pad
+        ("[0..9](b10)(1..)", "abc123", ["123"]),  # b10 explicit — same as default
+        # b64: [A../](b64) is the full base64 alphabet
+        ("[A../](b64)(1..)", "SGVs", ["SGVs"]),
+        ("[A../](b64)(1..)", "abc!def", ["abc", "def"]),  # '!' breaks the run
+    ],
+)
 def test_alternate_alphabets(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -376,17 +438,21 @@ def test_decimal_pad2_matches_exactly_2_chars(s):
 # Case-insensitive (i)
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    ("[hello](i)",        "say Hello",         ["Hello"]),
-    ("[hello](i)",        "HELLO world",        ["HELLO"]),
-    ("[hello](i)",        "hello HeLLo HELLO",  ["hello", "HeLLo", "HELLO"]),
-    ("[a..z](1.., i)",    "Hello World",        ["Hello", "World"]),
-    ("[A..Z](1.., i)",    "Hello World",        ["Hello", "World"]),
-    ("[a||b](i)",         "aAbB",               ["a", "A", "b", "B"]),
-    # Without (i), case-sensitive as before
-    ("[hello]",           "Hello",              []),
-    ("[a..z](1..)",       "Hello",              ["ello"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        ("[hello](i)", "say Hello", ["Hello"]),
+        ("[hello](i)", "HELLO world", ["HELLO"]),
+        ("[hello](i)", "hello HeLLo HELLO", ["hello", "HeLLo", "HELLO"]),
+        ("[a..z](1.., i)", "Hello World", ["Hello", "World"]),
+        ("[A..Z](1.., i)", "Hello World", ["Hello", "World"]),
+        ("[a||b](i)", "aAbB", ["a", "A", "b", "B"]),
+        # Without (i), case-sensitive as before
+        ("[hello]", "Hello", []),
+        ("[a..z](1..)", "Hello", ["ello"]),
+    ],
+)
 def test_case_insensitive(hmk, target, expected):
     assert run(hmk, target) == expected
 
@@ -401,25 +467,29 @@ def test_case_insensitive_literal_matches_upper(s):
 # Anchors
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("hmk, target, expected", [
-    # Line-start anchor
-    ("^[a..z](1..)",          "hello\nworld",   ["hello", "world"]),
-    ("^[a..z](1..)",          "hello world",    ["hello"]),  # only first word is at line start
-    # Line-end anchor
-    ("[a..z](1..)$",          "hello\nworld",   ["hello", "world"]),
-    ("[a..z](1..)$",          "hello world",    ["world"]),  # only last word is at line end
-    # Both: full-line word match
-    ("^[a..z](1..)$",         "hello\nworld",   ["hello", "world"]),
-    ("^[a..z](1..)$",         "hi there\nbye",  ["bye"]),    # "hi there" has a space, no match
-    # Document anchors
-    ("^^[a..z](1..)",         "hello world",    ["hello"]),  # only pos=0 qualifies
-    ("[a..z](1..)$$",         "hello world",    ["world"]),  # only pos=len(text) qualifies
-    ("^^[a..z](1..)$$",       "hello",          ["hello"]),  # whole doc is one word
-    ("^^[a..z](1..)$$",       "hello world",    []),         # space breaks it
-    # Literal ^ and $ inside brackets are unaffected
-    ("[^]",                   "a^b",            ["^"]),
-    ("[$]",                   "a$b",            ["$"]),
-])
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # Line-start anchor
+        ("^[a..z](1..)", "hello\nworld", ["hello", "world"]),
+        ("^[a..z](1..)", "hello world", ["hello"]),  # only first word is at line start
+        # Line-end anchor
+        ("[a..z](1..)$", "hello\nworld", ["hello", "world"]),
+        ("[a..z](1..)$", "hello world", ["world"]),  # only last word is at line end
+        # Both: full-line word match
+        ("^[a..z](1..)$", "hello\nworld", ["hello", "world"]),
+        ("^[a..z](1..)$", "hi there\nbye", ["bye"]),  # "hi there" has a space, no match
+        # Document anchors
+        ("^^[a..z](1..)", "hello world", ["hello"]),  # only pos=0 qualifies
+        ("[a..z](1..)$$", "hello world", ["world"]),  # only pos=len(text) qualifies
+        ("^^[a..z](1..)$$", "hello", ["hello"]),  # whole doc is one word
+        ("^^[a..z](1..)$$", "hello world", []),  # space breaks it
+        # Literal ^ and $ inside brackets are unaffected
+        ("[^]", "a^b", ["^"]),
+        ("[$]", "a$b", ["$"]),
+    ],
+)
 def test_anchors(hmk, target, expected):
     assert run(hmk, target) == expected
 

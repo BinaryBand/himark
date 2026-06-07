@@ -2,6 +2,7 @@ import pytest
 from hypothesis import given, settings, strategies as st
 from himark import parser
 from himark.engine import execute
+from himark.models import CompileError
 
 
 def run(hmk: str, target: str) -> list[str]:
@@ -11,6 +12,7 @@ def run(hmk: str, target: str) -> list[str]:
 
 
 # ── Literals ────────────────────────────────────────────────────────────────
+
 
 class TestLiterals:
     def test_single_char_found(self):
@@ -51,6 +53,7 @@ class TestLiterals:
 
 # ── Ranges ──────────────────────────────────────────────────────────────────
 
+
 class TestRanges:
     def test_lowercase(self):
         assert run("[a..z]", "a1B2c") == ["a", "c"]
@@ -83,16 +86,17 @@ class TestRanges:
 
     @pytest.mark.parametrize("hmk", ["[0..z]", "[a..1]"])
     def test_mixed_type_endpoints_error(self, hmk):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run(hmk, "anything")
 
     @pytest.mark.parametrize("hmk", ["[z..a]", "[9..0]", "[Z..A]"])
     def test_descending_range_error(self, hmk):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run(hmk, "anything")
 
 
 # ── Alternate alphabets ──────────────────────────────────────────────────────
+
 
 class TestAlternateAlphabets:
     def test_hex_matches(self):
@@ -116,6 +120,7 @@ class TestAlternateAlphabets:
 
 # ── Multi-character ranges ────────────────────────────────────────────────────
 
+
 class TestMultiCharRanges:
     def test_integer_range_in_bounds(self):
         assert run("[5..99]", "5 50 99") == ["5", "50", "99"]
@@ -132,11 +137,14 @@ class TestMultiCharRanges:
         # Matches "0" twice then "7"
         assert run("[0..9]", "007") == ["0", "0", "7"]
 
-    @pytest.mark.parametrize("s,expected", [
-        ("0", ["0"]),
-        ("99", ["99"]),
-        ("100", ["10", "0"]),
-    ])
+    @pytest.mark.parametrize(
+        "s,expected",
+        [
+            ("0", ["0"]),
+            ("99", ["99"]),
+            ("100", ["10", "0"]),
+        ],
+    )
     def test_integer_range_boundaries(self, s, expected):
         assert run("[0..99]", s) == expected
 
@@ -155,6 +163,7 @@ class TestMultiCharRanges:
 
 
 # ── Shortcuts ────────────────────────────────────────────────────────────────
+
 
 class TestShortcuts:
     def test_wildcard_matches_any_char(self):
@@ -185,11 +194,12 @@ class TestShortcuts:
     def test_shortcut_not_open_ended_range(self):
         # [0..] is a named shortcut, not a generic open-ended range
         # [1..] is NOT defined and should error or be treated differently
-        with pytest.raises((parser.CompileError, NotImplementedError)):
+        with pytest.raises((CompileError, NotImplementedError)):
             run("[1..]", "test")
 
 
 # ── Negation ─────────────────────────────────────────────────────────────────
+
 
 class TestNegation:
     def test_single_char(self):
@@ -204,7 +214,9 @@ class TestNegation:
 
     def test_alternation(self):
         assert run("[[hello||world]]", "say hello and world today") == [
-            "say ", " and ", " today",
+            "say ",
+            " and ",
+            " today",
         ]
 
     def test_full_match_is_empty(self):
@@ -222,15 +234,16 @@ class TestNegation:
         assert run("[[a||b||c]]", "abcdef") == ["def"]
 
     def test_unsupported_negation_of_negation(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[[[[a]]]]", "test")
 
     def test_unsupported_negation_with_count(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[[a]](2)", "test")
 
 
 # ── Repetition ───────────────────────────────────────────────────────────────
+
 
 class TestRepetition:
     def test_exact(self):
@@ -302,11 +315,12 @@ class TestRepetition:
 #         assert run("[a](n)[b](n)[c](m)[d](m)", "aabbcd") == ["aabbcd"]
 #
 #     def test_conflicting_bounds_compile_error(self):
-#         with pytest.raises(parser.CompileError):
+#         with pytest.raises(CompileError):
 #             run("[a](3..n)[b](n..2)", "test")
 
 
 # ── Captures ─────────────────────────────────────────────────────────────────
+
 
 class TestCaptures:
     def test_full_match(self):
@@ -323,7 +337,9 @@ class TestCaptures:
         assert run("[0..][px||em||rem] => {{ 2 }}", "24px 30em") == ["px", "em"]
 
     def test_three_groups(self):
-        assert run("[a..z](1..)[_][0..9](1..) => {{ 1 }}-{{ 3 }}", "foo_42") == ["foo-42"]
+        assert run("[a..z](1..)[_][0..9](1..) => {{ 1 }}-{{ 3 }}", "foo_42") == [
+            "foo-42"
+        ]
 
     # def test_varied_count_in_template(self):  # needs varied repetition
     #     assert run("[a](n) => {{ . }}({{ n }})", "aaa aa a") == ["aaa(3)", "aa(2)", "a(1)"]
@@ -338,6 +354,7 @@ class TestCaptures:
 
 
 # ── Separators ───────────────────────────────────────────────────────────────
+
 
 class TestSeparators:
     def test_slash(self):
@@ -367,13 +384,15 @@ class TestSeparators:
 
 # ── Transformers ──────────────────────────────────────────────────────────────
 
+
 class TestTransformers:
     # def test_wrap_match(self):  # [ in template body not yet handled
     #     assert run("[abc] => [{{ . }}]", "xabcx") == ["[abc]"]
 
     def test_multiple_matches(self):
         assert run("[a..z](1..) => <em>{{ . }}</em>", "hello world") == [
-            "<em>hello</em>", "<em>world</em>",
+            "<em>hello</em>",
+            "<em>world</em>",
         ]
 
     # def test_count_template_var(self):  # needs varied repetition
@@ -397,6 +416,7 @@ class TestTransformers:
 
 
 # ── Chained transformers ───────────────────────────────────────────────────────
+
 
 class TestChainedTransformers:
     def test_positive_lookahead(self):
@@ -426,6 +446,7 @@ class TestChainedTransformers:
 
 # ── Anchors ────────────────────────────────────────────────────────────────────
 
+
 class TestAnchors:
     def test_line_start_matches_first(self):
         assert run("^[abc]", "abc\nxabc") == ["abc"]
@@ -448,6 +469,7 @@ class TestAnchors:
 
 # ── Escaping ───────────────────────────────────────────────────────────────────
 
+
 class TestEscaping:
     def test_literal_open_bracket(self):
         assert run("\\[[a]\\]", "[a]") == ["[a]"]
@@ -467,6 +489,7 @@ class TestEscaping:
 
 # ── Whitespace significance ────────────────────────────────────────────────────
 
+
 class TestWhitespace:
     def test_space_outside_brackets_insignificant(self):
         assert run("[a..z] (1..3)", "abc") == run("[a..z](1..3)", "abc")
@@ -478,42 +501,45 @@ class TestWhitespace:
         assert run("[hello world]", "say hello world now") == ["hello world"]
 
     def test_space_literal_vs_whitespace_shortcut(self):
-        assert run("[ ]", "a  b") == [" ", " "]    # two single spaces
-        assert run("[ ..]", "a  b") == ["  "]       # one two-space run
+        assert run("[ ]", "a  b") == [" ", " "]  # two single spaces
+        assert run("[ ..]", "a  b") == ["  "]  # one two-space run
 
 
 # ── Error conditions ────────────────────────────────────────────────────────────
 
+
 class TestErrors:
     def test_mixed_type_range_endpoints(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[0..z]", "anything")
 
     def test_descending_ascii_range(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[z..a]", "anything")
 
     def test_descending_digit_range(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[9..0]", "anything")
 
     def test_negation_of_negation(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[[[[a]]]]", "anything")
 
     def test_negation_with_count_modifier(self):
-        with pytest.raises(parser.CompileError):
+        with pytest.raises(CompileError):
             run("[[a]](2)", "anything")
 
     # def test_varied_conflicting_bounds(self):  # needs varied repetition
-    #     with pytest.raises(parser.CompileError):
+    #     with pytest.raises(CompileError):
     #         run("[a](3..n)[b](n..2)", "anything")
 
 
 # ── Property-based ─────────────────────────────────────────────────────────────
 
 _lowercase = st.text(alphabet=st.characters(whitelist_categories=("Ll",)), min_size=1)
-_alphanum = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=0, max_size=40)
+_alphanum = st.text(
+    alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=0, max_size=40
+)
 _small_ints = st.integers(min_value=0, max_value=99)
 _large_ints = st.integers(min_value=100, max_value=999)
 
