@@ -285,38 +285,39 @@ class TestRepetition:
 
 
 # ── Varied repetition ─────────────────────────────────────────────────────────
-# NOTE: Varied repetition variables (n, m) are not yet implemented.
 
-# class TestVariedRepetition:
-#     def test_equal_counts_match(self):
-#         assert run("[a](n)[b](n)", "aabb") == ["aabb"]
-#
-#     def test_equal_counts_multiple(self):
-#         assert run("[a](n)[b](n)", "ab aabb aaabbb") == ["ab", "aabb", "aaabbb"]
-#
-#     def test_unequal_counts_no_match(self):
-#         assert run("[a](n)[b](n)", "aab") == []
-#         assert run("[a](n)[b](n)", "abb") == []
-#
-#     def test_bounded_variable_lower(self):
-#         # [a](2..n)[b](n..3): n=2 → "aabb"
-#         assert run("[a](2..n)[b](n..3)", "aabb") == ["aabb"]
-#
-#     def test_bounded_variable_upper(self):
-#         # n=3 → "aaabbb"
-#         assert run("[a](2..n)[b](n..3)", "aaabbb") == ["aaabbb"]
-#
-#     def test_bounded_variable_out_of_range(self):
-#         # n must be ≥2; n=1 → no match
-#         assert run("[a](2..n)[b](n..3)", "ab") == []
-#
-#     def test_independent_variables(self):
-#         # n and m are independent
-#         assert run("[a](n)[b](n)[c](m)[d](m)", "aabbcd") == ["aabbcd"]
-#
-#     def test_conflicting_bounds_compile_error(self):
-#         with pytest.raises(CompileError):
-#             run("[a](3..n)[b](n..2)", "test")
+
+class TestVariedRepetition:
+    def test_equal_counts_match(self):
+        assert run("[a](n)[b](n)", "aabb") == ["aabb"]
+
+    def test_equal_counts_multiple(self):
+        assert run("[a](n)[b](n)", "ab aabb aaabbb") == ["ab", "aabb", "aaabbb"]
+
+    def test_unequal_counts_no_full_match(self):
+        # "aab" has no a^n b^n of length > 2 — only "ab" (n=1) is a valid substring
+        assert run("[a](n)[b](n)", "aab") == ["ab"]
+        assert run("[a](n)[b](n)", "abb") == ["ab"]
+
+    def test_bounded_variable_lower(self):
+        # [a](2..n)[b](n..3): n=2 → "aabb"
+        assert run("[a](2..n)[b](n..3)", "aabb") == ["aabb"]
+
+    def test_bounded_variable_upper(self):
+        # n=3 → "aaabbb"
+        assert run("[a](2..n)[b](n..3)", "aaabbb") == ["aaabbb"]
+
+    def test_bounded_variable_out_of_range(self):
+        # n must be ≥2; n=1 → no match
+        assert run("[a](2..n)[b](n..3)", "ab") == []
+
+    def test_independent_variables(self):
+        # n and m are independent
+        assert run("[a](n)[b](n)[c](m)[d](m)", "aabbcd") == ["aabbcd"]
+
+    def test_conflicting_bounds_compile_error(self):
+        with pytest.raises(CompileError):
+            run("[a](3..n)[b](n..2)", "test")
 
 
 # ── Captures ─────────────────────────────────────────────────────────────────
@@ -341,8 +342,8 @@ class TestCaptures:
             "foo-42"
         ]
 
-    # def test_varied_count_in_template(self):  # needs varied repetition
-    #     assert run("[a](n) => {{ . }}({{ n }})", "aaa aa a") == ["aaa(3)", "aa(2)", "a(1)"]
+    def test_varied_count_in_template(self):
+        assert run("[a](n) => {{ . }}({{ n }})", "aaa aa a") == ["aaa(3)", "aa(2)", "a(1)"]
 
     def test_subgroup(self):
         # Group 1 contains [a..z](1..) and [0..9](1..) as sub-groups
@@ -395,8 +396,8 @@ class TestTransformers:
             "<em>world</em>",
         ]
 
-    # def test_count_template_var(self):  # needs varied repetition
-    #     assert run("[a](n) => {{ n }}x", "aaa aa a") == ["3x", "2x", "1x"]
+    def test_count_template_var(self):
+        assert run("[a](n) => {{ n }}x", "aaa aa a") == ["3x", "2x", "1x"]
 
     # def test_emoji_shortcode(self):  # emoji rendering not yet implemented
     #     result = run("[done] => {{ . }} {{ :white_check_mark: }}", "done")
@@ -529,9 +530,9 @@ class TestErrors:
         with pytest.raises(CompileError):
             run("[[a]](2)", "anything")
 
-    # def test_varied_conflicting_bounds(self):  # needs varied repetition
-    #     with pytest.raises(CompileError):
-    #         run("[a](3..n)[b](n..2)", "anything")
+    def test_varied_conflicting_bounds(self):
+        with pytest.raises(CompileError):
+            run("[a](3..n)[b](n..2)", "anything")
 
 
 # ── Property-based ─────────────────────────────────────────────────────────────

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from itertools import product as _product
 from typing import Iterator
 
+from himark.models import CompileError
 from himark.node import HMKNode
 
 
@@ -121,11 +122,16 @@ def _merge(
     """Tighten the domain for *name* with a new lo/hi constraint."""
     if name not in specs:
         specs[name] = VarSpec(name, lo, hi)
-        return
-    existing = specs[name]
-    existing.lo = max(existing.lo, lo)
-    if hi is not None:
-        existing.hi = min(existing.hi, hi) if existing.hi is not None else hi
+    else:
+        existing = specs[name]
+        existing.lo = max(existing.lo, lo)
+        if hi is not None:
+            existing.hi = min(existing.hi, hi) if existing.hi is not None else hi
+    spec = specs[name]
+    if spec.hi is not None and spec.lo > spec.hi:
+        raise CompileError(
+            f"Conflicting bounds for variable '{name}': {spec.lo}..{spec.hi}"
+        )
 
 
 def _flatten(opts: list[HMKNode]) -> list[HMKNode]:
