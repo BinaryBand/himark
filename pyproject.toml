@@ -7,11 +7,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-test = [
-	"pytest>=7.0",
-	"hypothesis>=6.50",
-	"pytest-cov",
-]
+test = ["pytest>=7.0", "hypothesis>=6.50", "pytest-cov"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
