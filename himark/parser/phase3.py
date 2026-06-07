@@ -1,6 +1,13 @@
 """Phase 3: Refine leaf node contents based on their parent container type."""
 
+import re
 from himark.node import HMKNode
+
+_SPAN_RE  = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
+_GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
+_EMOJI_RE = re.compile(r"^:([^:]+):$")
+_LATEX_RE = re.compile(r"^\$(.+)\$$", re.DOTALL)
+_VAR_RE   = re.compile(r"^[a-z]$")
 
 
 def parse(node: HMKNode) -> HMKNode:
@@ -24,7 +31,10 @@ def _refine_child(node: HMKNode, parent_type: str) -> HMKNode:
     if parent_type == "options":
         return _parse_options_leaf(node.content)
 
-    return node  # double_braces, double_chevrons, root — deferred
+    if parent_type == "double_braces":
+        return _parse_template_expr(node.content)
+
+    return node  # double_chevrons, root — deferred
 
 
 def _parse_bracket_leaf(content: str) -> HMKNode:
@@ -50,6 +60,30 @@ def _parse_range_or_literal(content: str) -> HMKNode:
         parts = content.split("..", 1)
         return HMKNode("range", content, metadata={"start": parts[0], "end": parts[1]})
     return HMKNode("literal", content)
+
+
+def _parse_capture_path(dotted: str) -> list[int]:
+    return [int(p) for p in dotted.split(".")]
+
+
+def _parse_template_expr(content: str) -> HMKNode:
+    expr = content.strip()
+    if expr == ".":
+        return HMKNode("full_match", expr)
+    if m := _SPAN_RE.match(expr):
+        return HMKNode("span_ref", expr, metadata={
+            "start": _parse_capture_path(m.group(1)),
+            "end":   _parse_capture_path(m.group(2)),
+        })
+    if _GROUP_RE.match(expr):
+        return HMKNode("group_ref", expr, metadata={"index": _parse_capture_path(expr)})
+    if m := _EMOJI_RE.match(expr):
+        return HMKNode("emoji", expr, metadata={"code": m.group(1)})
+    if m := _LATEX_RE.match(expr):
+        return HMKNode("latex", expr, metadata={"expr": m.group(1)})
+    if _VAR_RE.match(expr):
+        return HMKNode("var_ref", expr)
+    return HMKNode("leaf", content)
 
 
 def _parse_options_leaf(content: str) -> HMKNode:

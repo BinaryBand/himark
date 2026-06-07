@@ -20,6 +20,21 @@ def print_tree(node, indent=0):
         print(f"{prefix}LEAF: {node.content!r}")
     elif node.type == "literal":
         print(f"{prefix}literal: {node.content!r}")
+    elif node.type == "full_match":
+        print(f"{prefix}full_match")
+    elif node.type == "group_ref":
+        idx = ".".join(str(i) for i in node.metadata["index"])
+        print(f"{prefix}group_ref: {idx}")
+    elif node.type == "span_ref":
+        start = ".".join(str(i) for i in node.metadata["start"])
+        end   = ".".join(str(i) for i in node.metadata["end"])
+        print(f"{prefix}span_ref: {start}..{end}")
+    elif node.type == "var_ref":
+        print(f"{prefix}var_ref: {node.content!r}")
+    elif node.type == "emoji":
+        print(f"{prefix}emoji: :{node.metadata['code']}:")
+    elif node.type == "latex":
+        print(f"{prefix}latex: {node.metadata['expr']!r}")
     elif node.type == "shortcut":
         print(f"{prefix}shortcut: {node.metadata.get('kind')} ({node.content!r})")
     elif node.type == "range":
