@@ -435,6 +435,64 @@ def test_decimal_pad2_matches_exactly_2_chars(s):
 
 
 # ---------------------------------------------------------------------------
+# b32 alphabet (0-9 and a-v; case-agnostic)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # Single-char: any b32 character (0-9, a-v) matches
+        ("[0..v](b32)(1..)", "abc0v!", ["abc0v"]),
+        # Case-agnostic: uppercase A-V also match
+        ("[0..v](b32)(1..)", "ABV", ["ABV"]),
+        # 'w'-'z' are not in b32 (alphabet ends at 'v')
+        ("[0..v](b32)(1..)", "wxyz", []),
+        # Mixed: b32 chars surrounded by non-b32
+        ("[0..v](b32)(1..)", "!abc!", ["abc"]),
+    ],
+)
+def test_b32(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(alphabet="0123456789abcdefghijklmnopqrstuv", min_size=1))
+def test_b32_run_consumes_all_valid_chars(s):
+    # A string consisting entirely of b32 chars is consumed as one run
+    assert "".join(run("[0..v](b32)(1..)", s)) == s
+
+
+# ---------------------------------------------------------------------------
+# b58 alphabet (no 0, I, O, l; case-sensitive)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # Valid b58 chars match
+        ("[1..z](b58)(1..)", "1Az", ["1Az"]),
+        # Characters excluded from b58 break the run
+        ("[1..z](b58)(1..)", "1Az0IOl", ["1Az"]),
+        # '0', 'I', 'O', 'l' individually produce no match
+        ("[1..z](b58)", "0IOl", []),
+        # b58 is case-sensitive — 'I' is excluded but other uppercase matches
+        ("[1..z](b58)(1..)", "ABC", ["ABC"]),
+    ],
+)
+def test_b58(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(
+    alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
+    min_size=1,
+))
+def test_b58_run_consumes_all_valid_chars(s):
+    assert "".join(run("[1..z](b58)(1..)", s)) == s
+
+
+# ---------------------------------------------------------------------------
 # Case-insensitive (i)
 # ---------------------------------------------------------------------------
 

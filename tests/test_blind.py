@@ -94,6 +94,14 @@ class TestRanges:
         with pytest.raises(CompileError):
             run(hmk, "anything")
 
+    def test_open_ended_range_error_message(self):
+        with pytest.raises(CompileError, match="Undefined range shortcut"):
+            run("[1..]", "test")
+
+    def test_open_ended_range_error_message_for_letter(self):
+        with pytest.raises(CompileError, match="Undefined range shortcut"):
+            run("[b..]", "test")
+
 
 # ── Alternate alphabets ──────────────────────────────────────────────────────
 
@@ -116,6 +124,14 @@ class TestAlternateAlphabets:
     def test_case_insensitive_range(self):
         result = run("[a..f](i)", "abcABCgG")
         assert set(result) == {"a", "b", "c", "A", "B", "C"}
+
+    def test_case_insensitive_multi_word_alternation(self):
+        assert run("[hello||world](i)", "HELLO World") == ["HELLO", "World"]
+
+    def test_two_paren_groups_equivalent_to_comma(self):
+        # [0..f](hex)(1..) ≡ [0..f](hex, 1..)
+        target = "1a2b g"
+        assert run("[0..f](hex)(1..)", target) == run("[0..f](hex, 1..)", target)
 
 
 # ── Multi-character ranges ────────────────────────────────────────────────────
@@ -378,6 +394,13 @@ class TestCaptures:
     def test_subgroup_reconstruct_via_subs(self):
         assert run("[a..z](1..) => {{ 1.1 }}{{ 1.2 }}{{ 1.3 }}", "abc") == ["abc"]
 
+    def test_span_two_adjacent_groups(self):
+        # {{ 1.1..2.1 }} spans from start of group 1 to end of group 2
+        assert run("[a][b][c] => {{ 1.1..2.1 }}", "abc") == ["ab"]
+
+    def test_span_middle_two_groups(self):
+        assert run("[a][b][c] => {{ 2.1..3.1 }}", "abc") == ["bc"]
+
 
 # ── Separators ───────────────────────────────────────────────────────────────
 
@@ -439,6 +462,16 @@ class TestTransformers:
 
     def test_template_whitespace_insignificant(self):
         assert run("[a] => {{ . }}", "x") == run("[a] => {{.}}", "x")
+
+    def test_unknown_template_expr_renders_empty(self):
+        # Expressions that match no registered rule fall through to a leaf node
+        # and produce no output rather than crashing.
+        result = run("[a] => {{ ?mystery }}", "a")
+        assert result == [""]
+
+    def test_separator_empty_parts_in_chain(self):
+        # Leading/trailing separators produce empty strings that pass through templates
+        assert run("<</>> => <p>{{ . }}</p>", "/a/") == ["<p></p>", "<p>a</p>", "<p></p>"]
 
 
 # ── Chained transformers ───────────────────────────────────────────────────────

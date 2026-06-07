@@ -15,7 +15,7 @@ class SymbolResolver(Protocol):
     node_type: str  # matches HMKNode.type, e.g. "emoji", "latex"
     metadata_key: str  # key in node.metadata holding the resolver input
 
-    def resolve(self, content: str) -> str:
+    def resolve(self, content: str, /) -> str:
         """Resolve *content* to Unicode, or return a fallback string."""
         ...
 
