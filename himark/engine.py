@@ -137,12 +137,13 @@ def _match_bracket(
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options)
 
+    ci = _parse_case_insensitive(options)
     start_pos = pos
     positions = [pos]
     current = pos
     count = 0
     while max_count is None or count < max_count:
-        end = _match_content(content, text, current)
+        end = _match_content(content, text, current, ci)
         if end is None or end == current:
             break
         count += 1
@@ -176,19 +177,21 @@ def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo 
     return _SkipTo(start + 1)
 
 
-def _match_content(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_content(node: HMKNode, text: str, pos: int, ci: bool = False) -> int | None:
     if pos >= len(text):
         return None
     if node.type == "literal":
         s = node.content
+        if ci:
+            return pos + len(s) if text[pos:pos + len(s)].lower() == s.lower() else None
         return pos + len(s) if text[pos:pos + len(s)] == s else None
     if node.type == "shortcut":
         return _match_shortcut(node.metadata["kind"], text, pos)
     if node.type == "range":
-        return _match_range(node.metadata["start"], node.metadata["end"], text, pos)
+        return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ci)
     if node.type == "alternation":
         for arm in node.children:
-            end = _match_content(arm, text, pos)
+            end = _match_content(arm, text, pos, ci)
             if end is not None:
                 return end
         return None
@@ -214,16 +217,18 @@ def _match_shortcut(kind: str, text: str, pos: int) -> int | None:
     return end
 
 
-def _match_range(start: str, end: str, text: str, pos: int) -> int | None:
+def _match_range(start: str, end: str, text: str, pos: int, ci: bool = False) -> int | None:
     if not start or not end:
         return None
     # Integer range: both endpoints are decimal digit strings
     if start.isdigit() and end.isdigit():
         return _match_integer_range(int(start), int(end), text, pos)
     ch = text[pos]
-    # cross-case shorthand: [a..Z] = a-z | A-Z
+    # cross-case shorthand: [a..Z] = a-z | A-Z (already case-inclusive, ci is redundant)
     if start.islower() and end.isupper():
         return pos + 1 if (start <= ch <= "z" or "A" <= ch <= end) else None
+    if ci:
+        return pos + 1 if start.lower() <= ch.lower() <= end.lower() else None
     return pos + 1 if start <= ch <= end else None
 
 
@@ -247,7 +252,7 @@ def _match_integer_range(lo: int, hi: int, text: str, pos: int) -> int | None:
 # Option parsing helpers
 # ---------------------------------------------------------------------------
 
-_IGNORED_OPTIONS = {"hex", "b10", "dec", "b16", "b32", "b58", "b64", "i"}
+_IGNORED_OPTIONS = {"hex", "b10", "dec", "b16", "b32", "b58", "b64"}
 
 
 def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
@@ -260,6 +265,10 @@ def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
     return result
 
 
+def _parse_case_insensitive(options: list[HMKNode]) -> bool:
+    return any(opt.type == "option" and opt.content == "i" for opt in options)
+
+
 def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
     min_count, max_count, lazy = 1, 1, False
     for opt in options:
@@ -270,6 +279,8 @@ def _parse_repetition(options: list[HMKNode]) -> tuple[int, int | None, bool]:
         elif opt.type == "option":
             if opt.content.isdigit():
                 min_count = max_count = int(opt.content)
+            elif opt.content == "i":
+                pass  # handled by _parse_case_insensitive
             elif opt.content not in _IGNORED_OPTIONS:
                 raise NotImplementedError(f"Varied repetition variable '{opt.content}' not yet supported")
         elif opt.type == "lazy":

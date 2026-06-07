@@ -336,6 +336,31 @@ def test_chain(hmk, target, expected):
 
 
 # ---------------------------------------------------------------------------
+# Case-insensitive (i)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    ("[hello](i)",        "say Hello",         ["Hello"]),
+    ("[hello](i)",        "HELLO world",        ["HELLO"]),
+    ("[hello](i)",        "hello HeLLo HELLO",  ["hello", "HeLLo", "HELLO"]),
+    ("[a..z](1.., i)",    "Hello World",        ["Hello", "World"]),
+    ("[A..Z](1.., i)",    "Hello World",        ["Hello", "World"]),
+    ("[a||b](i)",         "aAbB",               ["a", "A", "b", "B"]),
+    # Without (i), case-sensitive as before
+    ("[hello]",           "Hello",              []),
+    ("[a..z](1..)",       "Hello",              ["ello"]),
+])
+def test_case_insensitive(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1))
+def test_case_insensitive_literal_matches_upper(s):
+    upper = s.upper()
+    assert run(f"[{s}](i)", upper) == [upper]
+
+
+# ---------------------------------------------------------------------------
 # Anchors
 # ---------------------------------------------------------------------------
 
