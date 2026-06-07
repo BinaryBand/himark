@@ -1,3 +1,6 @@
+from himark import parser
+from himark.node import print_tree
+
 test_cases = {
     "Basic literals": [
         "[a]",
@@ -8,7 +11,6 @@ test_cases = {
     "Multi-token sequences": [
         "[hello][ ..][world]",
         "[a..z][.][a..z]",
-        "[hello][ ..][world]",
     ],
     "Ranges": [
         "[a..z]",
@@ -16,7 +18,7 @@ test_cases = {
         "[a..Z]",
         "[a..c||H]",
         "[a..c||F..H]",
-        "[A..z]",       # includes punctuation codepoints 91-96
+        "[A..z]",
     ],
     "Shortcuts": [
         "[..]",
@@ -102,106 +104,20 @@ test_cases = {
 }
 
 
-class HMKNode:
-    def __init__(self, node_type, content, children=None, metadata=None):
-        self.type = node_type
-        self.content = content
-        self.children = children or []
-        self.metadata = metadata or {}
-
-    def __repr__(self):
-        if self.children:
-            children_str = ", ".join(repr(c) for c in self.children)
-            return f"HMK({self.type!r}, {self.content!r}, [{children_str}])"
-        if self.metadata:
-            return f"HMK({self.type!r}, {self.content!r}, meta={self.metadata})"
-        return f"HMK({self.type!r}, {self.content!r})"
-
-
-def parse_hmk_recursive(text):
-    """Recursively parse HMK text into an AST."""
-    import re
-
-    parenthesis = r"\(([^)]+)\)"
-    single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"
-    double_brackets = r"\[\[((?:[^\]\\]|\\.)+)\]\]"
-    brackets = f"{double_brackets}|{single_brackets}"
-    brackets_with_opts = f"{brackets}(?:{parenthesis})?"
-    double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
-    double_braces = r"{{((?:[^}]|}[^}])*)}}"
-
-    possible_matches = f"{brackets_with_opts}|{double_chevrons}|{double_braces}"
-
-    # Map group index to node type
-    group_types = ["double_brackets", "single_brackets", "options", "double_chevrons", "double_braces"]
-
-    nodes = []
-    pos = 0
-    leaf_start = None
-
-    while pos < len(text):
-        match = re.match(possible_matches, text[pos:])
-        if not match:
-            if leaf_start is None:
-                leaf_start = pos
-            pos += 1
-            continue
-
-        if leaf_start is not None:
-            nodes.append(HMKNode("leaf", text[leaf_start:pos]))
-            leaf_start = None
-
-        if match.start() > 0:
-            nodes.append(HMKNode("leaf", text[pos:pos + match.start()]))
-
-        groups = match.groups()
-        matched_idx = next(i for i, g in enumerate(groups) if g is not None)
-        node_type = group_types[matched_idx]
-        content = groups[matched_idx]
-
-        # Create node with recursive children
-        node = HMKNode(node_type, content, parse_hmk_recursive(content).children)
-
-        # Handle options for single brackets
-        if matched_idx == 1 and groups[2]:  # Single brackets with options
-            node.metadata["options"] = parse_hmk_recursive(groups[2]).children
-
-        nodes.append(node)
-        pos += match.end()
-
-    if leaf_start is not None:
-        nodes.append(HMKNode("leaf", text[leaf_start:]))
-
-    return HMKNode("root", text, nodes or [HMKNode("leaf", text)])
-
-
-def print_tree(node, indent=0):
-    """Pretty print the AST."""
-    prefix = "  " * indent
-    if node.type == "leaf":
-        print(f"{prefix}LEAF: {node.content!r}")
-    else:
-        print(f"{prefix}{node.type}: {node.content!r}")
-        if node.metadata:
-            for key, val in node.metadata.items():
-                print(f"{prefix}  @{key}:")
-                for child in val:
-                    print_tree(child, indent + 2)
-        for child in node.children:
-            print_tree(child, indent + 1)
-
-
 def main():
     print("=" * 70)
-    print("HMK Recursive Parser - AST Output")
+    print("HMK Parser - Three Phase Output")
     print("=" * 70)
 
     for group, cases in test_cases.items():
         print(f"\n--- {group} ---\n")
-        for test in cases:
-            print(f"Input: {test!r}")
-            ast = parse_hmk_recursive(test)
-            print_tree(ast)
+        for text in cases:
+            print(f"Input: {text!r}")
+            pattern_tree, template_tree = parser.parse(text)
+            print_tree(pattern_tree)
+            if template_tree:
+                print("  => (template)")
+                print_tree(template_tree, indent=1)
             print()
 
 
