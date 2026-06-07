@@ -20,6 +20,8 @@ def print_tree(node, indent=0):
         print(f"{prefix}LEAF: {node.content!r}")
     elif node.type == "literal":
         print(f"{prefix}literal: {node.content!r}")
+    elif node.type == "shortcut":
+        print(f"{prefix}shortcut: {node.metadata.get('kind')} ({node.content!r})")
     elif node.type == "range":
         start, end = node.metadata.get("start", ""), node.metadata.get("end", "")
         print(f"{prefix}range: {start!r}..{end!r}")
@@ -28,6 +30,8 @@ def print_tree(node, indent=0):
         print(f"{prefix}repetition_range: {mn!r}..{mx!r}")
     elif node.type == "pad":
         print(f"{prefix}pad: {node.metadata.get('width')!r}")
+    elif node.type == "lazy":
+        print(f"{prefix}lazy")
     elif node.type == "option":
         print(f"{prefix}option: {node.content!r}")
     else:

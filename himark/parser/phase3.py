@@ -35,7 +35,17 @@ def _parse_bracket_leaf(content: str) -> HMKNode:
     return _parse_range_or_literal(content)
 
 
+_SHORTCUTS = {
+    "..":  "any_char",    # [..]  — any single character
+    "0..": "digits",      # [0..] — one or more decimal digits
+    "a..": "word_chars",  # [a..] — one or more word characters [a-zA-Z0-9_]
+    " ..": "whitespace",  # [ ..] — one or more whitespace characters
+}
+
+
 def _parse_range_or_literal(content: str) -> HMKNode:
+    if content in _SHORTCUTS:
+        return HMKNode("shortcut", content, metadata={"kind": _SHORTCUTS[content]})
     if ".." in content:
         parts = content.split("..", 1)
         return HMKNode("range", content, metadata={"start": parts[0], "end": parts[1]})
@@ -51,6 +61,8 @@ def _parse_options_leaf(content: str) -> HMKNode:
 
 
 def _parse_single_option(content: str) -> HMKNode:
+    if content == "?":
+        return HMKNode("lazy", content)
     if ".." in content:
         parts = content.split("..", 1)
         return HMKNode("repetition_range", content, metadata={"min": parts[0], "max": parts[1]})
