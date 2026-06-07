@@ -1,7 +1,7 @@
 # Himark
 
-**Version:** 0.4.1-draft  
-**Status:** Draft Specification  
+**Version:** 0.4.2
+**Status:** Draft Specification
 **License:** CC0 1.0 Universal (Public Domain)
 
 ---
@@ -10,12 +10,13 @@ Himark uses the `.hmk` file extension, designed for pattern matching and text pr
 
 ## Escaping
 
-The backslash `\` escapes the three metacharacter pairs that have no bracket alternative, and provides control character shorthands.
+The backslash `\` escapes metacharacter pairs that have no bracket alternative, and provides control character shorthands.
 
 | Escape | Matches |
 | ------ | ------- |
 | `\\` | Literal backslash |
 | `\[` `\]` | Literal `[` or `]` |
+| `\{` `\}` | Literal `{` or `}` — required only when adjacent to another (e.g. `\}}` emits `}}` in template output) |
 | `\t` `\n` `\r` | Tab, newline, carriage return |
 
 Characters that form two-character operators (`..`, `||`, `<<`, `>>`, `{{`, `}}`) are already literal when used alone and do not need escaping. Anchor characters (`^`, `$`) are literal inside `[ ]`; use `[^]` or `[$]` to match them within a sequence.
@@ -39,7 +40,7 @@ Ranges use **Unicode codepoint order**. UTF-8 and UTF-16 are encodings of the sa
 
 **Cross-case shorthand** fires when both conditions hold: (1) the left endpoint has a higher codepoint than the right, and (2) the left is a lowercase ASCII letter and the right is an uppercase ASCII letter. The range expands to the union of two ascending sub-ranges, each running from its endpoint to the edge of its case. `[a..Z]` = `[a..z||A..Z]`. `[b..A]` = `[b..z||A..Z]` — note this excludes `'a'`. When in doubt, spell out both sub-ranges explicitly.
 
-The ascending range `[A..z]` is valid but includes the six punctuation characters between `'Z'` and `'a'` (codepoints 91–96: `[ \ ] ^ _ \``). This is rarely intended; prefer`[a..Z]`.
+The ascending range `[A..z]` is valid but includes the six punctuation characters between `'Z'` and `'a'` (codepoints 91–96: `` [\]^_` ``). This is rarely intended; prefer `[a..Z]`.
 
 ```proto
 [a..z]       // r/[a-z]/
@@ -58,12 +59,12 @@ The ascending range `[A..z]` is valid but includes the six punctuation character
 [ ..]  // one or more whitespace characters
 ```
 
-The shortcuts `[0..]`, `[a..]`, and `[ ..]` are fixed shorthands, not open-ended ranges. They match as atomic units: `[0..](2)` repeats the digit-sequence pattern twice, not "exactly two digits." For exact digit counts use a closed range: `[0..9](2)`.
+The shortcuts `[0..]`, `[a..]`, and `[ ..]` are fixed shorthands, not open-ended ranges. For exact digit counts, use a closed range: `[0..9](2)`.
 
-Integer value ranges match complete tokens — no leading zeros (except `'0'` itself). `[5..99]` matches `"10"` inside `"100"`.
+Integer value ranges match canonical strings with no leading zeros (except `'0'` itself). `[5..99]` can match `"10"` inside `"100"` since Himark matches strings, not semantic integer tokens.
 
 ```proto
-[5..99]  // integers 5 to 99 — complete tokens only
+[5..99]  // integers 5 to 99 — no leading zeros
 ```
 
 ### Alternate alphabets
@@ -167,18 +168,9 @@ Alternation branches within a single `[...]` group do not create sub-groups — 
 
 Consecutive, leading, or trailing separators produce empty strings: `'red//blue'` with `<</>>` → `'red'`, `''`, `'blue'`.
 
-**Surrounding-pattern form**: a separator may appear inside `[ ]` to constrain segment boundaries.
-
-| Expression | Target | Result |
-| ---------- | ------ | ------ |
-| `[W<</>>Ex]` | 'We/heart/RegEx' | 'We', 'heart', 'RegEx' |
-| `[W]<</>>[Ex]` | 'We/heart/RegEx' | 'e', 'heart', 'Reg' |
-
-In the first form, boundary patterns are included in each segment. In the second, they are consumed as separate groups and excluded from the segment content.
-
 ## Transformers
 
-Inside a template, `{{ expr }}` interpolates a value; a lone `{` or `}` inside any `{{ }}` pair is literal unless part of a two-character operators (e.g. `}}`). Whitespace around expression content is insignificant (`{{ . }}` and `{{.}}` are equivalent).
+Inside a template, `{{ expr }}` interpolates a value; a lone `{` or `}` inside any `{{ }}` pair is literal unless part of a two-character operator (e.g. `}}`). To emit a literal `}}` in template output, write `\}}`. Whitespace around expression content is insignificant (`{{ . }}` and `{{.}}` are equivalent).
 
 Template variables:
 
@@ -201,12 +193,23 @@ Template variables:
 [0..][px||em||rem] => {{ 1 }}
 ```
 
-Positive lookahead and lookbehind are expressed as chain transformations rather than zero-width assertions:
+### Chained transformations
+
+A pattern may contain multiple groups. The template then selects which group(s) to emit, expressing assertions that regex would encode as lookahead or lookbehind:
 
 | Regex | HMK equivalent |
 | ----- | -------------- |
 | `X(?=Y)` — positive lookahead | `[X][Y] => {{ 1 }}` |
 | `(?<=X)Y` — positive lookbehind | `[X][Y] => {{ 2 }}` |
+
+A transformer may also chain multiple `=>` steps. Each intermediate step is itself a pattern; `=>` pipes the **full matched text** of the current step as the input domain for the next. The final `=>` leads to a template. Template variables (`{{ . }}`, `{{ 1 }}`, etc.) always refer to the immediately preceding pattern's match.
+
+```proto
+<<\n>> => [#][ ][a..Z](1..) => <h1>{{ 2 }}</h1>
+// Split by newline, then match heading lines, then emit the title text in <h1>
+```
+
+Intermediate group selection — narrowing what passes to the next step via a `{{ }}` expression mid-chain — is not supported. If only a specific group is needed as input to a subsequent pattern, restructure the first pattern to match that group directly, or use two independent statements.
 
 ## Reference
 
@@ -219,14 +222,14 @@ $   // End of a line (literal inside [])
 $$  // End of the document
 ```
 
-Integer value ranges match complete tokens: `[5..99]` does not match `"10"` inside `"100"`. General word-boundary assertions are not currently supported.
+General word-boundary assertions are not currently supported.
 
 ### Whitespace significance
 
 Outside group delimiters (`[ ]`, `<<...>>`) and template blocks, whitespace between tokens is insignificant. Inside `[ ]`, spaces are literal — `[ ]` matches exactly one space character. Use `[ ..]` for any-whitespace sequences and `\t`, `\n` for specific control characters.
 
 ```proto
-[a..z] (1..3)        // same as [a..z](1..3)
+[a..z](1..3)         // same as [a..z] (1..3)
 [hello world]        // matches the literal string 'hello world' (one space)
 [hello][ ..][world]  // matches 'hello world', 'hello  world', 'hello\tworld', etc.
 ```
@@ -237,6 +240,12 @@ A `.hmk` file is a sequence of statements evaluated top-to-bottom in a single pa
 
 - **Pattern statements** collect all non-overlapping matches (left-to-right, greedy by default).
 - **Transformer statements** apply the first matching rule at each position; at most one transformer fires per input position per pass.
+
+Each statement acts on the **original input independently** — statements do not pipe into one another. A transformer `[X] => T` does not feed its output as the input to the next statement.
+
+A transformer statement produces a **list of results**, one per match. For a single-step transformer, the pattern yields an ordered list of match objects; each match object carries the full matched text and any captured groups. The template is applied to each match object in turn, resolving `{{ . }}`, `{{ 1 }}`, and other variables from that match. The final output is the list of resolved strings in match order.
+
+For a chained transformer (`P1 => P2 => ... => T`), each intermediate pattern is applied to the full matched text of the previous step. The list expands or contracts at each step — a match that yields no result in an intermediate step produces no output. See [Chained transformations](#chained-transformations).
 
 ### Comments
 
