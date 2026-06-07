@@ -137,12 +137,19 @@ def parse_hmk_recursive(text):
 
     nodes = []
     pos = 0
+    leaf_start = None
 
     while pos < len(text):
         match = re.match(possible_matches, text[pos:])
         if not match:
-            nodes.append(HMKNode("leaf", text[pos:]))
-            break
+            if leaf_start is None:
+                leaf_start = pos
+            pos += 1
+            continue
+
+        if leaf_start is not None:
+            nodes.append(HMKNode("leaf", text[leaf_start:pos]))
+            leaf_start = None
 
         if match.start() > 0:
             nodes.append(HMKNode("leaf", text[pos:pos + match.start()]))
@@ -161,6 +168,9 @@ def parse_hmk_recursive(text):
 
         nodes.append(node)
         pos += match.end()
+
+    if leaf_start is not None:
+        nodes.append(HMKNode("leaf", text[leaf_start:]))
 
     return HMKNode("root", text, nodes or [HMKNode("leaf", text)])
 
