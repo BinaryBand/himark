@@ -270,3 +270,33 @@ def test_captures(hmk, target, expected):
 @given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1))
 def test_capture_group1_identity(s):
     assert run("[a..z](1..)", s) == run("[a..z](1..) => {{ 1 }}", s)
+
+
+# ---------------------------------------------------------------------------
+# Integer ranges
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    ("[5..99]",    "12px",         ["12"]),
+    ("[5..99]",    "100",          ["10"]),     # 100 > 99; "10" is in range
+    ("[5..99]",    "4",            []),          # below range
+    ("[0..99]",    "0",            ["0"]),
+    ("[0..99]",    "00",           ["0", "0"]), # leading-zero string isn't canonical
+    ("[10..999]",  "5abc42xyz100", ["42", "100"]),
+    ("[0..9](1..)", "abc123",      ["123"]),     # existing behaviour unchanged
+])
+def test_integer_range(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.integers(min_value=0, max_value=99))
+def test_integer_range_matches_value_in_bounds(n):
+    assert run("[0..99]", str(n)) == [str(n)]
+
+
+@given(st.integers(min_value=100, max_value=9999))
+def test_integer_range_rejects_value_out_of_bounds(n):
+    # A number > 99 should not match [0..99] as a whole, though a prefix might
+    matches = run("[0..99]", str(n))
+    for m in matches:
+        assert 0 <= int(m) <= 99

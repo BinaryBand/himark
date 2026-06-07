@@ -198,11 +198,30 @@ def _match_shortcut(kind: str, text: str, pos: int) -> int | None:
 def _match_range(start: str, end: str, text: str, pos: int) -> int | None:
     if not start or not end:
         return None
+    # Integer range: both endpoints are decimal digit strings
+    if start.isdigit() and end.isdigit():
+        return _match_integer_range(int(start), int(end), text, pos)
     ch = text[pos]
     # cross-case shorthand: [a..Z] = a-z | A-Z
     if start.islower() and end.isupper():
         return pos + 1 if (start <= ch <= "z" or "A" <= ch <= end) else None
     return pos + 1 if start <= ch <= end else None
+
+
+def _match_integer_range(lo: int, hi: int, text: str, pos: int) -> int | None:
+    end = pos
+    while end < len(text) and text[end].isdigit():
+        end += 1
+    if end == pos:
+        return None
+    # Try longest match first (greedy), fall back to shorter
+    for length in range(end - pos, 0, -1):
+        candidate = text[pos : pos + length]
+        if length > 1 and candidate[0] == "0":
+            continue  # no leading zeros
+        if lo <= int(candidate) <= hi:
+            return pos + length
+    return None
 
 
 # ---------------------------------------------------------------------------
