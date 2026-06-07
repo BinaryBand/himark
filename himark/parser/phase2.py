@@ -26,6 +26,28 @@ def parse(text: str) -> HMKNode:
     leaf_start = None
 
     while pos < len(text):
+        # Handle top-level escapes for recognized sequences only.
+        # Unrecognized \x sequences fall through so \ is treated as a literal char.
+        if text[pos] == "\\" and pos + 1 < len(text):
+            esc = text[pos + 1]
+            if esc == "n":
+                repl: str | None = "\n"
+            elif esc == "t":
+                repl = "\t"
+            elif esc == "r":
+                repl = "\r"
+            elif esc in r"\[]{}<>^$":
+                repl = esc
+            else:
+                repl = None  # unrecognized — treat \ as a literal char
+            if repl is not None:
+                if leaf_start is not None:
+                    nodes.append(HMKNode("leaf", text[leaf_start:pos]))
+                    leaf_start = None
+                nodes.append(HMKNode("leaf", repl))
+                pos += 2
+                continue
+
         match = _PATTERN.match(text, pos)
         if not match:
             if leaf_start is None:
@@ -47,12 +69,17 @@ def parse(text: str) -> HMKNode:
 
         node = HMKNode(node_type, content, parse(content).children)
 
-        if node_type == "single_brackets":
+        if node_type in ("single_brackets", "double_brackets"):
             # Consume one or more trailing option groups, e.g. [a](hex)(1..)
+            # Whitespace between the bracket and an option group is insignificant.
             option_pos = match.end()
             option_nodes = []
             while True:
-                opt_match = _OPTION_GROUP.match(text, option_pos)
+                # Peek past insignificant whitespace before the next option group
+                peek_pos = option_pos
+                while peek_pos < len(text) and text[peek_pos] in " \t":
+                    peek_pos += 1
+                opt_match = _OPTION_GROUP.match(text, peek_pos)
                 if not opt_match:
                     break
                 option_nodes.extend(parse(opt_match.group(1)).children)

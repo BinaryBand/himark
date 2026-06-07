@@ -249,9 +249,10 @@ def _match_range(
     if start.isdigit() and end.isdigit():
         return _match_integer_range(int(start), int(end), text, pos, pad)
     ch = text[pos]
-    # cross-case shorthand: [a..Z] = a-z | A-Z (already case-inclusive, ci is redundant)
+    # cross-case shorthand: [a..Z] = a-z | A-Z, [b..A] = b-z | A-Z
+    # The uppercase endpoint signals cross-case; the full A-Z range is always included.
     if start.islower() and end.isupper():
-        return pos + 1 if (start <= ch <= "z" or "A" <= ch <= end) else None
+        return pos + 1 if (start <= ch <= "z" or "A" <= ch <= "Z") else None
     if ci:
         return pos + 1 if start.lower() <= ch.lower() <= end.lower() else None
     return pos + 1 if start <= ch <= end else None

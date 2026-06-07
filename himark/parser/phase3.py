@@ -2,6 +2,7 @@
 
 import re
 from himark.node import HMKNode
+from himark.parser import CompileError
 
 _SPAN_RE  = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
 _GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
@@ -11,22 +12,43 @@ _VAR_RE   = re.compile(r"^[a-z]$")
 
 
 def parse(node: HMKNode) -> HMKNode:
-    """Walk the tree and refine leaf nodes based on their parent's type."""
-    node.children = [_refine_child(child, parent_type=node.type) for child in node.children]
+    """Walk the tree and refine leaf nodes based on their parent's type.
+
+    Note: options must be refined before children so bracket leaf parsing
+    can consult alphabet/modifier options when validating ranges.
+    """
+    if node.type == "double_brackets":
+        if node.metadata.get("options"):
+            raise CompileError(
+                "Count modifiers are not supported on negation patterns [[...]]"
+            )
+        # Nested [[: the regex for [[...]] stops at the first ]], so [[[[a]]]]
+        # produces content "[[a". Detecting this via content prefix is reliable.
+        if node.content.startswith("[["):
+            raise CompileError(
+                "Negation of negation [[[[...]]]] is not supported"
+            )
+        for child in node.children:
+            if child.type == "double_brackets":
+                raise CompileError(
+                    "Negation of negation [[[[...]]]] is not supported"
+                )
     if node.metadata.get("options"):
         node.metadata["options"] = [
             _refine_child(child, parent_type="options")
             for child in node.metadata["options"]
         ]
+    node.children = [_refine_child(child, parent_type=node.type, parent=node) for child in node.children]
     return node
 
 
-def _refine_child(node: HMKNode, parent_type: str) -> HMKNode:
+def _refine_child(node: HMKNode, parent_type: str, parent: HMKNode | None = None) -> HMKNode:
     if node.type != "leaf":
         return parse(node)  # recurse into non-leaf nodes
 
     if parent_type in ("single_brackets", "double_brackets"):
-        return _parse_bracket_leaf(node.content)
+        options = parent.metadata.get("options", []) if parent is not None else []
+        return _parse_bracket_leaf(node.content, options=options)
 
     if parent_type == "options":
         return _parse_options_leaf(node.content)
@@ -39,12 +61,12 @@ def _refine_child(node: HMKNode, parent_type: str) -> HMKNode:
     return node  # root — deferred
 
 
-def _parse_bracket_leaf(content: str) -> HMKNode:
+def _parse_bracket_leaf(content: str, options: list[HMKNode] | None = None) -> HMKNode:
     arms = content.split("||")
     if len(arms) > 1:
         children = [_parse_range_or_literal(arm) for arm in arms]
         return HMKNode("alternation", content, children)
-    return _parse_range_or_literal(content)
+    return _parse_range_or_literal(content, options=options or [])
 
 
 _SHORTCUTS = {
@@ -55,12 +77,51 @@ _SHORTCUTS = {
 }
 
 
-def _parse_range_or_literal(content: str) -> HMKNode:
+def _parse_range_or_literal(content: str, options: list[HMKNode] | None = None) -> HMKNode:
     if content in _SHORTCUTS:
         return HMKNode("shortcut", content, metadata={"kind": _SHORTCUTS[content]})
     if ".." in content:
         parts = content.split("..", 1)
-        return HMKNode("range", content, metadata={"start": parts[0], "end": parts[1]})
+        start, end = parts[0], parts[1]
+
+        # Flatten option_list nodes so we can inspect individual options
+        def _flatten(opts: list[HMKNode]) -> list[HMKNode]:
+            out: list[HMKNode] = []
+            for o in opts:
+                if o.type == "option_list":
+                    out.extend(_flatten(o.children))
+                else:
+                    out.append(o)
+            return out
+
+        flat_options = _flatten(options or [])
+
+        # Determine if an explicit alphabet option is present; this permits
+        # non-digit endpoints when an alphabet like 'hex' is specified.
+        explicit_alph = False
+        alph_names = {"b10", "dec", "hex", "b16", "b32", "b58", "b64"}
+        for opt in flat_options:
+            if opt.type == "option" and opt.content in alph_names:
+                explicit_alph = True
+                break
+
+        # Mixed-type endpoints (one decimal digit endpoint, the other not) are a compile error
+        if (start.isdigit() and not end.isdigit()) or (end.isdigit() and not start.isdigit()):
+            if not explicit_alph:
+                raise CompileError(f"Mixed-type range endpoints: {content}")
+
+        # Descending ranges are compile errors unless they trigger cross-case shorthand
+        # or an explicit alphabet is given (which has its own ordering, not ASCII order).
+        # Cross-case shorthand allowance: left is lowercase ASCII and right is uppercase ASCII
+        if start and end and not explicit_alph:
+            try:
+                if start > end:
+                    if not (len(start) == 1 and len(end) == 1 and start.islower() and end.isupper()):
+                        raise CompileError(f"Descending range endpoints: {content}")
+            except TypeError:
+                raise CompileError(f"Invalid range endpoints: {content}")
+
+        return HMKNode("range", content, metadata={"start": start, "end": end})
     return HMKNode("literal", content)
 
 
