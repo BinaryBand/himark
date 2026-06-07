@@ -2,11 +2,12 @@ from himark.parser import phase1, phase2, phase3
 from himark.node import HMKNode
 
 
-def parse(text: str) -> tuple[HMKNode, HMKNode | None]:
-    """Run all three phases and return (pattern_tree, template_tree | None)."""
+def parse(text: str) -> list[HMKNode]:
+    """Run all three phases and return one tree per => step.
+
+    Single-step pattern  → [pattern_tree]
+    Pattern + template   → [pattern_tree, template_tree]
+    Chained              → [p1_tree, p2_tree, ..., template_tree]
+    """
     stmt = phase1.split_statement(text)
-
-    pattern_tree = phase3.parse(phase2.parse(stmt.pattern_text))
-    template_tree = phase3.parse(phase2.parse(stmt.template_text)) if stmt.template_text else None
-
-    return pattern_tree, template_tree
+    return [phase3.parse(phase2.parse(step)) for step in stmt.steps]

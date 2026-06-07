@@ -12,8 +12,7 @@ from himark.engine import execute
 
 
 def run(hmk: str, target: str) -> list[str]:
-    pattern_tree, template_tree = parser.parse(hmk)
-    return execute(pattern_tree, target, template_tree)
+    return execute(parser.parse(hmk), target)
 
 
 # ---------------------------------------------------------------------------
@@ -300,3 +299,45 @@ def test_integer_range_rejects_value_out_of_bounds(n):
     matches = run("[0..99]", str(n))
     for m in matches:
         assert 0 <= int(m) <= 99
+
+
+# ---------------------------------------------------------------------------
+# Chained transformations
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    # Two-step: filter then template (same as single => but exercises the chain path)
+    (
+        "[a..z](1..) => {{ . }}!",
+        "hello world",
+        ["hello!", "world!"],
+    ),
+    # Two-step: intermediate pattern narrows, template renders
+    (
+        "[hello||world] => {{ . }}?",
+        "say hello",
+        ["hello?"],
+    ),
+    # Three-step: separator splits, pattern filters, template wraps
+    (
+        "<<,>> => [a..z](1..) => <b>{{ . }}</b>",
+        "red,42,blue",
+        ["<b>red</b>", "<b>blue</b>"],
+    ),
+    # Three-step: separator, match heading pattern, extract group
+    (
+        "<<\n>> => [#][ ..][a..Z](1..) => {{ 3 }}",
+        "# Hello\nnot a heading\n# World",
+        ["Hello", "World"],
+    ),
+])
+def test_chain(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.lists(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1), min_size=1))
+def test_chain_separator_then_identity(parts):
+    target = ",".join(parts)
+    # Split by comma, then match each part, then render with {{ . }} — should give back the parts
+    result = run("<<,>> => [a..z](1..) => {{ . }}", target)
+    assert result == parts

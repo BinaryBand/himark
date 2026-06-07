@@ -14,11 +14,11 @@ from himark.parser import parse
     ],
 )
 def test_basic_tokenization_shapes(text, expected_first_child_type, expected_first_child_content):
-    pattern_tree, template_tree = parse(text)
+    trees = parse(text)
+    pattern_tree = trees[0]
 
     assert pattern_tree.type == "root"
-    # first child should exist and match expectations
     first = pattern_tree.children[0]
     assert first.type == expected_first_child_type
     assert first.content == expected_first_child_content
-    assert template_tree is None
+    assert len(trees) == 1

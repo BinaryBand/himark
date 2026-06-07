@@ -9,9 +9,8 @@ from himark.parser import parse
 def test_sequence_of_bracketed_tokens_preserves_order(tokens):
     # Build a pattern consisting of adjacent single-bracket groups like [a][b][c]
     pattern = "".join(f"[{t}]" for t in tokens)
-    tree, _ = parse(pattern)
+    tree = parse(pattern)[0]
 
-    # Extract bracket-like children (single_brackets / double_brackets / chevrons / braces)
     bracket_children = [c for c in tree.children if c.type in ("single_brackets", "double_brackets", "double_chevrons", "double_braces")]
 
     assert len(bracket_children) == len(tokens)
@@ -21,6 +20,5 @@ def test_sequence_of_bracketed_tokens_preserves_order(tokens):
 
 def test_group_numbering_basic():
     from himark.engine import execute
-    pattern_tree, template_tree = parse("[0..9](1..)[px||em||rem] => {{ 1 }}")
-    results = execute(pattern_tree, "12px solid", template_tree)
+    results = execute(parse("[0..9](1..)[px||em||rem] => {{ 1 }}"), "12px solid")
     assert results == ["12"]

@@ -7,8 +7,8 @@ from himark.parser import parse, phase2
 
 @given(st.text(min_size=1, max_size=30, alphabet=st.characters(blacklist_characters="[]{}<>", min_codepoint=32, max_codepoint=126)))
 def test_plain_text_becomes_leaf(s):
-    # Tests phase2 tokenization in isolation — bypasses phase1 stripping.
-    # (The full parse() pipeline strips outer whitespace per spec, so it cannot round-trip strings like '0 '.)
+    # Tests phase2 in isolation — bypasses phase1 stripping.
+    # (The full parse() pipeline strips outer whitespace per spec, so strings like '0 ' can't round-trip.)
     tree = phase2.parse(s)
     assert tree.type == "root"
     reconstructed = "".join(c.content for c in tree.children)
@@ -16,8 +16,6 @@ def test_plain_text_becomes_leaf(s):
 
 
 def test_double_chevrons_and_double_braces_tokenized():
-    tree, _ = parse("<<sep>><{x}>>")
-    # Ensure chevrons and braces are detected when properly formed
     t1 = parse("<<foo>>")[0].children[0]
     assert t1.type == "double_chevrons" and t1.content == "foo"
 

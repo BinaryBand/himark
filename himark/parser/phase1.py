@@ -1,27 +1,29 @@
-"""Phase 1: Split a raw HMK statement into its pattern and template sides."""
+"""Phase 1: Split a raw HMK statement into its ordered list of steps."""
 
 from dataclasses import dataclass
 
 
 @dataclass
 class Statement:
-    pattern_text: str
-    template_text: str | None = None
+    steps: list[str]  # one entry per => segment; last entry is the template (if > 1)
 
 
 def split_statement(text: str) -> Statement:
-    """Split 'pattern => template' into a Statement.
+    """Split 'P1 => P2 => ... => T' into an ordered list of step strings.
 
     Scans for => outside of any bracket/chevron/brace delimiters to avoid
     false splits on => appearing inside a token.
     """
-    idx = _find_arrow(text)
-    if idx is None:
-        return Statement(pattern_text=text.strip())
-    return Statement(
-        pattern_text=text[:idx].rstrip(),
-        template_text=text[idx + 2:].lstrip(),
-    )
+    steps = []
+    remaining = text
+    while True:
+        idx = _find_arrow(remaining)
+        if idx is None:
+            steps.append(remaining.strip())
+            break
+        steps.append(remaining[:idx].rstrip())
+        remaining = remaining[idx + 2:].lstrip()
+    return Statement(steps=steps)
 
 
 def _find_arrow(text: str) -> int | None:

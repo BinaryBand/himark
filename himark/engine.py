@@ -23,15 +23,26 @@ class _SkipTo:
 # Public API
 # ---------------------------------------------------------------------------
 
-def execute(
-    pattern_tree: HMKNode,
-    target: str,
-    template_tree: HMKNode | None = None,
-) -> list[str]:
-    matches = _find_matches(pattern_tree, target)
-    if template_tree is None:
-        return [m.text for m in matches]
-    return [_render(template_tree, m) for m in matches]
+def execute(steps: list[HMKNode], target: str) -> list[str]:
+    """Execute an ordered list of HMK step trees against target.
+
+    steps[0]      — pattern applied to target
+    steps[1:-1]   — intermediate patterns, each applied to the previous step's matches
+    steps[-1]     — template (when len > 1) rendered against the final matches
+    """
+    current: list[Match] = _find_matches(steps[0], target)
+
+    if len(steps) == 1:
+        return [m.text for m in current]
+
+    for step_tree in steps[1:-1]:
+        next_: list[Match] = []
+        for m in current:
+            next_.extend(_find_matches(step_tree, m.text))
+        current = next_
+
+    template_tree = steps[-1]
+    return [_render(template_tree, m) for m in current]
 
 
 # ---------------------------------------------------------------------------
