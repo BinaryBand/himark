@@ -16,6 +16,7 @@ def run(hmk: str, target: str) -> list[str]:
 # Unit tests for varied_rep helpers
 # ---------------------------------------------------------------------------
 
+
 class TestVarSpec:
     def test_domain_bounded(self):
         assert list(VarSpec("n", lo=2, hi=4).domain(100)) == [2, 3, 4]
@@ -96,14 +97,18 @@ class TestIterBindings:
 # Engine integration: matching
 # ---------------------------------------------------------------------------
 
+
 class TestVariedRepMatching:
-    @pytest.mark.parametrize("target, expected", [
-        ("ab",     ["ab"]),      # n=1
-        ("aabb",   ["aabb"]),    # n=2
-        ("aaabbb", ["aaabbb"]),  # n=3
-        ("aab",    ["ab"]),      # no n satisfies at pos=0; falls back to n=1 at pos=1
-        ("ba",     []),          # pattern is [a](n)[b](n), not [b..a]
-    ])
+    @pytest.mark.parametrize(
+        "target, expected",
+        [
+            ("ab", ["ab"]),  # n=1
+            ("aabb", ["aabb"]),  # n=2
+            ("aaabbb", ["aaabbb"]),  # n=3
+            ("aab", ["ab"]),  # no n satisfies at pos=0; falls back to n=1 at pos=1
+            ("ba", []),  # pattern is [a](n)[b](n), not [b..a]
+        ],
+    )
     def test_single_var_two_groups(self, target, expected):
         assert run("[a](n)[b](n)", target) == expected
 
@@ -125,13 +130,13 @@ class TestVariedRepMatching:
 
     def test_bounded_variable(self):
         # n ∈ {2, 3}
-        assert run("[a](2..n)[b](n..3)", "aabb") == ["aabb"]    # n=2
-        assert run("[a](2..n)[b](n..3)", "aaabbb") == ["aaabbb"] # n=3
-        assert run("[a](2..n)[b](n..3)", "ab") == []             # n=1 out of range
+        assert run("[a](2..n)[b](n..3)", "aabb") == ["aabb"]  # n=2
+        assert run("[a](2..n)[b](n..3)", "aaabbb") == ["aaabbb"]  # n=3
+        assert run("[a](2..n)[b](n..3)", "ab") == []  # n=1 out of range
 
     def test_single_variable_with_real_range(self):
         # [a..z](n) matches exactly n lowercase letters
-        assert run("[a..z](n)", "abc") == ["abc"]   # n=3 (greedy, whole string)
+        assert run("[a..z](n)", "abc") == ["abc"]  # n=3 (greedy, whole string)
         assert run("[a..z](n)", "ab1c") == ["ab", "c"]
 
     def test_variable_zero_length_not_matched(self):
@@ -142,6 +147,7 @@ class TestVariedRepMatching:
 # ---------------------------------------------------------------------------
 # Engine integration: template {{ n }}
 # ---------------------------------------------------------------------------
+
 
 class TestVariedRepTemplate:
     def test_n_in_template(self):
@@ -164,6 +170,7 @@ class TestVariedRepTemplate:
 # ---------------------------------------------------------------------------
 # Hypothesis property tests
 # ---------------------------------------------------------------------------
+
 
 @given(st.integers(min_value=1, max_value=6))
 def test_exact_variable_match_length(n):

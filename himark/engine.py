@@ -16,6 +16,7 @@ from himark.utils.resolver import RESOLVERS as _RESOLVERS
 
 class MatchCtx(NamedTuple):
     """Immutable per-bracket matching context threaded through content matchers."""
+
     ci: bool = False
     alphabet: str | None = None
     pad: int | None = None
@@ -27,8 +28,12 @@ class Match:
     start: int
     end: int
     groups: list[str] = field(default_factory=list)
-    group_spans: list[tuple[int, int]] = field(default_factory=list)  # (start, end) relative to match.start
-    sub_groups: list[list[str]] = field(default_factory=list)  # sub_groups[i] = per-repetition texts for group i
+    group_spans: list[tuple[int, int]] = field(
+        default_factory=list
+    )  # (start, end) relative to match.start
+    sub_groups: list[list[str]] = field(
+        default_factory=list
+    )  # sub_groups[i] = per-repetition texts for group i
     bindings: dict[str, int] = field(default_factory=dict)
 
 
@@ -93,14 +98,26 @@ def _find_matches(tree: HMKNode, text: str) -> list[Match]:
             captures: list[str] = []
             capture_spans: list[tuple[int, int]] = []
             sub_capture_lists: list[list[str]] = []
-            end = _match_node(tree, text, pos, captures, bindings, capture_spans, sub_capture_lists)
+            end = _match_node(
+                tree, text, pos, captures, bindings, capture_spans, sub_capture_lists
+            )
             if isinstance(end, _SkipTo):
                 pos = end.pos
                 found = True
                 break
             if end is not None and end > pos:
                 rel_spans = [(s - pos, e - pos) for s, e in capture_spans]
-                matches.append(Match(text[pos:end], pos, end, captures, rel_spans, sub_capture_lists, bindings))
+                matches.append(
+                    Match(
+                        text[pos:end],
+                        pos,
+                        end,
+                        captures,
+                        rel_spans,
+                        sub_capture_lists,
+                        bindings,
+                    )
+                )
                 pos = end
                 found = True
                 break
@@ -131,9 +148,19 @@ def _match_node(
     sub_capture_lists: list[list[str]] | None = None,
 ) -> int | _SkipTo | None:
     if node.type == "root":
-        return _match_sequence(node.children, text, pos, captures, bindings, capture_spans, sub_capture_lists)
+        return _match_sequence(
+            node.children,
+            text,
+            pos,
+            captures,
+            bindings,
+            capture_spans,
+            sub_capture_lists,
+        )
     if node.type == "single_brackets":
-        return _match_bracket(node, text, pos, captures, bindings, capture_spans, sub_capture_lists)
+        return _match_bracket(
+            node, text, pos, captures, bindings, capture_spans, sub_capture_lists
+        )
     if node.type == "double_brackets":
         return _match_bracket_negated(node, text, pos)
     if node.type == "double_chevrons":
@@ -167,7 +194,9 @@ def _match_sequence(
 ) -> int | _SkipTo | None:
     current = pos
     for node in nodes:
-        end = _match_node(node, text, current, captures, bindings, capture_spans, sub_capture_lists)
+        end = _match_node(
+            node, text, current, captures, bindings, capture_spans, sub_capture_lists
+        )
         if end is None:
             return None
         if isinstance(end, _SkipTo):
@@ -191,7 +220,9 @@ def _match_bracket(
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options, bindings)
 
-    ctx = MatchCtx(_parse_case_insensitive(options), _parse_alphabet(options), _parse_pad(options))
+    ctx = MatchCtx(
+        _parse_case_insensitive(options), _parse_alphabet(options), _parse_pad(options)
+    )
     start_pos = pos
     positions = [pos]
     current = pos
@@ -213,7 +244,7 @@ def _match_bracket(
         capture_spans.append((start_pos, result))
     if sub_capture_lists is not None:
         end_idx = min_count if lazy else len(positions) - 1
-        subs = [text[positions[i]:positions[i + 1]] for i in range(end_idx)]
+        subs = [text[positions[i] : positions[i + 1]] for i in range(end_idx)]
         sub_capture_lists.append(subs)
     return result
 
@@ -237,22 +268,36 @@ def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo 
     return _SkipTo(start + 1)
 
 
-def _match_literal_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
+def _match_literal_node(
+    node: HMKNode, text: str, pos: int, ctx: MatchCtx
+) -> int | None:
     s = node.content
     if ctx.ci:
         return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
     return pos + len(s) if text[pos : pos + len(s)] == s else None
 
 
-def _match_shortcut_node(node: HMKNode, text: str, pos: int, _ctx: MatchCtx) -> int | None:
+def _match_shortcut_node(
+    node: HMKNode, text: str, pos: int, _ctx: MatchCtx
+) -> int | None:
     return _match_shortcut(node.metadata["kind"], text, pos)
 
 
 def _match_range_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
-    return _match_range(node.metadata["start"], node.metadata["end"], text, pos, ctx.ci, ctx.alphabet, ctx.pad)
+    return _match_range(
+        node.metadata["start"],
+        node.metadata["end"],
+        text,
+        pos,
+        ctx.ci,
+        ctx.alphabet,
+        ctx.pad,
+    )
 
 
-def _match_alternation_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
+def _match_alternation_node(
+    node: HMKNode, text: str, pos: int, ctx: MatchCtx
+) -> int | None:
     for arm in node.children:
         end = _match_content(arm, text, pos, ctx)
         if end is not None:
@@ -261,14 +306,16 @@ def _match_alternation_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -
 
 
 _CONTENT_MATCHERS: dict[str, Callable[[HMKNode, str, int, MatchCtx], int | None]] = {
-    "literal":     _match_literal_node,
-    "shortcut":    _match_shortcut_node,
-    "range":       _match_range_node,
+    "literal": _match_literal_node,
+    "shortcut": _match_shortcut_node,
+    "range": _match_range_node,
     "alternation": _match_alternation_node,
 }
 
 
-def _match_content(node: HMKNode, text: str, pos: int, ctx: MatchCtx = MatchCtx()) -> int | None:
+def _match_content(
+    node: HMKNode, text: str, pos: int, ctx: MatchCtx = MatchCtx()
+) -> int | None:
     if pos >= len(text):
         return None
     matcher = _CONTENT_MATCHERS.get(node.type)
@@ -455,7 +502,9 @@ def _parse_repetition(
             mn, mx = opt.metadata["min"], opt.metadata["max"]
             resolved_mn = _resolve(mn, bindings) if mn else None
             resolved_mx = _resolve(mx, bindings) if mx else None
-            min_count = resolved_mn if resolved_mn is not None else (0 if not mn else min_count)
+            min_count = (
+                resolved_mn if resolved_mn is not None else (0 if not mn else min_count)
+            )
             max_count = resolved_mx  # None means unbounded
         elif opt.type == "option":
             if opt.content.isdigit():

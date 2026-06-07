@@ -18,7 +18,7 @@ and for propagating them through the matching stack.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import product as _product
 from typing import Iterator
 
@@ -34,7 +34,7 @@ from himark.node import HMKNode
 @dataclass
 class VarSpec:
     name: str
-    lo: int = 1            # inclusive lower bound on the variable's value
+    lo: int = 1  # inclusive lower bound on the variable's value
     hi: int | None = None  # inclusive upper bound (None = capped by text length)
 
     def domain(self, max_count: int) -> range:
@@ -116,9 +116,7 @@ def _is_var(s: str) -> bool:
     return len(s) == 1 and s.isalpha()
 
 
-def _merge(
-    specs: dict[str, VarSpec], name: str, lo: int, hi: int | None
-) -> None:
+def _merge(specs: dict[str, VarSpec], name: str, lo: int, hi: int | None) -> None:
     """Tighten the domain for *name* with a new lo/hi constraint."""
     if name not in specs:
         specs[name] = VarSpec(name, lo, hi)

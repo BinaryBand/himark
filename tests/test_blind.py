@@ -343,7 +343,11 @@ class TestCaptures:
         ]
 
     def test_varied_count_in_template(self):
-        assert run("[a](n) => {{ . }}({{ n }})", "aaa aa a") == ["aaa(3)", "aa(2)", "a(1)"]
+        assert run("[a](n) => {{ . }}({{ n }})", "aaa aa a") == [
+            "aaa(3)",
+            "aa(2)",
+            "a(1)",
+        ]
 
     def test_subgroup(self):
         # Group 1 contains [a..z](1..) and [0..9](1..) as sub-groups

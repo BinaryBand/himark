@@ -153,24 +153,36 @@ def _parse_capture_path(dotted: str) -> list[int]:
 _TemplateRule = tuple[str, re.Pattern | None, Callable[[re.Match, str], dict]]
 
 
-def _meta_noop(_m: re.Match, _e: str) -> dict: return {}
+def _meta_noop(_m: re.Match, _e: str) -> dict:
+    return {}
+
+
 def _meta_span(m: re.Match, _e: str) -> dict:
-    return {"start": _parse_capture_path(m.group(1)), "end": _parse_capture_path(m.group(2))}
+    return {
+        "start": _parse_capture_path(m.group(1)),
+        "end": _parse_capture_path(m.group(2)),
+    }
+
+
 def _meta_group(_m: re.Match, e: str) -> dict:
     return {"index": _parse_capture_path(e)}
+
+
 def _meta_emoji(m: re.Match, _e: str) -> dict:
     return {"code": m.group(1)}
+
+
 def _meta_latex(m: re.Match, _e: str) -> dict:
     return {"expr": m.group(1)}
 
 
 _TEMPLATE_EXPR_RULES: list[_TemplateRule] = [
-    ("full_match", None,      _meta_noop),
-    ("span_ref",   _SPAN_RE,  _meta_span),
-    ("group_ref",  _GROUP_RE, _meta_group),
-    ("emoji",      _EMOJI_RE, _meta_emoji),
-    ("latex",      _LATEX_RE, _meta_latex),
-    ("var_ref",    _VAR_RE,   _meta_noop),
+    ("full_match", None, _meta_noop),
+    ("span_ref", _SPAN_RE, _meta_span),
+    ("group_ref", _GROUP_RE, _meta_group),
+    ("emoji", _EMOJI_RE, _meta_emoji),
+    ("latex", _LATEX_RE, _meta_latex),
+    ("var_ref", _VAR_RE, _meta_noop),
 ]
 
 
