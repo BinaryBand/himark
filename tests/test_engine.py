@@ -335,6 +335,33 @@ def test_chain(hmk, target, expected):
     assert run(hmk, target) == expected
 
 
+# ---------------------------------------------------------------------------
+# Anchors
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("hmk, target, expected", [
+    # Line-start anchor
+    ("^[a..z](1..)",          "hello\nworld",   ["hello", "world"]),
+    ("^[a..z](1..)",          "hello world",    ["hello"]),  # only first word is at line start
+    # Line-end anchor
+    ("[a..z](1..)$",          "hello\nworld",   ["hello", "world"]),
+    ("[a..z](1..)$",          "hello world",    ["world"]),  # only last word is at line end
+    # Both: full-line word match
+    ("^[a..z](1..)$",         "hello\nworld",   ["hello", "world"]),
+    ("^[a..z](1..)$",         "hi there\nbye",  ["bye"]),    # "hi there" has a space, no match
+    # Document anchors
+    ("^^[a..z](1..)",         "hello world",    ["hello"]),  # only pos=0 qualifies
+    ("[a..z](1..)$$",         "hello world",    ["world"]),  # only pos=len(text) qualifies
+    ("^^[a..z](1..)$$",       "hello",          ["hello"]),  # whole doc is one word
+    ("^^[a..z](1..)$$",       "hello world",    []),         # space breaks it
+    # Literal ^ and $ inside brackets are unaffected
+    ("[^]",                   "a^b",            ["^"]),
+    ("[$]",                   "a$b",            ["$"]),
+])
+def test_anchors(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
 @given(st.lists(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1), min_size=1))
 def test_chain_separator_then_identity(parts):
     target = ",".join(parts)

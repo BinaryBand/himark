@@ -102,6 +102,14 @@ def _match_node(
         return pos + len(s) if text[pos : pos + len(s)] == s else None
     if node.type == "leaf":
         s = node.content
+        if s == "^^":
+            return pos if pos == 0 else None
+        if s == "$$":
+            return pos if pos == len(text) else None
+        if s == "^":
+            return pos if (pos == 0 or text[pos - 1] == "\n") else None
+        if s == "$":
+            return pos if (pos == len(text) or text[pos] == "\n") else None
         return pos + len(s) if text[pos : pos + len(s)] == s else None
     return None
 
