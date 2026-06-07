@@ -4,7 +4,10 @@ version = "0.1.0"
 description = ""
 authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "emoji>=2.0",
+    "unicodeit>=0.9",
+]
 
 [project.optional-dependencies]
 test = ["pytest>=7.0", "hypothesis>=6.50", "pytest-cov"]

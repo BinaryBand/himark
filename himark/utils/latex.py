@@ -1,101 +1,16 @@
-"""LaTeX expression → Unicode lookup for {{ $expr$ }} template expressions.
+"""LaTeX expression → Unicode via the `unicodeit` library.
 
-Supports single-token expressions like \\pi, \\alpha, \\infty, etc.
-Multi-token or compound expressions (fractions, superscripts) are not supported
-and fall back to the original $expr$ string.
+Supports single-token commands like \\pi, \\alpha, \\infty, etc.
+Falls back to the original $expr$ string when the expression is not recognised.
 """
 
-_SYMBOLS: dict[str, str] = {
-    # Greek lowercase
-    "\\alpha": "α",
-    "\\beta": "β",
-    "\\gamma": "γ",
-    "\\delta": "δ",
-    "\\epsilon": "ε",
-    "\\zeta": "ζ",
-    "\\eta": "η",
-    "\\theta": "θ",
-    "\\iota": "ι",
-    "\\kappa": "κ",
-    "\\lambda": "λ",
-    "\\mu": "μ",
-    "\\nu": "ν",
-    "\\xi": "ξ",
-    "\\pi": "π",
-    "\\rho": "ρ",
-    "\\sigma": "σ",
-    "\\tau": "τ",
-    "\\upsilon": "υ",
-    "\\phi": "φ",
-    "\\chi": "χ",
-    "\\psi": "ψ",
-    "\\omega": "ω",
-    # Greek uppercase
-    "\\Gamma": "Γ",
-    "\\Delta": "Δ",
-    "\\Theta": "Θ",
-    "\\Lambda": "Λ",
-    "\\Xi": "Ξ",
-    "\\Pi": "Π",
-    "\\Sigma": "Σ",
-    "\\Upsilon": "Υ",
-    "\\Phi": "Φ",
-    "\\Psi": "Ψ",
-    "\\Omega": "Ω",
-    # Math symbols
-    "\\infty": "∞",
-    "\\partial": "∂",
-    "\\nabla": "∇",
-    "\\sum": "∑",
-    "\\prod": "∏",
-    "\\int": "∫",
-    "\\sqrt": "√",
-    "\\pm": "±",
-    "\\mp": "∓",
-    "\\times": "×",
-    "\\div": "÷",
-    "\\cdot": "·",
-    "\\circ": "∘",
-    "\\leq": "≤",
-    "\\geq": "≥",
-    "\\neq": "≠",
-    "\\approx": "≈",
-    "\\equiv": "≡",
-    "\\sim": "∼",
-    "\\subset": "⊂",
-    "\\supset": "⊃",
-    "\\subseteq": "⊆",
-    "\\supseteq": "⊇",
-    "\\in": "∈",
-    "\\notin": "∉",
-    "\\cup": "∪",
-    "\\cap": "∩",
-    "\\emptyset": "∅",
-    "\\forall": "∀",
-    "\\exists": "∃",
-    "\\neg": "¬",
-    "\\land": "∧",
-    "\\lor": "∨",
-    "\\to": "→",
-    "\\leftarrow": "←",
-    "\\rightarrow": "→",
-    "\\leftrightarrow": "↔",
-    "\\Rightarrow": "⇒",
-    "\\Leftarrow": "⇐",
-    "\\Leftrightarrow": "⇔",
-    "\\uparrow": "↑",
-    "\\downarrow": "↓",
-    # Misc
-    "\\hbar": "ℏ",
-    "\\ell": "ℓ",
-    "\\Re": "ℜ",
-    "\\Im": "ℑ",
-    "\\aleph": "ℵ",
-    "\\degree": "°",
-}
+import unicodeit as _unicodeit
 
 
 def resolve(expr: str) -> str:
-    """Return Unicode for a single LaTeX token, or '$expr$' if unsupported."""
-    token = expr.strip()
-    return _SYMBOLS.get(token, f"${expr}$")
+    """Return Unicode for a LaTeX expression, or '$expr$' if unsupported."""
+    result = _unicodeit.replace(expr.strip())
+    # unicodeit returns the input unchanged when it cannot convert
+    if result == expr.strip():
+        return f"${expr}$"
+    return result
