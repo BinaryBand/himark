@@ -31,7 +31,13 @@ test_cases = [
     "[[abc]]",
     "[[hello||world]]",
     "[a](1..3)",
-    "<<foo>>"
+    "<<foo>>",
+    "{{ . }}",
+    "{{ 1 }}",
+    "{{ 1.2 }}",
+    "{{ 1.2..3.1 }}",
+    "{{ :tada: }}",
+    "{{ $\pi$ }}"
 ]
 
 
@@ -43,10 +49,10 @@ def main():
     double_brackets = r"\[\[([^\]]+)\]\]"
     brackets = f"{double_brackets}|{single_brackets}"
     brackets_with_opts = f"{brackets}(?:{parenthesis})?"
-
     double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
+    double_braces = r"{{((?:[^}]|}[^}])*)}}"
 
-    possible_matches = f"{brackets_with_opts}|{double_chevrons}"
+    possible_matches = f"{brackets_with_opts}|{double_chevrons}|{double_braces}"
 
     for test in test_cases:
         match = re.match(possible_matches, test)
@@ -56,6 +62,7 @@ def main():
             print(f"  Single Brackets: {match.group(2)}")
             print(f"  Bracket Options: {match.group(3)}")
             print(f"  Double Chevrons: {match.group(4)}")
+            print(f"  Double Braces: {match.group(5)}")
             print(f"  Remaining Text: {test[match.end():]}")
         else:
             print(f"No match: {test}")
