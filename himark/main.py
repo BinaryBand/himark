@@ -71,54 +71,37 @@ def parse_hmk_recursive(text):
 
     possible_matches = f"{brackets_with_opts}|{double_chevrons}|{double_braces}"
 
+    # Map group index to node type
+    group_types = ["double_brackets", "single_brackets", "options", "double_chevrons", "double_braces"]
+
     nodes = []
     pos = 0
 
     while pos < len(text):
         match = re.match(possible_matches, text[pos:])
         if not match:
-            # No match found, rest is a leaf
             nodes.append(HMKNode("leaf", text[pos:]))
             break
 
-        # Add any text before the match as a leaf
         if match.start() > 0:
             nodes.append(HMKNode("leaf", text[pos:pos + match.start()]))
 
-        # Determine which group matched
         groups = match.groups()
+        matched_idx = next(i for i, g in enumerate(groups) if g is not None)
+        node_type = group_types[matched_idx]
+        content = groups[matched_idx]
 
-        if groups[0]:  # Double brackets
-            content = groups[0]
-            children = parse_hmk_recursive(content).children
-            nodes.append(HMKNode("double_brackets", content, children))
-        elif groups[1]:  # Single brackets
-            content = groups[1]
-            children = parse_hmk_recursive(content).children
-            node = HMKNode("single_brackets", content, children)
+        # Create node with recursive children
+        node = HMKNode(node_type, content, parse_hmk_recursive(content).children)
 
-            # Check for options (parenthesis)
-            if groups[2]:
-                options = groups[2]
-                option_children = parse_hmk_recursive(options).children
-                node.metadata["options"] = option_children
-            nodes.append(node)
-        elif groups[3]:  # Double chevrons
-            content = groups[3]
-            children = parse_hmk_recursive(content).children
-            nodes.append(HMKNode("double_chevrons", content, children))
-        elif groups[4]:  # Double braces
-            content = groups[4]
-            children = parse_hmk_recursive(content).children
-            nodes.append(HMKNode("double_braces", content, children))
+        # Handle options for single brackets
+        if matched_idx == 1 and groups[2]:  # Single brackets with options
+            node.metadata["options"] = parse_hmk_recursive(groups[2]).children
 
+        nodes.append(node)
         pos += match.end()
 
-    # If no nodes, return a leaf
-    if not nodes:
-        return HMKNode("root", text, [HMKNode("leaf", text)])
-
-    return HMKNode("root", text, nodes)
+    return HMKNode("root", text, nodes or [HMKNode("leaf", text)])
 
 
 def print_tree(node, indent=0):
