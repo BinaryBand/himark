@@ -6,6 +6,19 @@ authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.11"
 dependencies = []
 
+[project.optional-dependencies]
+test = [
+	"pytest>=7.0",
+	"hypothesis>=6.50",
+	"pytest-cov",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
 
 [project.scripts]
 himark = "himark.main:main"
