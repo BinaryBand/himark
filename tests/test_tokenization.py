@@ -28,8 +28,8 @@ def test_double_chevrons_and_double_braces_tokenized():
     t1 = parse("<<foo>>")[0].children[0]
     assert t1.type == "double_chevrons" and t1.content == "foo"
 
-    t2 = parse("{{bar}}")[0].children[0]
-    assert t2.type == "double_braces" and t2.content == "bar"
+    t2 = parse("{{ . }}")[0].children[0]
+    assert t2.type == "double_braces" and t2.content == " . "
 
 
 def test_bracket_with_options_has_metadata():

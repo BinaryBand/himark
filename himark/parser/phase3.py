@@ -197,7 +197,7 @@ def _parse_template_expr(content: str) -> HMKNode:
         m = pattern.match(expr)
         if m:
             return HMKNode(node_type, expr, metadata=meta_fn(m, expr))
-    return HMKNode("leaf", content)
+    raise CompileError(f"Unknown template expression: {{{{{content}}}}}")
 
 
 def _parse_options_leaf(content: str) -> HMKNode:

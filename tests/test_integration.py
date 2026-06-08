@@ -9,7 +9,7 @@ from himark.parser import parse
         ("[a]", "single_brackets", "a"),
         ("[[a]]", "double_brackets", "a"),
         ("<<foo>>", "double_chevrons", "foo"),
-        ("{{var}}", "double_braces", "var"),
+        ("{{ . }}", "double_braces", " . "),
         ("hello", "leaf", "hello"),
     ],
 )

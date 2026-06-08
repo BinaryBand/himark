@@ -465,11 +465,9 @@ class TestTransformers:
     def test_template_whitespace_insignificant(self):
         assert run("[a] => {{ . }}", "x") == run("[a] => {{.}}", "x")
 
-    def test_unknown_template_expr_renders_empty(self):
-        # Expressions that match no registered rule fall through to a leaf node
-        # and produce no output rather than crashing.
-        result = run("[a] => {{ ?mystery }}", "a")
-        assert result == [""]
+    def test_unknown_template_expr_raises(self):
+        with pytest.raises(CompileError, match="Unknown template expression"):
+            run("[a] => {{ ?mystery }}", "a")
 
     def test_separator_empty_parts_in_chain(self):
         # Leading/trailing separators produce empty strings that pass through templates
