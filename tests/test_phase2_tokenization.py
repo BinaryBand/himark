@@ -44,6 +44,7 @@ def test_two_paren_groups_both_stored_in_options():
     tree = parse("[a..f](hex)(1..)")[0]
     bracket = tree.children[0]
     from himark.parser.phase3 import _flatten
+
     opts = _flatten(bracket.metadata.get("options", []))
     opt_contents = [o.content for o in opts if o.type == "option"]
     assert "hex" in opt_contents

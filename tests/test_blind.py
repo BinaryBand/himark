@@ -471,7 +471,11 @@ class TestTransformers:
 
     def test_separator_empty_parts_in_chain(self):
         # Leading/trailing separators produce empty strings that pass through templates
-        assert run("<</>> => <p>{{ . }}</p>", "/a/") == ["<p></p>", "<p>a</p>", "<p></p>"]
+        assert run("<</>> => <p>{{ . }}</p>", "/a/") == [
+            "<p></p>",
+            "<p>a</p>",
+            "<p></p>",
+        ]
 
 
 # ── Chained transformers ───────────────────────────────────────────────────────

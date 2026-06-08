@@ -484,10 +484,12 @@ def test_b58(hmk, target, expected):
     assert run(hmk, target) == expected
 
 
-@given(st.text(
-    alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
-    min_size=1,
-))
+@given(
+    st.text(
+        alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
+        min_size=1,
+    )
+)
 def test_b58_run_consumes_all_valid_chars(s):
     assert "".join(run("[1..z](b58)(1..)", s)) == s
 

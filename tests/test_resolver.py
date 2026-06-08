@@ -1,7 +1,5 @@
 """Tests for the SymbolResolver Protocol and central registry (himark/utils/resolver.py)."""
 
-import pytest
-
 from himark import parser
 from himark.engine import execute
 from himark.utils.resolver import RESOLVERS, SymbolResolver, register
