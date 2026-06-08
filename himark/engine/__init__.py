@@ -5,7 +5,12 @@ from himark.engine._render import render as _render
 from himark.engine._types import Match, MatchCtx
 from himark.models.node import HMKNode
 
-__all__ = ["execute", "Match", "MatchCtx"]
+__all__ = ["execute", "find", "Match", "MatchCtx"]
+
+
+def find(steps: list[HMKNode], target: str) -> list[tuple[int, int]]:
+    """Return (start, end) positions of all matches of steps[0] in target."""
+    return [(m.start, m.end) for m in _find_matches(steps[0], target)]
 
 
 def execute(steps: list[HMKNode], target: str) -> list[str]:

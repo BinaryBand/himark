@@ -16,10 +16,10 @@ class Match:
     start: int
     end: int
     groups: list[str] = field(default_factory=list)
-    group_spans: list[tuple[int, int]] = field(
-        default_factory=list
-    )  # (start, end) relative to match.start
-    sub_groups: list[list[str]] = field(
-        default_factory=list
-    )  # sub_groups[i] = per-repetition texts for group i
+
+    # (start, end) relative to match.start
+    group_spans: list[tuple[int, int]] = field(default_factory=list)
+
+    # sub_groups[i] = per-repetition texts for group i
+    sub_groups: list[list[str]] = field(default_factory=list)
     bindings: dict[str, int] = field(default_factory=dict)
