@@ -68,3 +68,35 @@ def test_chain_first_tree_is_pattern():
 def test_chain_last_tree_is_template():
     trees = parse("[a] => {{ . }}")
     assert trees[-1].children[0].type == "double_braces"
+
+
+# ---------------------------------------------------------------------------
+# Negation with count modifiers
+# ---------------------------------------------------------------------------
+
+
+def test_negation_with_count_modifier_parses():
+    # Previously raised CompileError; should now succeed
+    trees = parse("[[a]](1..)")
+    bracket = trees[0].children[0]
+    assert bracket.type == "double_brackets"
+    assert bracket.metadata.get("options"), "count modifier should be in options"
+
+
+def test_negation_exact_count_parses():
+    trees = parse("[[a]](3)")
+    bracket = trees[0].children[0]
+    assert bracket.type == "double_brackets"
+
+
+def test_negation_zero_or_more_parses():
+    trees = parse("[[a]](0..)")
+    bracket = trees[0].children[0]
+    assert bracket.type == "double_brackets"
+
+
+def test_negation_newline_with_count_parses():
+    # The heading use case: [[\n]](0..)
+    trees = parse(r"[[\n]](0..)")
+    bracket = trees[0].children[0]
+    assert bracket.type == "double_brackets"

@@ -110,7 +110,9 @@ def _match_node(
             node, text, pos, captures, bindings, capture_spans, sub_capture_lists
         )
     if node.type == "double_brackets":
-        return _match_bracket_negated(node, text, pos)
+        return _match_bracket_negated(
+            node, text, pos, captures, bindings, capture_spans, sub_capture_lists
+        )
     if node.type == "double_chevrons":
         if not node.children:
             return None
@@ -196,22 +198,59 @@ def _match_bracket(
     return result
 
 
-def _match_bracket_negated(node: HMKNode, text: str, pos: int) -> int | _SkipTo | None:
+def _match_bracket_negated(
+    node: HMKNode,
+    text: str,
+    pos: int,
+    captures: list[str] | None = None,
+    bindings: dict[str, int] | None = None,
+    capture_spans: list[tuple[int, int]] | None = None,
+    sub_capture_lists: list[list[str]] | None = None,
+) -> int | _SkipTo | None:
     if not node.children:
         return None
     content = node.children[0]
-    start = pos
-    while pos < len(text):
-        inner_end = _match_content(content, text, pos, MatchCtx())
-        if inner_end is not None:
+    options = _flatten_options(node.metadata.get("options", []))
+
+    # Default when no count modifier: one or more, greedy (historic behaviour)
+    has_count = any(
+        o.type == "repetition_range"
+        or (o.type == "option" and (o.content.isdigit() or _is_var(o.content)))
+        for o in options
+    )
+    if has_count:
+        min_count, max_count, lazy = _parse_repetition(options, bindings)
+    else:
+        min_count, max_count, lazy = 1, None, False
+
+    # Build the run: consume characters that do NOT match the excluded content
+    run_end = pos
+    while (max_count is None or (run_end - pos) < max_count) and run_end < len(text):
+        if _match_content(content, text, run_end, MatchCtx()) is not None:
             break
-        pos += 1
-    if pos > start:
-        return pos
-    inner_end = _match_content(content, text, start, MatchCtx())
-    if inner_end is not None and inner_end > start:
-        return _SkipTo(inner_end)
-    return _SkipTo(start + 1)
+        run_end += 1
+
+    run_length = run_end - pos
+
+    if run_length < min_count:
+        # Can't satisfy minimum — skip past the excluded content if it matched here
+        inner_end = _match_content(content, text, pos, MatchCtx())
+        if inner_end is not None and inner_end > pos:
+            return _SkipTo(inner_end)
+        return _SkipTo(pos + 1) if min_count > 0 else pos
+
+    result = (pos + min_count) if lazy else run_end
+
+    if captures is not None:
+        captures.append(text[pos:result])
+    if capture_spans is not None:
+        capture_spans.append((pos, result))
+    if sub_capture_lists is not None:
+        sub_capture_lists.append(
+            [text[pos + i : pos + i + 1] for i in range(result - pos)]
+        )
+
+    return result
 
 
 # ---------------------------------------------------------------------------

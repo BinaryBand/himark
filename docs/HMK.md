@@ -109,7 +109,18 @@ Without a `pad` argument, ranges match canonical integer strings (no leading zer
 
 To negate a character alternation (class complement) rather than exclude sequences, use single-character alternatives: `[[a||b||c]]` = runs containing no `'a'`, `'b'`, or `'c'`.
 
-Overlapping candidates merge into the longest non-overlapping run. Negation of negation (`[[[[a]]]]`) and negation with a repetition modifier (`[[a]](0..)`) are not supported.
+Overlapping candidates merge into the longest non-overlapping run. Negation of negation (`[[[[a]]]]`) is not supported.
+
+Count modifiers work on negation patterns the same way they do on regular brackets:
+
+```proto
+[[\n]](0..)   // zero or more non-newline characters
+[[\n]](1..)   // one or more non-newline characters
+[[a]](3)      // exactly 3 characters that are not 'a'
+[[a]](1..5)   // between 1 and 5 characters that are not 'a'
+```
+
+Without a count modifier the default is one-or-more, greedy — the same as `(1..)`.
 
 ## Repetition
 

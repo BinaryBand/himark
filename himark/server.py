@@ -48,7 +48,9 @@ def execute_route(req: Request) -> ExecuteResponse | JSONResponse:
 
     try:
         matches = find_matches(trees[0], req.target)
-        deltas = [Delta(start=m.start, end=m.end, text=render(trees[-1], m)) for m in matches]
+        deltas = [
+            Delta(start=m.start, end=m.end, text=render(trees[-1], m)) for m in matches
+        ]
     except CompileError as exc:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
 

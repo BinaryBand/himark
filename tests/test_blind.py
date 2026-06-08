@@ -255,9 +255,9 @@ class TestNegation:
         with pytest.raises(CompileError):
             run("[[[[a]]]]", "test")
 
-    def test_unsupported_negation_with_count(self):
-        with pytest.raises(CompileError):
-            run("[[a]](2)", "test")
+    def test_negation_with_exact_count(self):
+        # [[a]](2) now supported: exactly 2 non-'a' chars
+        assert run("[[a]](2)", "bbbabbb") == ["bb", "bb"]
 
 
 # ── Repetition ───────────────────────────────────────────────────────────────
@@ -589,8 +589,8 @@ class TestErrors:
             run("[[[[a]]]]", "anything")
 
     def test_negation_with_count_modifier(self):
-        with pytest.raises(CompileError):
-            run("[[a]](2)", "anything")
+        # Count modifiers on negation are now supported
+        assert run("[[a]](2)", "bbba") == ["bb"]
 
     def test_varied_conflicting_bounds(self):
         with pytest.raises(CompileError):

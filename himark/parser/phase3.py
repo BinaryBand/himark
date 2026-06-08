@@ -20,10 +20,6 @@ def parse(node: HMKNode) -> HMKNode:
     can consult alphabet/modifier options when validating ranges.
     """
     if node.type == "double_brackets":
-        if node.metadata.get("options"):
-            raise CompileError(
-                "Count modifiers are not supported on negation patterns [[...]]"
-            )
         # Nested [[: the regex for [[...]] stops at the first ]], so [[[[a]]]]
         # produces content "[[a". Detecting this via content prefix is reliable.
         if node.content.startswith("[["):

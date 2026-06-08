@@ -295,6 +295,68 @@ def test_negation_lowercase_range_never_contains_lowercase(s):
 
 
 # ---------------------------------------------------------------------------
+# Negation with count modifiers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # exact count
+        ("[[a]](3)", "bbbabbb", ["bbb", "bbb"]),
+        ("[[a]](3)", "bb", []),  # run too short
+        (
+            "[[a]](3)",
+            "bbbb",
+            ["bbb"],
+        ),  # greedy: takes first 3, 'b' left is only 1 — no second match
+        # range
+        ("[[a]](1..3)", "bbbbabbb", ["bbb", "b", "bbb"]),
+        ("[[a]](2..)", "bba", ["bb"]),  # min 2, unlimited max
+        # zero or more
+        ("[[a]](0..)", "bbb", ["bbb"]),
+        ("[[a]](0..)", "aaa", []),  # all excluded — no non-'a' runs to return
+        # newline exclusion — the heading use case
+        ("[[\n]](0..)", "hello\nworld", ["hello", "world"]),
+        ("[[\n]](1..)", "hello\nworld", ["hello", "world"]),
+        # full heading transform
+        (
+            "^[#][ ][[\n]](0..)$ => <h1>{{ 3 }}</h1>",
+            "# Hello World\nother line",
+            ["<h1>Hello World</h1>"],
+        ),
+    ],
+)
+def test_negation_with_count(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(st.integers(min_value=1, max_value=6), st.text(alphabet="bcde", min_size=1))
+def test_negation_exact_count_match_length(n, body):
+    # Every match of [[a]](n) against a string of non-'a' chars has length exactly n
+    for m in run(f"[[a]]({n})", body):
+        assert len(m) == n
+
+
+@given(
+    st.integers(min_value=1, max_value=4),
+    st.integers(min_value=0, max_value=3),
+    st.text(alphabet="bcde", min_size=1),
+)
+def test_negation_range_count_respects_bounds(lo, extra, body):
+    hi = lo + extra
+    for m in run(f"[[a]]({lo}..{hi})", body):
+        assert lo <= len(m) <= hi
+
+
+@given(st.text(alphabet="bcde", min_size=1))
+def test_negation_zero_or_more_matches_full_run(body):
+    # A string with no 'a' chars should be consumed as a single match with (0..)
+    matches = run("[[a]](0..)", body)
+    assert matches == [body]
+
+
+# ---------------------------------------------------------------------------
 # Captures
 # ---------------------------------------------------------------------------
 
