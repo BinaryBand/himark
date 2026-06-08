@@ -456,11 +456,11 @@ class TestTransformers:
     def test_latex_pi(self):
         assert run("[pi] => {{ $\\pi$ }}", "pi") == ["π"]
 
-    # def test_template_lone_brace_is_literal(self):  # brace escaping not yet implemented
-    #     assert run("[a] => {{{ . }}}", "x") == ["{x}"]
+    def test_template_lone_brace_is_literal(self):
+        assert run("[a] => {{{ . }}}", "a") == ["{a}"]
 
-    # def test_template_escaped_double_brace(self):  # brace escaping not yet implemented
-    #     assert run("[a] => {{ . }}\\}}", "x") == ["x}}"]
+    def test_template_escaped_double_brace(self):
+        assert run("[a] => {{ . }}\\}}", "a") == ["a}}"]
 
     def test_template_whitespace_insignificant(self):
         assert run("[a] => {{ . }}", "x") == run("[a] => {{.}}", "x")

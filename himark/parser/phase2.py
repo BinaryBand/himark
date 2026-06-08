@@ -9,7 +9,7 @@ _single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"
 _double_brackets = r"\[\[((?:[^\]\\]|\\.)+)\]\]"
 _brackets = f"{_double_brackets}|{_single_brackets}"
 _double_chevrons = r"<<((?:[^>]|>[^>])*)>>"
-_double_braces = r"{{((?:[^}]|}[^}])*)}}"
+_double_braces = r"{{(?!\{)((?:[^}]|}[^}])*)}}"
 
 _PATTERN = re.compile(f"{_brackets}|{_double_chevrons}|{_double_braces}")
 _OPTION_GROUP = re.compile(_parenthesis)
