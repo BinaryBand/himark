@@ -357,6 +357,32 @@ def test_negation_zero_or_more_matches_full_run(body):
 
 
 # ---------------------------------------------------------------------------
+# <<sep>> as bracket content
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # simple: [<<,>>] matches a literal comma
+        ("[<<,>>]", "a,b,,c", [",", ",", ","]),
+        # anchored: line that is exactly a comma
+        ("^[<<,>>]$", "a\n,\nb,c", [","]),
+        # multi-char separator treated as a literal sequence
+        ("[<<::>>]", "a::b::c", ["::", "::"]),
+        # anchored multi-char: line that is exactly "::"
+        ("^[<<::>>]$", "a\n::\nb::c", ["::"]),
+        # with repetition: two consecutive commas
+        ("[<<,>>](2)", "a,,b", [",,"]),
+        # case-insensitive flag applies to the separator content
+        ("[<<hi>>](i)", "say HI there", ["HI"]),
+    ],
+)
+def test_chevron_as_bracket_content(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+# ---------------------------------------------------------------------------
 # Captures
 # ---------------------------------------------------------------------------
 
@@ -622,3 +648,56 @@ def test_chain_separator_then_identity(parts):
     # Split by comma, then match each part, then render with {{ . }} — should give back the parts
     result = run("<<,>> => [a..z](1..) => {{ . }}", target)
     assert result == parts
+
+
+# ---------------------------------------------------------------------------
+# <<>> wildcard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # Standalone <<>> matches entire text as one result
+        ("<<>>", "hello world", ["hello world"]),
+        ("<<>>", "", []),
+        # Lazy wildcard stops before the next constraint
+        (r"^<<>>$", "line one\nline two", ["line one", "line two"]),
+        # Heading lines: ^[#]<<>>$ matches lines starting with #
+        (r"^[#]<<>>$", "# Hello\nnot a heading\n# World", ["# Hello", "# World"]),
+        # With a character before <<>>
+        (
+            r"^[#][ ]<<>>$",
+            "# Hello World\n# Another\nnope",
+            ["# Hello World", "# Another"],
+        ),
+        # Transform heading lines with <<>>
+        (
+            r"^[#]<<>>$ => <h1>{{ . }}</h1>",
+            "# Hello World\nnot a heading\n# Another",
+            ["<h1># Hello World</h1>", "<h1># Another</h1>"],
+        ),
+        # <<>> between two constraints
+        ("[hello]<<>>[world]", "hello there world", ["hello there world"]),
+        # <<>> inside brackets acts as any-single-char
+        ("[<<>>](3)", "abc", ["abc"]),
+        ("[<<>>](3)", "ab", []),
+    ],
+)
+def test_chevron_wildcard(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+@given(
+    st.lists(
+        st.text(
+            min_size=1, alphabet=st.characters(min_codepoint=32, max_codepoint=126)
+        ),
+        min_size=1,
+    )
+)
+def test_chevron_wildcard_matches_all_lines(lines):
+    target = "\n".join(lines)
+    # ^<<>>$ should match every line
+    matches = run(r"^<<>>$", target)
+    assert matches == lines

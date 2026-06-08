@@ -29,7 +29,12 @@ def find_matches(tree: HMKNode, text: str) -> list[Match]:
         and len(tree.children) == 1
         and tree.children[0].type == "double_chevrons"
     ):
-        return _split_by_separator(tree.children[0], text)
+        node = tree.children[0]
+        sep = node.children[0].content if node.children else ""
+        if not sep:
+            # <<>> alone: one match covering the entire text
+            return [Match(text, 0, len(text))] if text else []
+        return _split_by_separator(node, text)
 
     specs = collect_var_specs(tree)
     matches = []
@@ -142,7 +147,39 @@ def _match_sequence(
     sub_capture_lists: list[list[str]] | None = None,
 ) -> int | _SkipTo | None:
     current = pos
-    for node in nodes:
+    for i, node in enumerate(nodes):
+        if node.type == "double_chevrons":
+            s = node.children[0].content if node.children else ""
+            if not s:
+                # <<>> lazy wildcard: consume minimum chars so the rest can succeed.
+                # When nothing follows, consume all remaining text (greedy terminal).
+                remaining = nodes[i + 1 :]
+                if not remaining:
+                    return len(text)
+                for n in range(len(text) - current + 1):
+                    snap_c = len(captures) if captures is not None else 0
+                    snap_s = len(capture_spans) if capture_spans is not None else 0
+                    snap_sub = (
+                        len(sub_capture_lists) if sub_capture_lists is not None else 0
+                    )
+                    result = _match_sequence(
+                        remaining,
+                        text,
+                        current + n,
+                        captures,
+                        bindings,
+                        capture_spans,
+                        sub_capture_lists,
+                    )
+                    if result is not None:
+                        return result
+                    if captures is not None:
+                        del captures[snap_c:]
+                    if capture_spans is not None:
+                        del capture_spans[snap_s:]
+                    if sub_capture_lists is not None:
+                        del sub_capture_lists[snap_sub:]
+                return None
         end = _match_node(
             node, text, current, captures, bindings, capture_spans, sub_capture_lists
         )
@@ -295,11 +332,25 @@ def _match_alternation_node(
     return None
 
 
+def _match_double_chevrons_node(
+    node: HMKNode, text: str, pos: int, ctx: MatchCtx
+) -> int | None:
+    s = node.children[0].content if node.children else ""
+    if not s:
+        # <<>> inside brackets: match any single character
+        return pos + 1
+    # <<sep>> inside brackets: match the separator string as a literal
+    if ctx.ci:
+        return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
+    return pos + len(s) if text[pos : pos + len(s)] == s else None
+
+
 _CONTENT_MATCHERS: dict[str, Callable[[HMKNode, str, int, MatchCtx], int | None]] = {
     "literal": _match_literal_node,
     "shortcut": _match_shortcut_node,
     "range": _match_range_node,
     "alternation": _match_alternation_node,
+    "double_chevrons": _match_double_chevrons_node,
 }
 
 
