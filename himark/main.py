@@ -16,7 +16,9 @@ def _str_or_file(value: str) -> str:
 
 @app.command()
 def run(
-    pattern: str = typer.Argument(help="HMK pattern, file path, or '-' to read from stdin"),
+    pattern: str = typer.Argument(
+        help="HMK pattern, file path, or '-' to read from stdin"
+    ),
     target: str = typer.Argument(help="String to match against, or a file path"),
 ) -> None:
     """Match TARGET against PATTERN and print each result."""
