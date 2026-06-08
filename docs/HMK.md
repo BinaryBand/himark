@@ -12,12 +12,12 @@ Himark uses the `.hmk` file extension, designed for pattern matching and text pr
 
 The backslash `\` escapes metacharacter pairs that have no bracket alternative, and provides control character shorthands.
 
-| Escape | Matches |
-| ------ | ------- |
-| `\\` | Literal backslash |
-| `\[` `\]` | Literal `[` or `]` |
-| `\{` `\}` | Literal `{` or `}` — required only when adjacent to another (e.g. `\}}` emits `}}` in template output) |
-| `\t` `\n` `\r` | Tab, newline, carriage return |
+| Escape         | Matches                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| `\\`           | Literal backslash                                                                                      |
+| `\[` `\]`      | Literal `[` or `]`                                                                                     |
+| `\{` `\}`      | Literal `{` or `}` — required only when adjacent to another (e.g. `\}}` emits `}}` in template output) |
+| `\t` `\n` `\r` | Tab, newline, carriage return                                                                          |
 
 Characters that form two-character operators (`..`, `||`, `<<`, `>>`, `{{`, `}}`) are already literal when used alone and do not need escaping. Anchor characters (`^`, `$`) are literal inside `[ ]`; use `[^]` or `[$]` to match them within a sequence.
 
@@ -115,16 +115,16 @@ Overlapping candidates merge into the longest non-overlapping run. Negation of n
 
 Repetition is a count modifier on any `[...]` group. A bare group without a count modifier matches exactly once.
 
-| Form | Meaning |
-| ---- | ------- |
-| `[a]` | Exactly once |
-| `[a](2)` | Exactly 2 |
-| `[a](1..)` | One or more |
-| `[a](0..)` | Zero or more |
-| `[a](1..3)` | Between 1 and 3 |
-| `[a](..3)` | Zero to 3 |
+| Form          | Meaning                 |
+| ------------- | ----------------------- |
+| `[a]`         | Exactly once            |
+| `[a](2)`      | Exactly 2               |
+| `[a](1..)`    | One or more             |
+| `[a](0..)`    | Zero or more            |
+| `[a](1..3)`   | Between 1 and 3         |
+| `[a](..3)`    | Zero to 3               |
 | `[a\|\|b](2)` | Exactly 2 of `a` or `b` |
-| `[a](0.., ?)` | Zero or more, lazy |
+| `[a](0.., ?)` | Zero or more, lazy      |
 
 The lazy flag `?` is a second argument to the count modifier and may be combined with any count: `[a](1.., ?)` = one or more, lazy.
 
@@ -155,18 +155,18 @@ Groups are defined by `[...]` and `<<...>>` delimiters and numbered left-to-righ
 
 Alternation branches within a single `[...]` group do not create sub-groups — the whole bracket is one group regardless of how many `||` alternatives it contains.
 
-| Reference | Resolves to |
-| --------- | ----------- |
-| `{{ 1 }}`, `{{ 2 }}` | Top-level group content by position |
-| `{{ 1.1 }}`, `{{ 2.3 }}` | Sub-group content by position |
-| `{{ 1.2..3.1 }}` | Concatenated content from the start of group 1.2 through the end of group 3.1 (inclusive, left-to-right) |
+| Reference                | Resolves to                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `{{ 1 }}`, `{{ 2 }}`     | Top-level group content by position                                                                      |
+| `{{ 1.1 }}`, `{{ 2.3 }}` | Sub-group content by position                                                                            |
+| `{{ 1.2..3.1 }}`         | Concatenated content from the start of group 1.2 through the end of group 3.1 (inclusive, left-to-right) |
 
 ## Separators
 
-| Expression | Target | Result |
-| ---------- | ------ | ------ |
-| `<</>>` | 'red/green/blue' | 'red', 'green', 'blue' |
-| `<<foo>>` | 'redfoogreenfooblue' | 'red', 'green', 'blue' |
+| Expression | Target               | Result                 |
+| ---------- | -------------------- | ---------------------- |
+| `<</>>`    | 'red/green/blue'     | 'red', 'green', 'blue' |
+| `<<foo>>`  | 'redfoogreenfooblue' | 'red', 'green', 'blue' |
 
 Consecutive, leading, or trailing separators produce empty strings: `'red//blue'` with `<</>>` → `'red'`, `''`, `'blue'`.
 
@@ -176,14 +176,14 @@ Inside a template, `{{ expr }}` interpolates a value; a lone `{` or `}` inside a
 
 Template variables:
 
-| Variable | Resolves to |
-| -------- | ----------- |
-| `{{ . }}` | Full matched text |
-| `{{ n }}` | Varied-repetition count bound to variable `n` |
-| `{{ 1 }}`, `{{ 1.2 }}` | Captured group by position |
-| `{{ 1.2..3.1 }}` | Span from start of group 1.2 to end of group 3.1 |
-| `{{ :emoji: }}` | Emoji shortcode → grapheme cluster |
-| `{{ $expr$ }}` | LaTeX expression → Unicode |
+| Variable               | Resolves to                                      |
+| ---------------------- | ------------------------------------------------ |
+| `{{ . }}`              | Full matched text                                |
+| `{{ n }}`              | Varied-repetition count bound to variable `n`    |
+| `{{ 1 }}`, `{{ 1.2 }}` | Captured group by position                       |
+| `{{ 1.2..3.1 }}`       | Span from start of group 1.2 to end of group 3.1 |
+| `{{ :emoji: }}`        | Emoji shortcode → grapheme cluster               |
+| `{{ $expr$ }}`         | LaTeX expression → Unicode                       |
 
 ```proto
 [selector] => <template>{{ . }}</template>
@@ -199,9 +199,9 @@ Template variables:
 
 A pattern may contain multiple groups. The template then selects which group(s) to emit, expressing assertions that regex would encode as lookahead or lookbehind:
 
-| Regex | HMK equivalent |
-| ----- | -------------- |
-| `X(?=Y)` — positive lookahead | `[X][Y] => {{ 1 }}` |
+| Regex                           | HMK equivalent      |
+| ------------------------------- | ------------------- |
+| `X(?=Y)` — positive lookahead   | `[X][Y] => {{ 1 }}` |
 | `(?<=X)Y` — positive lookbehind | `[X][Y] => {{ 2 }}` |
 
 A transformer may also chain multiple `=>` steps. Each intermediate step is itself a pattern; `=>` pipes the **full matched text** of the current step as the input domain for the next. The final `=>` leads to a template. Template variables (`{{ . }}`, `{{ 1 }}`, etc.) always refer to the immediately preceding pattern's match.
