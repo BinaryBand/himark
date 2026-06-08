@@ -3,7 +3,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from himark import parser
-from himark.engine import execute, find
+from himark.engine import find
+from himark.engine._match import find_matches
+from himark.engine._render import render
 from himark.models.exceptions import CompileError
 
 api = FastAPI(title="himark", description="HMK pattern matching API")
@@ -14,8 +16,14 @@ class Request(BaseModel):
     target: str
 
 
+class Delta(BaseModel):
+    start: int
+    end: int
+    text: str
+
+
 class ExecuteResponse(BaseModel):
-    results: list[str]
+    deltas: list[Delta]
 
 
 class FindMatch(BaseModel):
@@ -27,15 +35,24 @@ class FindResponse(BaseModel):
     matches: list[FindMatch]
 
 
-
 @api.post("/execute", response_model=ExecuteResponse)
 def execute_route(req: Request) -> ExecuteResponse | JSONResponse:
     try:
         trees = parser.parse(req.pattern)
-        results = execute(trees, req.target)
     except CompileError as exc:
         return JSONResponse(status_code=422, content={"detail": str(exc)})
-    return ExecuteResponse(results=results)
+
+    if len(trees) < 2:
+        # No template — return empty deltas (no substitutions)
+        return ExecuteResponse(deltas=[])
+
+    try:
+        matches = find_matches(trees[0], req.target)
+        deltas = [Delta(start=m.start, end=m.end, text=render(trees[-1], m)) for m in matches]
+    except CompileError as exc:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    return ExecuteResponse(deltas=deltas)
 
 
 @api.post("/find", response_model=FindResponse)
