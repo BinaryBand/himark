@@ -1,8 +1,10 @@
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
 from himark import parser
 from himark.engine import execute
-from himark.models import CompileError
+from himark.models.exceptions import CompileError
 
 
 def run(hmk: str, target: str) -> list[str]:

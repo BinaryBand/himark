@@ -22,9 +22,8 @@ from dataclasses import dataclass
 from itertools import product as _product
 from typing import Iterator
 
-from himark.models import CompileError
-from himark.node import HMKNode
-
+from himark.models.exceptions import CompileError
+from himark.models.node import HMKNode
 
 # ---------------------------------------------------------------------------
 # Public types

@@ -3,15 +3,14 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import NamedTuple
-from himark.node import HMKNode
+
+from himark.models.node import HMKNode
 from himark.utils.alphabet import ALPHABETS as _ALPHABETS
 from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
-from himark.utils.alphabet import alpha_value as _alpha_value
 from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
-from himark.utils.varied_rep import collect_var_specs, iter_bindings
-from himark.utils import emoji as _emoji  # noqa: F401 — side-effect: registers emoji resolver
-from himark.utils import latex as _latex  # noqa: F401 — side-effect: registers latex resolver
+from himark.utils.alphabet import alpha_value as _alpha_value
 from himark.utils.resolver import RESOLVERS as _RESOLVERS
+from himark.utils.varied_rep import collect_var_specs, iter_bindings
 
 
 class MatchCtx(NamedTuple):

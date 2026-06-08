@@ -1,5 +1,5 @@
+from himark.models.node import HMKNode
 from himark.parser import phase1, phase2, phase3
-from himark.node import HMKNode
 
 
 def parse(text: str) -> list[HMKNode]:

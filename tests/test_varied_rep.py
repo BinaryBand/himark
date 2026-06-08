@@ -1,7 +1,8 @@
 """Tests for varied-repetition: variable count modifiers (n, m, …)."""
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from himark import parser
 from himark.engine import execute

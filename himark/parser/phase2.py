@@ -1,7 +1,8 @@
 """Phase 2: Tokenize an HMK pattern string into an HMKNode tree."""
 
 import re
-from himark.node import HMKNode
+
+from himark.models.node import HMKNode
 
 _parenthesis = r"\(([^)]+)\)"
 _single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"
