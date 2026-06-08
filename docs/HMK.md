@@ -1,6 +1,6 @@
 # Himark
 
-**Version:** 0.4.2
+**Version:** 0.4.3-draft
 **Status:** Draft Specification
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -178,8 +178,32 @@ Alternation branches within a single `[...]` group do not create sub-groups — 
 | ---------- | -------------------- | ---------------------- |
 | `<</>>`    | 'red/green/blue'     | 'red', 'green', 'blue' |
 | `<<foo>>`  | 'redfoogreenfooblue' | 'red', 'green', 'blue' |
+| `<<>>`     | 'hello world'        | 'hello world'          |
 
 Consecutive, leading, or trailing separators produce empty strings: `'red//blue'` with `<</>>` → `'red'`, `''`, `'blue'`.
+
+An empty separator `<<>>` makes no splits — the span's content is returned as a single segment. This is the zero-split degenerate of the general separator form.
+
+```proto
+^<<>>$  // complete line as one piece
+<<>>    // entire input as one segment
+```
+
+**Surrounding-pattern form**: a separator may appear inside `[ ]` to constrain the span. The bracket's left and right contents are boundary patterns; the separator splits the interior.
+
+| Expression     | Target           | Result                 |
+| -------------- | ---------------- | ---------------------- |
+| `[W<</>>Ex]`   | 'We/heart/RegEx' | 'We', 'heart', 'RegEx' |
+| `[W]<</>>[Ex]` | 'We/heart/RegEx' | 'e', 'heart', 'Reg'    |
+
+In the first form, boundary patterns are included in each segment. In the second, they are consumed as separate groups and excluded from segment content.
+
+`<<>>` and the surrounding-pattern form compose directly — the separator is the only thing that changes:
+
+```proto
+[hello<<,>>world]  // span from 'hello' to 'world', split on ','
+[hello<<>>world]   // same span, no split — full 'hello…world' as one piece
+```
 
 ## Transformers
 
@@ -218,7 +242,7 @@ A pattern may contain multiple groups. The template then selects which group(s) 
 A transformer may also chain multiple `=>` steps. Each intermediate step is itself a pattern; `=>` pipes the **full matched text** of the current step as the input domain for the next. The final `=>` leads to a template. Template variables (`{{ . }}`, `{{ 1 }}`, etc.) always refer to the immediately preceding pattern's match.
 
 ```proto
-<<\n>> => [#][ ][a..Z](1..) => <h1>{{ 2 }}</h1>
+<<\n>> => [#][ ][a..Z](1..) => <h1>{{ 3 }}</h1>
 // Split by newline, then match heading lines, then emit the title text in <h1>
 ```
 
