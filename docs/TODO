@@ -10,8 +10,8 @@
   - Yes. Every `[...]` and `<<...>>` creates a capture group; this is now the core rule.
 - [x] Three-argument repetition range `2..n..5` is unexplained
   - Dropped. Replaced by `{{#N}}` — valid in both template and count positions. Count constraints use normal ranges `(2..5)`; cross-group equality uses `({{#N}})`.
-- [ ] Alternation precedence is unspecified
-  - `||` separates alternative patterns at any level" — but is `[a][b] || [c]` parsed as `([a][b]) || [c]` or `[a]([b] || [c])`?
+- [x] Alternation precedence is unspecified
+  - `||` is lowest precedence, sequence-level: `A B || C D` = `(A B) | (C D)`. Branches share capture group slots; mismatched group counts are a compile error.
 - [x] Complement inside value ranges creates two exclusion syntaxes
   - Resolved: `{!...}` is character class complement (char-level); `,!value` / `,!min..max` inside `[...]` is value exclusion (string-level). Distinct purposes, no longer ambiguous.
 - [ ] Formalize transformer chain nesting notation

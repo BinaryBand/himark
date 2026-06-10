@@ -173,6 +173,18 @@ Constructs placed adjacently match left to right. Whitespace between constructs 
   ((.)) {dec}((0..255)) ((.)) {dec}((0..255))      // IPv4
 ```
 
+## Alternation
+
+`||` separates alternative expression sequences. It has the lowest precedence — everything to the left of `||` is one branch, everything to the right is another. Branches share capture group slots: the same index refers to the same logical group regardless of which branch matched.
+
+```proto
+((cat)) || ((dog))                              // 'cat' or 'dog'; group 0 = matched word
+((http)) || ((https))                           // group 0 = matched scheme
+((1)){b58}((a..)) || ((3)){b58}((a..))          // P2PKH or P2SH; group 0 = version byte, group 1 = payload
+```
+
+Branches must have the same number of capture groups. A branch with fewer groups than its sibling is a compile error.
+
 ## Captures
 
 Every `((...))` and `<<...>>` creates a capture group, numbered left to right from 0. `{...}` and `[...]` modifiers do not create groups. Sub-captures within a group use dot notation and are also 0-indexed.
