@@ -17,4 +17,8 @@
 - [ ] Formalize transformer chain nesting notation
 - [ ] Define per-character exclusion syntax
   - `{a..z,!d..f}` appears in the spec as an example but the `,!char` mechanism inside `{...}` is never formally defined.
+- [ ] Negative lookahead (?!Y)
+- [ ] Case-insensitive
+- [ ] Greedy/lazy toggle on [count]
+- [ ] Unicode categories \p{L}
 - [ ] Add second-layer shortcuts for common patterns

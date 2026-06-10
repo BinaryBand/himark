@@ -84,13 +84,16 @@ Unicode codepoint order is the default for all ranges. No implicit inference.
 
 Named alphabets are aliases for `,`-joined ranges.
 
-| Alias | Expands to                |
-| ----- | ------------------------- |
-| `dec` | `0..9`                    |
-| `hex` | `0..9,a..f`               |
-| `b32` | `0..9,a..v` (RFC 4648 §7) |
-| `b58` | `1..9,A..Z,a..z,!I,!O,!l` |
-| `b64` | `A..Z,a..z,0..9,+,/`      |
+| Alias     | Expands to                |
+| --------- | ------------------------- |
+| `dec`     | `0..9`                    |
+| `hex`     | `0..9,a..f`               |
+| `b32`     | `0..9,a..v` (RFC 4648 §7) |
+| `b58`     | `1..9,A..Z,a..z,!I,!O,!l` |
+| `b64`     | `A..Z,a..z,0..9,+,/`      |
+| `b85`     | RFC 1924 Base85           |
+| `ascii`   | U+0000–U+007F             |
+| `unicode` | U+0000–U+10FFFF           |
 
 ```proto
 {b58}((1..z))   // one base58 character
