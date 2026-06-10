@@ -161,20 +161,14 @@ Named alphabets are aliases for `,`-joined ranges.
 {a..z}[a..z](2..5) // same letter 2–5 times
 {0..9}[0..9](1..)  // same digit one or more times
 [ab](3)            // 'ababab'
-[#](n)             // n hash chars, n bound as variable
-[#](2..n)          // n hash chars where n is at least 2
-[#](2..n..5)       // n hash chars where n is between 2 and 5
 ```
 
-### Varied repetition
-
-Variable letters bind at first occurrence (left-to-right) and must be consistent.
+The count of any group is accessible as `{{#N}}` — in a template to emit the value, or in a count position to enforce equality with another group.
 
 ```proto
-[#](n) {!\n}[..](m)   // n hashes then m non-newline chars, n and m independent
+[#](1..) [ ] {!\n}[..]          // n hashes then a line; {{#0}} = hash count
+[a](2..5)[b]({{#0}})            // [b] repeats the same number of times as [a]
 ```
-
-A conflicting variable bound is a compile error.
 
 ## Negation
 
@@ -236,6 +230,7 @@ Capture references:
 | `{{N}}`    | Capture group N (0-indexed)        |
 | `{{N.M}}`  | Sub-group M of group N (0-indexed) |
 | `{{N..M}}` | Groups N through M inclusive       |
+| `{{#N}}`   | Repeat count of group N            |
 
 ## Nesting
 
@@ -256,7 +251,7 @@ The range slot `[...]` in a value range expression accepts a nested Marky patter
 | `{{N}}`    | Capture group N (0-indexed)                 |
 | `{{N.M}}`  | Sub-group M of group N                      |
 | `{{N..M}}` | Groups N through M inclusive                |
-| `{{n}}`    | Varied-repetition count variable n          |
+| `{{#N}}`   | Repeat count of group N                     |
 
 ```proto
 [**]<<>>[**] => <strong>{{1}}</strong>
@@ -353,7 +348,7 @@ P2PKH or P2SH:
 **Headings** (`#`–`######`):
 
 ```proto
-<<\n>> => [#](1..n..6) [ ] {!\n}[..] => <h{{n}}>{{2}}</h{{n}}>
+<<\n>> => [#](1..6) [ ] {!\n}[..] => <h{{#0}}>{{2}}</h{{#0}}>
 ```
 
 **Bold**:

@@ -8,7 +8,8 @@
   - Resolved: `{class}` prefix → value range, no prefix → literal, `:` → padding. Formalized in the Implicit Defaults table. Nested range slots fall out from root transparency — no behavioral consequence to disambiguate.
 - [x] Does `<<sep>>` form a capture group?
   - Yes. Every `[...]` and `<<...>>` creates a capture group; this is now the core rule.
-- [ ] Three-argument repetition range `2..n..5` is unexplained
+- [x] Three-argument repetition range `2..n..5` is unexplained
+  - Dropped. Replaced by `{{#N}}` — valid in both template and count positions. Count constraints use normal ranges `(2..5)`; cross-group equality uses `({{#N}})`.
 - [ ] Alternation precedence is unspecified
   - `||` separates alternative patterns at any level" — but is `[a][b] || [c]` parsed as `([a][b]) || [c]` or `[a]([b] || [c])`?
 - [x] Complement inside value ranges creates two exclusion syntaxes
