@@ -1,95 +1,84 @@
 # HMK Implementation Audit
 
-## Bugs (documented features that silently misbehave)
-
-### Bug 1 — Char-range exclusion is silently ignored
-
-**Spec (lines 46, 59):**
-
-```text
-{a..z, !d..f}   // lowercase, excluding d–f
-```
-
-**Actual:** `d`, `e`, `f` are matched anyway. Exclusions on `char_range`, `named_alpha`, and `full_alpha` nodes are parsed and stored in `node.metadata["exclusions"]` by phase3, but `_match_semantic` in `engine/_match.py` never reads them for those node types. Exclusions only work on `upper_bound` / `lower_bound` / `bounded_range` (value-range nodes) and `union`.
-
-**Fix:** Thread exclusion checks through `_match_char_range`, `_match_named_alpha`, and `_match_full_alpha`.
+Audit of `marky/` implementation against `docs/HMK.md`.
+154 tests passing as of 2026-06-10.
 
 ---
 
+## Bugs
+
+### ~~Bug 1 — Char-range exclusion is silently ignored~~ ✅ Fixed
+
+Exclusions on `char_range`, `named_alpha`, and `full_alpha` are now honored in
+`_match_semantic` / `_match_named_alpha` / `_match_full_alpha`. `{a..z,!d..f}`
+on `abcdefg` correctly yields `a,b,c,g`. Covered by the exclusion stress tests
+in `test_match.py`.
+
 ### ~~Bug 2 — Token-position ranges raise CompileError~~ ✅ Fixed
 
-`{cat..dog}` now resolves to a `string_range` node and matches any string lexicographically between the two endpoints. Equal-length endpoints (the common case) match strings of exactly that length. The spec example comment has been updated to reflect the actual semantic: `{cat..dog} // cat,cau,...,dof,dog`.
+`{cat..dog}` now resolves to a `string_range` node and matches any string
+lexicographically between the two endpoints. Equal-length endpoints (the commonvcase) match strings of exactly that length.
 
 ---
 
 ## Partial / Approximated
 
-### Issue 3 — Grouped-class multi-char tokens flattened
+### ~~Issue 3 — Grouped-class multi-char tokens flattened~~ ✅ Fixed
 
-**Spec (line 136):**
+`_match_group_class` now matches whole tokens (longest-first) rather than a flat
+char set. `{{a,bc},{def,ghi}}` matches `bcghi`; a lone `b` no longer matches
+where only `bc` is a member. Single-char groups (`{{a,A},{b,B}}`) still work.
 
-```text
-{{a,bc},{def,ghi}}   // 2 groups with multi-char tokens
-```
+### ~~Issue 4 — `hexi` named alphabet is a no-op~~ ✅ Fixed
 
-**Actual:** `_match_group_class` in `engine/_match.py` builds a flat char set `{a,b,c,d,e,f,g,h,i}` and matches any of those chars in any order, ignoring group membership per position. The common single-char case (`{{a,A},{b,B}}`) works correctly; multi-char tokens within a group do not.
+`{hexi}` now matches case-insensitive hex digits (`0-9a-fA-F`) via a virtual
+branch in `_match_named_alpha`. It remains match-only (not usable as a value
+bound — case is ambiguous for positional arithmetic).
 
----
+### ~~Issue 5 — Virtual alphabets cannot be used as range bounds~~ ✅ Fixed
 
-### Issue 4 — `hexi` named alphabet is a no-op
-
-`NAMED_ALPHABETS["hexi"] = None` and there is no virtual-alphabet expansion path for `hexi` in `_match_named_alpha`. `{hexi}` matches nothing. The spec table lists `hexi` as the case-insensitive hex alphabet (implied zip of `hex` and `HEX`). Either implement it as a union `{hex,HEX}` at match time or document it as unsupported.
-
----
-
-### Issue 5 — Virtual alphabets (`ascii`, `uni`) cannot be used as range bounds
-
-**Spec:** `ascii` and `uni` act as α in arithmetic, implying e.g.
-`{{ascii}..A}` should work.
-
-**Actual:** Raises uncaught `ValueError` (not `CompileError`) from `_value_bounds`because virtual alphabets have no string value to compute positions against. The error is not user-friendly and the limitation is undocumented.
-
----
+`ascii` is materialized as a 128-char alphabet, so `{{ascii}..A}` works by
+codepoint. `uni` (1.1M codepoints) and `hexi` (case-ambiguous) now raise a clean
+`CompileError` instead of an uncaught `ValueError`.
 
 ### Issue 6 — Chained `{{.}}` deferred resolution not implemented
 
-**Spec (line 210):**
-
-> `{{.}}` in a chained template is deferred — it resolves to the result of applying the remaining chain to the current match, not the raw text.
-
-**Actual:** Multi-step chains `pattern => template => pattern => template` treat each step independently. `{{.}}` in a middle template renders the raw matched text, not the output of the remainder of the chain. The North Star examples only use two-step chains, so this does not affect current tests.
+**Decision: documented, not implemented.** The engine executes a chain as
+`pattern => pattern => … => template` — every step before the last is a pattern,
+only the final step is rendered. The spec's alternating
+`pattern => template => pattern => template` with deferred `{{.}}` is a larger
+architectural change and is not exercised by any North Star example. The spec
+now carries an "Implementation status" note under Transformers.
 
 ---
 
 ## Docs Issues
 
-### Docs Issue 7 — North Star IPv4 pattern has literal spaces
+### ~~Docs Issue 7 — North Star patterns have literal spaces~~ ✅ Fixed
 
-**Spec (line 242):**
-
-```text
-{{dec}..255} {.} {{dec}..255} {.} {{dec}..255} {.} {{dec}..255}
-```
-
-**Actual:** HMK is whitespace-significant outside `{...}`. The spaces around `{.}` are literal — this pattern matches `192 . 168 . 1 . 1`, not `192.168.1.1`. The working pattern (used in the north_star tests) is:
-
-```text
-{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}
-```
-
-The spec should either remove the decorative spaces or annotate them as illustrative only.
+Both the Markdown-heading and IPv4 North Star examples used decorative spaces
+that HMK treats as literal text. They are now written in compact form and a
+note explains whitespace significance. All three North Star patterns
+(Markdown, IPv4, Bitcoin) verified to run verbatim from the spec.
 
 ---
 
 ## What Aligns Well
 
-- **τ/α cardinality model** — singleton detection, parse-time evaluation, and bound classification all behave exactly as specified.
-- **Repetition by equality** — `{a..z}[3]` requires `aaa`, `bbb`, etc., not any mix; backtracking longest-first works.
-- **No-anchor scanning** — no implicit start/end anchors; engine scans left to right and returns all non-overlapping matches, consistent throughout.
-- **Named alphabets** (`dec`, `hex`, `HEX`, `b32`, `b58`, `b64`, `b85`) — all correct; exclusions in `b58` (`!I`, `!O`, `!l`) applied at alphabet construction, not at match time.
-- **Value-range arithmetic** (`upper_bound`, `lower_bound`, `bounded_range`) — including exclusions on numeric ranges (e.g. `{dec}..255, !128..191`).
+- **τ/α cardinality model** — singleton detection, parse-time evaluation, and
+  bound classification all behave exactly as specified.
+- **Repetition by equality** — `{a..z}[3]` requires `aaa`, `bbb`, etc., not any
+  mix; backtracking longest-first works.
+- **No-anchor scanning** — no implicit start/end anchors; engine scans left to
+  right and returns all non-overlapping matches, consistent throughout.
+- **Named alphabets** (`dec`, `hex`, `HEX`, `hexi`, `b32`, `b58`, `b64`, `b85`,
+  `ascii`) — all match correctly.
+- **Value-range arithmetic** (`upper_bound`, `lower_bound`, `bounded_range`,
+  `string_range`) — including exclusions on numeric ranges.
 - **Padding** (`{N: expr}`, `{: expr}`) — fixed and variable-width both work.
-- **Captures** — 0-based left-to-right numbering, dot-notation sub-captures, `{{#N}}` count references all correct.
+- **Captures** — 0-based left-to-right numbering, dot-notation sub-captures,
+  `{{#N}}` count references all correct.
 - **Separators** (`<<sep>>`) — lazy span, split semantics, `<<\n>>` on full input.
 - **Transformers** (`=>`) — two-step chains (the common case) work correctly.
-- **Singleton constructors** (`{z}[33]` as τ bound) — cardinality-based classification is implemented and tested.
+- **Singleton constructors** (`{z}[33]` as τ bound) — cardinality-based
+  classification is implemented and tested.

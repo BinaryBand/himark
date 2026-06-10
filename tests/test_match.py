@@ -57,6 +57,16 @@ def test_named_alpha_hex():
     assert result == ["0", "a", "f"]
 
 
+def test_named_alpha_hexi_case_insensitive():
+    # hexi accepts both cases of hex digits.
+    result = matches("{hexi}", "0aF g9C")
+    assert result == ["0", "a", "F", "9", "C"]
+
+
+def test_named_alpha_hexi_rejects_non_hex():
+    assert matches("{hexi}", "ghz") == []
+
+
 # ── upper_bound ───────────────────────────────────────────────────────────────
 
 
@@ -73,6 +83,22 @@ def test_upper_bound_hex():
     assert "0f" in result
     assert "ff" in result
     assert "100" not in result
+
+
+def test_upper_bound_ascii_virtual():
+    # ascii is materializable, so it works as a value-range bound by codepoint.
+    result = matches("{{ascii}..A}", "A B")
+    assert "A" in result  # ord 'A' == 65, within bound
+    assert "B" not in result  # ord 'B' == 66, over bound
+
+
+def test_uni_as_bound_raises():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        matches("{{uni}..A}", "xyz")
 
 
 # ── lower_bound ───────────────────────────────────────────────────────────────
@@ -212,6 +238,27 @@ def test_token_set_order():
 def test_union_chars():
     result = matches("{a,e,i,o,u}", "hello")
     assert result == ["e", "o"]
+
+
+# ── group_class ───────────────────────────────────────────────────────────────
+
+
+def test_group_class_single_char():
+    # Each position is one member of a group; any casing, any length.
+    result = matches("{{a,A},{b,B}}", "aBAb zz")
+    assert result == ["aBAb"]
+
+
+def test_group_class_multichar_tokens():
+    # Multi-char group members are matched as whole tokens, not loose chars.
+    result = matches("{{a,bc},{def,ghi}}", "bcghi")
+    assert result == ["bcghi"]
+
+
+def test_group_class_rejects_partial_token():
+    # 'b' alone is not a member ('bc' is); a lone 'b' must not start a match.
+    result = matches("{{a,bc},{x,yz}}", "byz")
+    assert result == ["yz"]  # no-anchor: 'yz' still matches as a sub-token
 
 
 # ── complement ────────────────────────────────────────────────────────────────

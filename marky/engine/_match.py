@@ -1,8 +1,12 @@
 """HMK match engine — walks the phase3 AST against a text string."""
 
 from marky.engine._types import Match
+from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
 from marky.utils.alphabet import NAMED_ALPHABETS, alpha_value
+
+_ASCII_ALPHA = "".join(chr(i) for i in range(0x80))
+_HEXI_CHARS = "0123456789abcdefABCDEF"
 
 
 class _State:
@@ -290,12 +294,15 @@ def _match_named_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     alph = NAMED_ALPHABETS[name]
     ch = text[pos]
     if alph is None:
-        # Virtual: ascii or uni
+        # Virtual: ascii, uni, or hexi
         if name == "ascii":
             if ord(ch) > 0x7F:
                 return None
         elif name == "uni":
             pass  # every char is in uni
+        elif name == "hexi":
+            if ch not in _HEXI_CHARS:
+                return None
         else:
             return None
     elif ch not in alph:
@@ -328,7 +335,13 @@ def _alpha_str(node: HMKNode) -> str:
         name = node.metadata["name"]
         alph = NAMED_ALPHABETS[name]
         if alph is None:
-            raise ValueError(f"Virtual alphabet {name!r} cannot be used as range bound")
+            # ascii has a finite, materializable alphabet usable for value
+            # arithmetic. uni (1.1M codepoints) and hexi (case-ambiguous) do not.
+            if name == "ascii":
+                return _ASCII_ALPHA
+            raise CompileError(
+                f"Virtual alphabet {name!r} cannot be used as a range bound"
+            )
         return alph
     if t == "char_range":
         s, e = node.metadata["start"], node.metadata["end"]
@@ -441,7 +454,7 @@ def _build_zip_groups(node: HMKNode) -> list[list[str]]:
     try:
         left_alph = _alpha_str(left_node)
         right_alph = _alpha_str(right_node)
-    except ValueError:
+    except (ValueError, CompileError):
         return []
 
     if len(left_alph) != len(right_alph):
@@ -585,11 +598,27 @@ def _match_token_set(node: HMKNode, text: str, pos: int) -> int | None:
 
 
 def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
+    """Match a sequence of group members (tokens), each possibly multi-char.
+
+    Every consumed position must be a whole token belonging to one of the
+    groups — not merely a character drawn from the union of all members.
+    Tokens are tried longest-first so multi-char members win over any shorter
+    member that is a prefix of them.
+    """
     groups = node.metadata["groups"]
-    char_set = {ch for grp in groups for item in grp for ch in item}
+    tokens = sorted(
+        (item for grp in groups for item in grp if item),
+        key=len,
+        reverse=True,
+    )
     end = pos
-    while end < len(text) and text[end] in char_set:
-        end += 1
+    while end < len(text):
+        for tok in tokens:
+            if text[end : end + len(tok)] == tok:
+                end += len(tok)
+                break
+        else:
+            break
     return end if end > pos else None
 
 
