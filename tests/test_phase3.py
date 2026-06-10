@@ -239,9 +239,11 @@ def test_template_count_ref():
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 
-def test_char_range_multi_char_raises():
-    with pytest.raises(CompileError):
-        first_semantic("{ab..yz}")
+def test_char_range_multi_char_produces_string_range():
+    node = first_semantic("{cat..dog}")
+    assert node.type == "string_range"
+    assert node.metadata["start"] == "cat"
+    assert node.metadata["end"] == "dog"
 
 
 def test_invalid_count_raises():

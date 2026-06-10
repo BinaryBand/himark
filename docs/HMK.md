@@ -27,15 +27,15 @@ Expressions inside `{...}` are built from two types:
 
 Every `{expr}` without an explicit count has an implicit `[1]`. This makes `{hello}` identical to `{hello}[1]` — and since it can only produce one value, it is $\tau$. The τ/α distinction is therefore about **cardinality**, not syntax: cardinality 1 is τ, cardinality > 1 is α.
 
-| Form                         | Meaning                       |
-| ---------------------------- | ----------------------------- |
-| $\tau$                       | Literal match                 |
-| $\tau_1$..$\tau_2$           | Character range (single-char) |
-| $\alpha$                     | Full range                    |
-| $\alpha$..$\tau$             | Upper bound $\tau$            |
-| $\tau$..$\alpha$             | Lower bound $\tau$            |
-| $\tau_1$..$\alpha$..$\tau_2$ | Bounded range in $\alpha$     |
-| $\alpha_1$..$\alpha_2$       | Zip (counts must match)       |
+| Form                         | Meaning                   |
+| ---------------------------- | ------------------------- |
+| $\tau$                       | Literal match             |
+| $\tau_1$..$\tau_2$           | Character/string range    |
+| $\alpha$                     | Full range                |
+| $\alpha$..$\tau$             | Upper bound $\tau$        |
+| $\tau$..$\alpha$             | Lower bound $\tau$        |
+| $\tau_1$..$\alpha$..$\tau_2$ | Bounded range in $\alpha$ |
+| $\alpha_1$..$\alpha_2$       | Zip (counts must match)   |
 
 `,` joins expressions as a union. `{!expr}` is the complement — any value NOT in the group.
 
@@ -119,7 +119,7 @@ Token order matches write order; `..` ranges apply over token position:
 
 ```proto
 {cat,dog,fish}   // cat=0, dog=1, fish=2
-{cat..dog}       // tokens 0–1: 'cat' or 'dog'
+{cat..dog}       // cat,cau,...,dof,dog
 ```
 
 ---

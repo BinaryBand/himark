@@ -239,6 +239,8 @@ def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
         if excl and _is_char_excluded(ch, excl):
             return None
         return pos + 1
+    if t == "string_range":
+        return _match_string_range(node, text, pos)
     if t == "named_alpha":
         return _match_named_alpha(node, text, pos)
     if t == "full_alpha":
@@ -261,6 +263,25 @@ def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
         return _match_group_class(node, text, pos)
     if t == "padded":
         return _match_padded(node, text, pos)
+    return None
+
+
+def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
+    """Greedy lex-range match for multi-char τ..τ endpoints.
+
+    When endpoints are equal length, only that length is tried.
+    When different, tries lengths from len(end) down to len(start).
+    """
+    start = node.metadata["start"]
+    end = node.metadata["end"]
+    lo_len = min(len(start), len(end))
+    hi_len = max(len(start), len(end))
+    for length in range(hi_len, lo_len - 1, -1):
+        s = text[pos : pos + length]
+        if len(s) < length:
+            continue
+        if start <= s <= end:
+            return pos + length
     return None
 
 

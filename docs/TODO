@@ -1,25 +1,106 @@
-# TODO (Marky)
+# HMK Implementation Audit
 
-- [x] Value range semantics are undefined
-  - The spec says matching is "under the class ordering" but the examples imply numeric semantics.
-- [x] `<<sep>>` semantics are under-defined
-  - `<<\n>>`, `<<>>`, `[**]<<>>[**]` don't follow a unified, coherent rule.
-- [x] `[...]` is overloaded without disambiguation rules
-  - Resolved: `{class}` prefix → value range, no prefix → literal, `:` → padding. Formalized in the Implicit Defaults table. Nested range slots fall out from root transparency — no behavioral consequence to disambiguate.
-- [x] Does `<<sep>>` form a capture group?
-  - Yes. Every `[...]` and `<<...>>` creates a capture group; this is now the core rule.
-- [x] Three-argument repetition range `2..n..5` is unexplained
-  - Dropped. Replaced by `{{#N}}` — valid in both template and count positions. Count constraints use normal ranges `(2..5)`; cross-group equality uses `({{#N}})`.
-- [x] Alternation precedence is unspecified
-  - Resolved natively: string-token alphabets `{cat,dog}((..))` handle fixed-string alternation; pattern-expression classes `{{dec}((0..255)), {hex}((0..ff))}((..))` handle pattern alternation. `||` deferred to secondary layer as a shortcut for the verbose pattern-expression form.
-- [x] Complement inside value ranges creates two exclusion syntaxes
-  - Resolved: `{!...}` is character class complement (char-level); `,!value` / `,!min..max` inside `[...]` is value exclusion (string-level). Distinct purposes, no longer ambiguous.
-- [ ] Formalize transformer chain nesting notation
-- [ ] Define per-character exclusion syntax
-  - `{a..z,!d..f}` appears in the spec as an example but the `,!char` mechanism inside `{...}` is never formally defined.
-- [ ] Negative lookahead (?!Y)
-- [x] Case-insensitive
-  - Resolved natively via grouped-class alphabets: `{{a,A}..{z,Z}}((..))` matches any word any case. Literal matches are alphabet-aware: `((hello))` matches all casings. No `(i)` flag needed as a primitive.
-- [ ] Greedy/lazy toggle on [count]
-- [ ] Unicode categories \p{L}
-- [ ] Add second-layer shortcuts for common patterns
+## Bugs (documented features that silently misbehave)
+
+### Bug 1 — Char-range exclusion is silently ignored
+
+**Spec (lines 46, 59):**
+
+```text
+{a..z, !d..f}   // lowercase, excluding d–f
+```
+
+**Actual:** `d`, `e`, `f` are matched anyway. Exclusions on `char_range`, `named_alpha`, and `full_alpha` nodes are parsed and stored in `node.metadata["exclusions"]` by phase3, but `_match_semantic` in `engine/_match.py` never reads them for those node types. Exclusions only work on `upper_bound` / `lower_bound` / `bounded_range` (value-range nodes) and `union`.
+
+**Fix:** Thread exclusion checks through `_match_char_range`, `_match_named_alpha`, and `_match_full_alpha`.
+
+---
+
+### Bug 2 — Token-position ranges raise CompileError
+
+**Spec (lines 120–123):**
+
+```text
+{cat,dog,fish}   // cat=0, dog=1, fish=2
+{cat..dog}       // tokens 0–1: 'cat' or 'dog'
+```
+
+**Actual:** `{cat..dog}` raises `CompileError: Character range endpoints must be single characters`. Both endpoints evaluate as singletons (τ) so `_resolve_arm` routes them to the `char_range` branch, which enforces `len == 1`. Token-position ranging over string-token alphabets is completely unimplemented.
+
+**Fix:** In `_resolve_arm`, when both τ values have `len > 1`, resolve to a `token_set` slice rather than `char_range`.
+
+> **Note from developer**: {cat..dog} shouldn't collapse to {cat,dog} but rather represent any and every Unicode string between 'cat' and 'dog'. e.g. [cat,cau,...,dof,dog]
+
+---
+
+## Partial / Approximated
+
+### Issue 3 — Grouped-class multi-char tokens flattened
+
+**Spec (line 136):**
+
+```text
+{{a,bc},{def,ghi}}   // 2 groups with multi-char tokens
+```
+
+**Actual:** `_match_group_class` in `engine/_match.py` builds a flat char set `{a,b,c,d,e,f,g,h,i}` and matches any of those chars in any order, ignoring group membership per position. The common single-char case (`{{a,A},{b,B}}`) works correctly; multi-char tokens within a group do not.
+
+---
+
+### Issue 4 — `hexi` named alphabet is a no-op
+
+`NAMED_ALPHABETS["hexi"] = None` and there is no virtual-alphabet expansion path for `hexi` in `_match_named_alpha`. `{hexi}` matches nothing. The spec table lists `hexi` as the case-insensitive hex alphabet (implied zip of `hex` and `HEX`). Either implement it as a union `{hex,HEX}` at match time or document it as unsupported.
+
+---
+
+### Issue 5 — Virtual alphabets (`ascii`, `uni`) cannot be used as range bounds
+
+**Spec:** `ascii` and `uni` act as α in arithmetic, implying e.g.
+`{{ascii}..A}` should work.
+
+**Actual:** Raises uncaught `ValueError` (not `CompileError`) from `_value_bounds`because virtual alphabets have no string value to compute positions against. The error is not user-friendly and the limitation is undocumented.
+
+---
+
+### Issue 6 — Chained `{{.}}` deferred resolution not implemented
+
+**Spec (line 210):**
+
+> `{{.}}` in a chained template is deferred — it resolves to the result of applying the remaining chain to the current match, not the raw text.
+
+**Actual:** Multi-step chains `pattern => template => pattern => template` treat each step independently. `{{.}}` in a middle template renders the raw matched text, not the output of the remainder of the chain. The North Star examples only use two-step chains, so this does not affect current tests.
+
+---
+
+## Docs Issues
+
+### Docs Issue 7 — North Star IPv4 pattern has literal spaces
+
+**Spec (line 242):**
+
+```text
+{{dec}..255} {.} {{dec}..255} {.} {{dec}..255} {.} {{dec}..255}
+```
+
+**Actual:** HMK is whitespace-significant outside `{...}`. The spaces around `{.}` are literal — this pattern matches `192 . 168 . 1 . 1`, not `192.168.1.1`. The working pattern (used in the north_star tests) is:
+
+```text
+{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}
+```
+
+The spec should either remove the decorative spaces or annotate them as illustrative only.
+
+---
+
+## What Aligns Well
+
+- **τ/α cardinality model** — singleton detection, parse-time evaluation, and bound classification all behave exactly as specified.
+- **Repetition by equality** — `{a..z}[3]` requires `aaa`, `bbb`, etc., not any mix; backtracking longest-first works.
+- **No-anchor scanning** — no implicit start/end anchors; engine scans left to right and returns all non-overlapping matches, consistent throughout.
+- **Named alphabets** (`dec`, `hex`, `HEX`, `b32`, `b58`, `b64`, `b85`) — all correct; exclusions in `b58` (`!I`, `!O`, `!l`) applied at alphabet construction, not at match time.
+- **Value-range arithmetic** (`upper_bound`, `lower_bound`, `bounded_range`) — including exclusions on numeric ranges (e.g. `{dec}..255, !128..191`).
+- **Padding** (`{N: expr}`, `{: expr}`) — fixed and variable-width both work.
+- **Captures** — 0-based left-to-right numbering, dot-notation sub-captures, `{{#N}}` count references all correct.
+- **Separators** (`<<sep>>`) — lazy span, split semantics, `<<\n>>` on full input.
+- **Transformers** (`=>`) — two-step chains (the common case) work correctly.
+- **Singleton constructors** (`{z}[33]` as τ bound) — cardinality-based classification is implemented and tested.

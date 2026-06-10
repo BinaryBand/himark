@@ -221,12 +221,10 @@ def _resolve_arm(arm: str) -> HMKNode:
         av, bv = svals
 
         if av is not None and bv is not None:
-            # τ..τ — single-char character range
-            if len(av) != 1 or len(bv) != 1:
-                raise CompileError(
-                    f"Character range endpoints must be single characters: {arm!r}"
-                )
-            return HMKNode("char_range", arm, metadata={"start": av, "end": bv})
+            # τ..τ — character range (single-char) or string range (multi-char)
+            if len(av) == 1 and len(bv) == 1:
+                return HMKNode("char_range", arm, metadata={"start": av, "end": bv})
+            return HMKNode("string_range", arm, metadata={"start": av, "end": bv})
 
         if av is None and bv is not None:
             # α..τ — upper bound

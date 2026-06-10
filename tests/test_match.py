@@ -173,6 +173,27 @@ def test_fixed_padding_rejects_wrong_width():
     assert matches("{3: {dec}..255}", "12") == []
 
 
+# ── string_range ─────────────────────────────────────────────────────────────
+
+
+def test_string_range_equal_length():
+    # All 3-char strings between 'cat' and 'dog' inclusive.
+    result = matches("{cat..dog}", "cat cau dof dog elk")
+    assert result == ["cat", "cau", "dof", "dog"]
+
+
+def test_string_range_excludes_out_of_range():
+    assert matches("{cat..dog}", "aaa zzz") == []
+
+
+def test_string_range_mixed_lengths():
+    # 'c' (1 char) < 'cat' so it should not match; 'ca' < 'cat' so not matched.
+    # 'do' is between 'cat' and 'dog' (len 2, lo_len=3 so no 2-char match expected).
+    # With equal-length endpoints (both len 3), only 3-char candidates tried.
+    result = matches("{cat..dog}", "ca do cz")
+    assert result == []
+
+
 # ── token_set ─────────────────────────────────────────────────────────────────
 
 
