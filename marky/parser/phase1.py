@@ -21,8 +21,8 @@ def split_statement(text: str) -> Statement:
         if idx is None:
             steps.append(remaining.strip())
             break
-        steps.append(remaining[:idx].rstrip())
-        remaining = remaining[idx + 2 :].lstrip()
+        steps.append(remaining[:idx].strip())
+        remaining = remaining[idx + 2 :]
     return Statement(steps=steps)
 
 
