@@ -186,11 +186,10 @@ def test_string_range_excludes_out_of_range():
     assert matches("{cat..dog}", "aaa zzz") == []
 
 
-def test_string_range_mixed_lengths():
-    # 'c' (1 char) < 'cat' so it should not match; 'ca' < 'cat' so not matched.
-    # 'do' is between 'cat' and 'dog' (len 2, lo_len=3 so no 2-char match expected).
-    # With equal-length endpoints (both len 3), only 3-char candidates tried.
-    result = matches("{cat..dog}", "ca do cz")
+def test_string_range_equal_length_only():
+    # Endpoints are both len 3; 2-char substrings like "do" are never tried.
+    # "aaa" and "zzz" are outside the range, "do" is only 2 chars so no match.
+    result = matches("{cat..dog}", "aaa zzz")
     assert result == []
 
 

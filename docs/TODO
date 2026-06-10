@@ -16,20 +16,9 @@
 
 ---
 
-### Bug 2 — Token-position ranges raise CompileError
+### ~~Bug 2 — Token-position ranges raise CompileError~~ ✅ Fixed
 
-**Spec (lines 120–123):**
-
-```text
-{cat,dog,fish}   // cat=0, dog=1, fish=2
-{cat..dog}       // tokens 0–1: 'cat' or 'dog'
-```
-
-**Actual:** `{cat..dog}` raises `CompileError: Character range endpoints must be single characters`. Both endpoints evaluate as singletons (τ) so `_resolve_arm` routes them to the `char_range` branch, which enforces `len == 1`. Token-position ranging over string-token alphabets is completely unimplemented.
-
-**Fix:** In `_resolve_arm`, when both τ values have `len > 1`, resolve to a `token_set` slice rather than `char_range`.
-
-> **Note from developer**: {cat..dog} shouldn't collapse to {cat,dog} but rather represent any and every Unicode string between 'cat' and 'dog'. e.g. [cat,cau,...,dof,dog]
+`{cat..dog}` now resolves to a `string_range` node and matches any string lexicographically between the two endpoints. Equal-length endpoints (the common case) match strings of exactly that length. The spec example comment has been updated to reflect the actual semantic: `{cat..dog} // cat,cau,...,dof,dog`.
 
 ---
 

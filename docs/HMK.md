@@ -115,10 +115,10 @@ When comma-separated items inside `{...}` are multi-character, the class defines
 {http,https}  // 'http' or 'https'
 ```
 
-Token order matches write order; `..` ranges apply over token position:
+Token order matches write order. `..` between string tokens defines a lexicographic range — any string between the two endpoints inclusive:
 
 ```proto
-{cat,dog,fish}   // cat=0, dog=1, fish=2
+{cat,dog,fish}   // 'cat', 'dog', or 'fish'
 {cat..dog}       // cat,cau,...,dof,dog
 ```
 
