@@ -292,8 +292,54 @@ def _alpha_str(node: HMKNode) -> str:
     raise ValueError(f"Cannot extract alphabet from node type {t!r}")
 
 
+def _value_bounds(
+    node: HMKNode,
+) -> tuple[str, int | None, int | None, list[str]]:
+    """Return (alphabet, lo, hi, exclusions) for a value-range node.
+
+    lo / hi are None when that side is unbounded. Exclusions are raw strings
+    (a single value or a `v1..v2` sub-range) checked numerically at match time.
+    """
+    t = node.type
+    excl = node.metadata.get("exclusions", [])
+    if t == "upper_bound":
+        alph = _alpha_str(node.metadata["alpha"])
+        return alph, None, alpha_value(node.metadata["upper"], alph), excl
+    if t == "lower_bound":
+        alph = _alpha_str(node.metadata["alpha"])
+        return alph, alpha_value(node.metadata["lower"], alph), None, excl
+    if t == "bounded_range":
+        alph = _alpha_str(node.metadata["alpha"])
+        lo = alpha_value(node.metadata["lower"], alph)
+        hi = alpha_value(node.metadata["upper"], alph)
+        return alph, lo, hi, excl
+    if t == "full_alpha":
+        alph = _alpha_str(node.children[0])
+        return alph, None, None, excl
+    if t == "named_alpha":
+        return _alpha_str(node), None, None, excl
+    raise ValueError(f"Node type {t!r} has no value bounds")
+
+
+def _is_value_excluded(v: int, alph: str, exclusions: list[str]) -> bool:
+    """Return True if integer value `v` falls in any excluded value or sub-range."""
+    for excl in exclusions:
+        if ".." in excl:
+            lo_s, hi_s = excl.split("..", 1)
+            if alpha_value(lo_s, alph) <= v <= alpha_value(hi_s, alph):
+                return True
+        elif v == alpha_value(excl, alph):
+            return True
+    return False
+
+
 def _match_alpha_value_range(
-    alph: str, lo: int | None, hi: int | None, text: str, pos: int
+    alph: str,
+    lo: int | None,
+    hi: int | None,
+    exclusions: list[str],
+    text: str,
+    pos: int,
 ) -> int | None:
     """Greedily consume alphabet chars at pos; return longest end where lo ≤ val ≤ hi."""
     end = pos
@@ -304,28 +350,27 @@ def _match_alpha_value_range(
     for length in range(end - pos, 0, -1):
         candidate = text[pos : pos + length]
         v = alpha_value(candidate, alph)
-        if (lo is None or v >= lo) and (hi is None or v <= hi):
-            return pos + length
+        if (lo is not None and v < lo) or (hi is not None and v > hi):
+            continue
+        if _is_value_excluded(v, alph, exclusions):
+            continue
+        return pos + length
     return None
 
 
 def _match_upper_bound(node: HMKNode, text: str, pos: int) -> int | None:
-    alph_str = _alpha_str(node.metadata["alpha"])
-    hi = alpha_value(node.metadata["upper"], alph_str)
-    return _match_alpha_value_range(alph_str, None, hi, text, pos)
+    alph, lo, hi, excl = _value_bounds(node)
+    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
 
 
 def _match_lower_bound(node: HMKNode, text: str, pos: int) -> int | None:
-    alph_str = _alpha_str(node.metadata["alpha"])
-    lo = alpha_value(node.metadata["lower"], alph_str)
-    return _match_alpha_value_range(alph_str, lo, None, text, pos)
+    alph, lo, hi, excl = _value_bounds(node)
+    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
 
 
 def _match_bounded_range(node: HMKNode, text: str, pos: int) -> int | None:
-    alph_str = _alpha_str(node.metadata["alpha"])
-    lo = alpha_value(node.metadata["lower"], alph_str)
-    hi = alpha_value(node.metadata["upper"], alph_str)
-    return _match_alpha_value_range(alph_str, lo, hi, text, pos)
+    alph, lo, hi, excl = _value_bounds(node)
+    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
 
 
 def _build_zip_groups(node: HMKNode) -> list[list[str]]:
@@ -493,23 +538,24 @@ def _match_padded(node: HMKNode, text: str, pos: int) -> int | None:
     width = node.metadata.get("width")
 
     if width is not None:
-        # Fixed width: try exactly width chars
+        # Fixed width: exactly `width` chars, all in the alphabet, value in bounds.
+        # Leading zero-character padding is allowed (that is the point of padding).
         candidate = text[pos : pos + width]
         if len(candidate) != width:
             return None
-        # Check that the stripped version matches the inner node
-        stripped = candidate.lstrip(NAMED_ALPHABETS.get("dec", "0") or "0")
-        stripped = stripped or candidate[-1]  # keep at least one char
-        # Match inner against stripped form; if matches, accept full padded width
-        if _match_semantic(inner, stripped, 0) == len(stripped):
-            return pos + width
-        return None
+        try:
+            alph, lo, hi, excl = _value_bounds(inner)
+        except ValueError:
+            return None
+        if not all(c in alph for c in candidate):
+            return None
+        v = alpha_value(candidate, alph)
+        if (lo is not None and v < lo) or (hi is not None and v > hi):
+            return None
+        if _is_value_excluded(v, alph, excl):
+            return None
+        return pos + width
 
-    # Variable width ({: expr}): try longest match down to 1
-    max_end = pos
-    while max_end < len(text):
-        next_end = _match_semantic(inner, text, max_end)
-        if next_end is None or next_end == max_end:
-            break
-        max_end = next_end
-    return max_end if max_end > pos else None
+    # Variable width ({: expr}): the inner value range already greedily caps at
+    # len(max) and allows leading zeros, so delegate directly.
+    return _match_semantic(inner, text, pos)

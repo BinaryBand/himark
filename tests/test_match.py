@@ -97,6 +97,42 @@ def test_bounded_range():
     assert "5" not in result
 
 
+# ── Value exclusion on ranges ─────────────────────────────────────────────────
+
+
+def test_exclusion_subrange_on_upper_bound():
+    # 0–255 excluding 128–191; 130 is excluded, 100 and 200 are kept
+    result = matches("{{dec}..255, !128..191}", "130 100 200")
+    assert "100" in result
+    assert "200" in result
+    assert "130" not in result
+
+
+def test_exclusion_single_value():
+    # 0–255 excluding exactly 200
+    result = matches("{{dec}..255, !200}", "199 200 201")
+    assert "199" in result
+    assert "201" in result
+    assert "200" not in result
+
+
+# ── Padding ──────────────────────────────────────────────────────────────────
+
+
+def test_fixed_padding_enforces_bound():
+    # {3: {dec}..255} matches exactly 3 digits whose value is ≤ 255
+    result = matches("{3: {dec}..255}", "042 999 256 255")
+    assert "042" in result
+    assert "255" in result
+    assert "999" not in result
+    assert "256" not in result
+
+
+def test_fixed_padding_rejects_wrong_width():
+    # "12" is only 2 chars; with no leading zero it cannot satisfy width 3
+    assert matches("{3: {dec}..255}", "12") == []
+
+
 # ── token_set ─────────────────────────────────────────────────────────────────
 
 
