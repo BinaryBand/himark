@@ -65,8 +65,8 @@ def _resolve_brace(content: str) -> HMKNode:
     if is_complement:
         content = content[1:]
 
-    # Split on top-level commas
-    arms = [a.strip(" \t") for a in _split_top(",", content)]
+    # Split on top-level commas; preserve purely-whitespace arms (e.g. { } = literal space)
+    arms = [a.strip(" \t") or a for a in _split_top(",", content)]
 
     # Separate exclusion arms (!value or !v1..v2)
     include_arms = []
@@ -148,7 +148,7 @@ def _parse_inner_brace_items(brace_text: str) -> list[str]:
 
 def _resolve_arm(arm: str) -> HMKNode:
     """Resolve one arm (no top-level commas) into a typed node."""
-    parts = [p.strip(" \t") for p in _split_top("..", arm)]
+    parts = [p.strip(" \t") or p for p in _split_top("..", arm)]
 
     if len(parts) == 1:
         part = parts[0]
