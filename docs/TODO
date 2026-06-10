@@ -11,7 +11,7 @@
 - [x] Three-argument repetition range `2..n..5` is unexplained
   - Dropped. Replaced by `{{#N}}` — valid in both template and count positions. Count constraints use normal ranges `(2..5)`; cross-group equality uses `({{#N}})`.
 - [x] Alternation precedence is unspecified
-  - `||` is lowest precedence, sequence-level: `A B || C D` = `(A B) | (C D)`. Branches share capture group slots; mismatched group counts are a compile error.
+  - Resolved natively: string-token alphabets `{cat,dog}((..))` handle fixed-string alternation; pattern-expression classes `{{dec}((0..255)), {hex}((0..ff))}((..))` handle pattern alternation. `||` deferred to secondary layer as a shortcut for the verbose pattern-expression form.
 - [x] Complement inside value ranges creates two exclusion syntaxes
   - Resolved: `{!...}` is character class complement (char-level); `,!value` / `,!min..max` inside `[...]` is value exclusion (string-level). Distinct purposes, no longer ambiguous.
 - [ ] Formalize transformer chain nesting notation

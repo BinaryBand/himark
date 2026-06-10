@@ -97,6 +97,39 @@ Named alphabets are aliases for `,`-joined ranges.
 {hex}((0..f))   // one hex character
 ```
 
+### String-token alphabets
+
+When comma-separated items in `{...}` contain more than one character, the class defines a **string-token alphabet** — an ordered set of string tokens rather than individual characters. `((..))` matches any one token. Token order is the order items are written; the first token is index 0.
+
+```proto
+{cat,dog}((..))        // 'cat' or 'dog'
+{http,https}((..))     // 'http' or 'https'
+{jpg,png,gif}((..))    // any of three extensions
+```
+
+`..` ranges apply over token position, consistent with value range semantics:
+
+```proto
+{cat,dog,fish}((cat..dog))   // tokens 0–1: 'cat' or 'dog'
+{cat,dog,fish}((dog..))      // tokens 1–2: 'dog' or 'fish'
+```
+
+`[count]` enforces same-token repetition:
+
+```proto
+{cat,dog}((..))[2]           // 'catcat' or 'dogdog'
+```
+
+### Pattern-expression classes
+
+Items in `{...}` may be full Marky pattern expressions, defining a class whose members are all strings any item can match. `((..))` matches any one member. `..` ranges are not supported over pattern-expression classes — only `,` enumeration. Sub-pattern captures inside `{...}` are opaque; only the outer `((..))` group is accessible.
+
+```proto
+{{dec}((0..255)), {hex}((0..ff))}((..))              // decimal 0–255 OR hex 0–ff
+{((ha))[2..4], ((ho))[3..6]}((..))                   // 2–4 'ha's OR 3–6 'ho's
+{((key))<<,>>((value)), ((key))<<;>>((value))}((..)) // comma- or semicolon-delimited pair
+```
+
 ## Value Ranges
 
 `{class}((min..max))` matches strings whose value falls within a range. Values are interpreted as positional integers in the alphabet defined by the class, with the first character in class order as digit zero. Strings must be in canonical form — no leading zeros, where the zero character is the first character in class order — unless the `:` padding prefix is used.
@@ -172,18 +205,6 @@ Constructs placed adjacently match left to right. Whitespace between constructs 
 {dec}((0..255)) ((.)) {dec}((0..255))
   ((.)) {dec}((0..255)) ((.)) {dec}((0..255))      // IPv4
 ```
-
-## Alternation
-
-`||` separates alternative expression sequences. It has the lowest precedence — everything to the left of `||` is one branch, everything to the right is another. Branches share capture group slots: the same index refers to the same logical group regardless of which branch matched.
-
-```proto
-((cat)) || ((dog))                              // 'cat' or 'dog'; group 0 = matched word
-((http)) || ((https))                           // group 0 = matched scheme
-((1)){b58}((a..)) || ((3)){b58}((a..))          // P2PKH or P2SH; group 0 = version byte, group 1 = payload
-```
-
-Branches must have the same number of capture groups. A branch with fewer groups than its sibling is a compile error.
 
 ## Captures
 
