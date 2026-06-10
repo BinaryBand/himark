@@ -29,6 +29,7 @@ def test_is_named_alpha():
 
 def test_alpha_value_dec():
     alph = NAMED_ALPHABETS["dec"]
+    assert alph is not None
     assert alpha_value("0", alph) == 0
     assert alpha_value("9", alph) == 9
     assert alpha_value("10", alph) == 10
@@ -37,6 +38,7 @@ def test_alpha_value_dec():
 
 def test_alpha_value_hex():
     alph = NAMED_ALPHABETS["hex"]
+    assert alph is not None
     assert alpha_value("0", alph) == 0
     assert alpha_value("f", alph) == 15
     assert alpha_value("ff", alph) == 255
@@ -45,11 +47,13 @@ def test_alpha_value_hex():
 
 def test_alpha_value_HEX():
     alph = NAMED_ALPHABETS["HEX"]
+    assert alph is not None
     assert alpha_value("FF", alph) == 255
 
 
 def test_b58_excludes_ambiguous():
     alph = NAMED_ALPHABETS["b58"]
+    assert alph is not None
     assert "I" not in alph
     assert "O" not in alph
     assert "l" not in alph

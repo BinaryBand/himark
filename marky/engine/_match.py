@@ -558,6 +558,13 @@ def _match_padded(node: HMKNode, text: str, pos: int) -> int | None:
         try:
             alph, lo, hi, excl = _value_bounds(inner)
         except ValueError:
+            # Inner is not a value-range node (e.g. a char union): accept each
+            # position individually.
+            if all(
+                _match_semantic(inner, text, pos + i) == pos + i + 1
+                for i in range(width)
+            ):
+                return pos + width
             return None
         if not all(c in alph for c in candidate):
             return None
