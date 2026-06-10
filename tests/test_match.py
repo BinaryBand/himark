@@ -116,6 +116,46 @@ def test_exclusion_single_value():
     assert "200" not in result
 
 
+def test_exclusion_char_range_stress():
+    # Stress Bug 1 on char_range: excluded chars must never match.
+    text = "abcdefghijklmnopqrstuvwxyz" * 50
+    result = matches("{a..z, !d..f}", text)
+    expected = [ch for ch in text if "a" <= ch <= "z" and not ("d" <= ch <= "f")]
+    assert result == expected
+
+
+def test_exclusion_named_alpha_stress():
+    # Stress Bug 1 on named_alpha: exclusions should filter matches.
+    text = ("0123456789abcdefxyzABC" * 60) + "face"
+    result = matches("{hex, !a..c, !f}", text)
+    expected = [
+        ch
+        for ch in text
+        if (ch in "0123456789abcdef") and not ("a" <= ch <= "c") and ch != "f"
+    ]
+    assert result == expected
+
+
+def test_exclusion_full_alpha_stress():
+    # Stress Bug 1 on full_alpha: excluded chars should split greedy runs.
+    text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
+    result = matches("{{a..z}, !m..p}", text)
+
+    expected = []
+    run = ""
+    for ch in text:
+        if "a" <= ch <= "z" and not ("m" <= ch <= "p"):
+            run += ch
+        else:
+            if run:
+                expected.append(run)
+                run = ""
+    if run:
+        expected.append(run)
+
+    assert result == expected
+
+
 # ── Padding ──────────────────────────────────────────────────────────────────
 
 

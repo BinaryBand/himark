@@ -233,7 +233,12 @@ def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
         return pos + len(s) if text[pos : pos + len(s)] == s else None
     if t == "char_range":
         ch = text[pos]
-        return pos + 1 if node.metadata["start"] <= ch <= node.metadata["end"] else None
+        if not (node.metadata["start"] <= ch <= node.metadata["end"]):
+            return None
+        excl = node.metadata.get("exclusions", [])
+        if excl and _is_char_excluded(ch, excl):
+            return None
+        return pos + 1
     if t == "named_alpha":
         return _match_named_alpha(node, text, pos)
     if t == "full_alpha":
@@ -266,18 +271,28 @@ def _match_named_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     if alph is None:
         # Virtual: ascii or uni
         if name == "ascii":
-            return pos + 1 if ord(ch) <= 0x7F else None
-        if name == "uni":
-            return pos + 1  # every char is in uni
+            if ord(ch) > 0x7F:
+                return None
+        elif name == "uni":
+            pass  # every char is in uni
+        else:
+            return None
+    elif ch not in alph:
         return None
-    return pos + 1 if ch in alph else None
+    excl = node.metadata.get("exclusions", [])
+    if excl and _is_char_excluded(ch, excl):
+        return None
+    return pos + 1
 
 
 def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     """Greedy: consume 1+ chars that each match the inner alpha node."""
     inner = node.children[0]
+    excl = node.metadata.get("exclusions", [])
     end = pos
     while end < len(text):
+        if excl and _is_char_excluded(text[end], excl):
+            break
         next_end = _match_semantic(inner, text, end)
         if next_end is None or next_end == end:
             break
@@ -331,6 +346,18 @@ def _value_bounds(
     if t == "named_alpha":
         return _alpha_str(node), None, None, excl
     raise ValueError(f"Node type {t!r} has no value bounds")
+
+
+def _is_char_excluded(ch: str, exclusions: list[str]) -> bool:
+    """Return True if single character `ch` falls in any excluded character or char-range."""
+    for excl in exclusions:
+        if ".." in excl:
+            lo, hi = excl.split("..", 1)
+            if lo <= ch <= hi:
+                return True
+        elif ch == excl:
+            return True
+    return False
 
 
 def _is_value_excluded(v: int, alph: str, exclusions: list[str]) -> bool:
