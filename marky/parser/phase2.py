@@ -12,8 +12,9 @@ import re
 from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
 
-# Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no nesting
-_TEMPLATE_REF = re.compile(r"\{\{((?:[^}]|}(?!}))*)\}\}")
+# Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no braces
+# inside (so {{a..z}..{A..Z}} stays a brace group, not a template ref).
+_TEMPLATE_REF = re.compile(r"\{\{([^{}]*)\}\}")
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]  (also allows {{#N}})
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")

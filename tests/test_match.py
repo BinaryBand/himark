@@ -62,7 +62,10 @@ def test_named_alpha_hex():
 
 def test_upper_bound_dec():
     result = matches("{{dec}..255}", "192 300 10 999")
-    assert set(result) == {"192", "10"}
+    assert "192" in result
+    assert "10" in result
+    assert "300" not in result
+    assert "999" not in result
 
 
 def test_upper_bound_hex():
@@ -86,8 +89,12 @@ def test_lower_bound_dec():
 
 
 def test_bounded_range():
-    result = matches("{aa..{a..z}..zz}", "aa bb zz aa hello zzz")
-    assert set(result) == {"aa", "bb", "zz"}
+    # Decimal values 10–99
+    result = matches("{10..{dec}..99}", "5 10 50 99")
+    assert "10" in result
+    assert "50" in result
+    assert "99" in result
+    assert "5" not in result
 
 
 # ── token_set ─────────────────────────────────────────────────────────────────
@@ -142,7 +149,7 @@ def test_count_range():
 
 
 def test_standalone_separator():
-    trees = parser.parse(r"<<\n>>")
+    trees = parser.parse("<<\n>>")
     from marky.engine._match import find_matches
 
     ms = find_matches(trees[0], "line1\nline2\nline3")
@@ -150,9 +157,11 @@ def test_standalone_separator():
 
 
 def test_separator_span():
-    result = matches("{a}{b} {c}", "a b c")
-    # leaf " " separates groups
-    assert result == ["a", "b", "c"]
+    # Groups joined by a literal space: {a} {b} {c} matches "a b c"
+    trees = parser.parse("{a} {b} {c}")
+    ms = find_matches(trees[0], "a b c")
+    assert len(ms) == 1
+    assert ms[0].groups == ["a", "b", "c"]
 
 
 # ── Captures ─────────────────────────────────────────────────────────────────

@@ -84,15 +84,10 @@ def test_zip_range():
 
 
 def test_full_alpha():
-    node = first_semantic("{{dec}}")
-    # Wait: {{dec}} is a template ref? No — inside pattern context, {dec} is named alpha
-    # and {{dec}} would be a double_braces template ref.
-    # So {{dec}} in pattern → double_braces → group_ref? Let's verify:
-    tree = resolve("{{dec}}")
-    child = tree.children[0]
-    # double_braces for {{dec}} is a template ref trying group_ref "dec" — but "dec"
-    # is not a numeric path, so it should fail
-    assert child.type not in ("brace_group",)  # it's a template expr node
+    # {α} full range. Written with a space to avoid the {{...}} template-ref form.
+    node = first_semantic("{ {a..z} }")
+    assert node.type == "full_alpha"
+    assert node.children[0].type == "char_range"
 
 
 # ── Union / token_set / group_class ─────────────────────────────────────────

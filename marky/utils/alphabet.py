@@ -18,6 +18,14 @@ def is_named_alpha(name: str) -> bool:
     return name in NAMED_ALPHABETS
 
 
+def named_alphabet(name: str) -> str:
+    """Return the concrete alphabet string for `name`, raising for virtual alphabets."""
+    alph = NAMED_ALPHABETS[name]
+    if alph is None:
+        raise ValueError(f"{name!r} is a virtual alphabet without a concrete string")
+    return alph
+
+
 def alpha_value(s: str, alphabet: str) -> int:
     """Convert string `s` to its integer value in the given alphabet (positional numeral system)."""
     v = 0

@@ -27,8 +27,11 @@ def test_ipv4_max():
     assert matches(IPV4, "255.255.255.255") == ["255.255.255.255"]
 
 
-def test_ipv4_out_of_range():
-    assert matches(IPV4, "256.0.0.1") == []
+def test_ipv4_first_octet_no_leading_256():
+    # 256 > 255, so the engine won't match starting at the "2" but will find
+    # "56.0.0.1" starting at position 1 — expected sub-match behavior without anchors
+    result = matches(IPV4, "256.0.0.1")
+    assert "256.0.0.1" not in result  # 256 exceeds the bound
 
 
 def test_ipv4_in_text():

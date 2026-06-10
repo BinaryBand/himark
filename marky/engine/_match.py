@@ -96,7 +96,6 @@ def _match_sequence(
 
         # Separator acting as lazy wildcard
         if node.type == "separator":
-            sep = node.content
             remaining = nodes[i + 1 :]
             snap = state.snapshot()
             if not remaining:
@@ -297,7 +296,6 @@ def _match_alpha_value_range(
     alph: str, lo: int | None, hi: int | None, text: str, pos: int
 ) -> int | None:
     """Greedily consume alphabet chars at pos; return longest end where lo ≤ val ≤ hi."""
-    zero = alph[0]
     end = pos
     while end < len(text) and text[end] in alph:
         end += 1
@@ -305,8 +303,6 @@ def _match_alpha_value_range(
         return None
     for length in range(end - pos, 0, -1):
         candidate = text[pos : pos + length]
-        if length > 1 and candidate[0] == zero:
-            continue  # no leading zeros
         v = alpha_value(candidate, alph)
         if (lo is None or v >= lo) and (hi is None or v <= hi):
             return pos + length

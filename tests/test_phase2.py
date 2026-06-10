@@ -93,7 +93,6 @@ def test_escape_brace():
 
 
 def test_multiple_groups():
-    tree = parse("{a}{b}{c}")
     assert children_types("{a}{b}{c}") == ["brace_group", "brace_group", "brace_group"]
 
 

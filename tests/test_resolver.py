@@ -103,7 +103,7 @@ def test_resolver_end_to_end_via_engine(monkeypatch):
     original = RESOLVERS["emoji"]
     RESOLVERS["emoji"] = _TagResolver()
     try:
-        result = run("[x] => {{ :tada: }}", "x")
+        result = run("{x} => {{ :tada: }}", "x")
         assert result == ["<tada>"]
     finally:
         RESOLVERS["emoji"] = original
@@ -115,10 +115,10 @@ def test_resolver_end_to_end_via_engine(monkeypatch):
 
 
 def test_unknown_emoji_shortcode_returns_colon_wrapped():
-    result = run("[x] => {{ :definitely_not_a_real_emoji_xyz: }}", "x")
+    result = run("{x} => {{ :definitely_not_a_real_emoji_xyz: }}", "x")
     assert result == [":definitely_not_a_real_emoji_xyz:"]
 
 
 def test_unknown_latex_expr_returns_dollar_wrapped():
-    result = run("[x] => {{ $\\undefinedcmd$ }}", "x")
+    result = run("{x} => {{ $\\undefinedcmd$ }}", "x")
     assert result == ["$\\undefinedcmd$"]

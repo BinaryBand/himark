@@ -61,12 +61,12 @@ def _resolve_brace(content: str) -> HMKNode:
         content = pm.group(2)
 
     # Complement prefix: {!expr}
-    is_complement = content.lstrip().startswith("!")
+    is_complement = content.startswith("!")
     if is_complement:
-        content = content.lstrip()[1:].lstrip()
+        content = content[1:]
 
     # Split on top-level commas
-    arms = [a.strip() for a in _split_top(",", content)]
+    arms = [a.strip(" \t") for a in _split_top(",", content)]
 
     # Separate exclusion arms (!value or !v1..v2)
     include_arms = []
@@ -143,12 +143,12 @@ def _parse_inner_brace_items(brace_text: str) -> list[str]:
     """Return the top-level comma-separated items inside a {…} expression."""
     if not (brace_text.startswith("{") and brace_text.endswith("}")):
         raise CompileError(f"Expected brace expression, got: {brace_text!r}")
-    return [s.strip() for s in _split_top(",", brace_text[1:-1])]
+    return [s.strip(" \t") for s in _split_top(",", brace_text[1:-1])]
 
 
 def _resolve_arm(arm: str) -> HMKNode:
     """Resolve one arm (no top-level commas) into a typed node."""
-    parts = [p.strip() for p in _split_top("..", arm)]
+    parts = [p.strip(" \t") for p in _split_top("..", arm)]
 
     if len(parts) == 1:
         part = parts[0]
