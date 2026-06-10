@@ -651,6 +651,32 @@ def test_chain_separator_then_identity(parts):
 
 
 # ---------------------------------------------------------------------------
+# Span brackets: [A<<>>B] and [A<<sep>>B]
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hmk, target, expected",
+    [
+        # No split: whole span returned
+        ("[hello<<>>world]", "say hello there world ok", ["hello there world"]),
+        ("[hello<<>>world]", "hello world", ["hello world"]),
+        # Multiple spans in the same text
+        ("[a<<>>b]", "aXbYaZb", ["aXb", "aZb"]),
+        # Split on comma: span matched, comma-splits in sub_groups
+        ("[hello<<,>>world]", "helloA,B,Cworld", ["helloA,B,Cworld"]),
+        # Span with no separator content
+        ("[hello<<>>world]", "no match here", []),
+        # <<>> inside bracket also works as any-non-newline char class with count
+        ("[<<>>](3)", "abc", ["abc"]),
+        ("[<<>>](0..)", "hello\nworld", ["hello", "world"]),
+    ],
+)
+def test_span_bracket(hmk, target, expected):
+    assert run(hmk, target) == expected
+
+
+# ---------------------------------------------------------------------------
 # <<>> wildcard
 # ---------------------------------------------------------------------------
 
@@ -677,9 +703,22 @@ def test_chain_separator_then_identity(parts):
             "# Hello World\nnot a heading\n# Another",
             ["<h1># Hello World</h1>", "<h1># Another</h1>"],
         ),
-        # <<>> between two constraints
+        # <<>> between two constraints (lazy wildcard with capture)
         ("[hello]<<>>[world]", "hello there world", ["hello there world"]),
-        # <<>> inside brackets acts as any-single-char
+        # [<<>>] without count modifier = lazy wildcard group (same as bare <<>>)
+        (r"^[<<>>]$", "line one\nline two", ["line one", "line two"]),
+        # <<>> capture enables group templates
+        (
+            r"^[#]<<>>$ => <h1>{{ 2 }}</h1>",
+            "# Hello\nnope\n# World",
+            ["<h1> Hello</h1>", "<h1> World</h1>"],
+        ),
+        (
+            r"^[#][ ]<<>>$ => <h1>{{ 3 }}</h1>",
+            "# Hello World\n# Another",
+            ["<h1>Hello World</h1>", "<h1>Another</h1>"],
+        ),
+        # <<>> inside brackets WITH count = non-newline char class (not lazy wildcard)
         ("[<<>>](3)", "abc", ["abc"]),
         ("[<<>>](3)", "ab", []),
     ],

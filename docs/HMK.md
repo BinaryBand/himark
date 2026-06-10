@@ -205,6 +205,15 @@ In the first form, boundary patterns are included in each segment. In the second
 [hello<<>>world]   // same span, no split — full 'hello…world' as one piece
 ```
 
+In the surrounding-pattern form, `<<>>` resolves to the **nearest** matching boundary — it is lazy by default. To span to the **farthest** boundary, use `[..](0..)` explicitly in place of `<<>>`:
+
+```proto
+[hello<<>>world]        // nearest 'world' — lazy
+[hello][..](0..)[world] // farthest 'world' — greedy (three groups)
+```
+
+This holds for non-empty separators too: `[hello<<,>>world]` matches the nearest `'world'` and splits the interior on commas.
+
 ## Transformers
 
 Inside a template, `{{ expr }}` interpolates a value; a lone `{` or `}` inside any `{{ }}` pair is literal unless part of a two-character operator (e.g. `}}`). To emit a literal `}}` in template output, write `\}}`. Whitespace around expression content is insignificant (`{{ . }}` and `{{.}}` are equivalent).

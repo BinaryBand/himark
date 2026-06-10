@@ -148,38 +148,65 @@ def _match_sequence(
 ) -> int | _SkipTo | None:
     current = pos
     for i, node in enumerate(nodes):
-        if node.type == "double_chevrons":
-            s = node.children[0].content if node.children else ""
-            if not s:
-                # <<>> lazy wildcard: consume minimum chars so the rest can succeed.
-                # When nothing follows, consume all remaining text (greedy terminal).
-                remaining = nodes[i + 1 :]
-                if not remaining:
-                    return len(text)
-                for n in range(len(text) - current + 1):
-                    snap_c = len(captures) if captures is not None else 0
-                    snap_s = len(capture_spans) if capture_spans is not None else 0
-                    snap_sub = (
-                        len(sub_capture_lists) if sub_capture_lists is not None else 0
-                    )
-                    result = _match_sequence(
-                        remaining,
-                        text,
-                        current + n,
-                        captures,
-                        bindings,
-                        capture_spans,
-                        sub_capture_lists,
-                    )
-                    if result is not None:
-                        return result
+        # Detect lazy wildcard: bare <<>> or [<<>>] without explicit count modifier.
+        # Both act as "match minimum chars until the rest of the sequence can succeed"
+        # and both create a capture group for what they consumed.
+        is_chevron_wildcard = node.type == "double_chevrons" and not _chevron_sep(node)
+        is_bracket_wildcard = (
+            node.type == "single_brackets"
+            and len(node.children) == 1
+            and node.children[0].type == "double_chevrons"
+            and not _chevron_sep(node.children[0])
+            and not _has_explicit_count(
+                _flatten_options(node.metadata.get("options", []))
+            )
+        )
+        if is_chevron_wildcard or is_bracket_wildcard:
+            remaining = nodes[i + 1 :]
+            if not remaining:
+                # Greedy terminal: consume everything left
+                wc = text[current:]
+                if captures is not None:
+                    captures.append(wc)
+                if capture_spans is not None:
+                    capture_spans.append((current, len(text)))
+                if sub_capture_lists is not None:
+                    sub_capture_lists.append([wc])
+                return len(text)
+            for n in range(len(text) - current + 1):
+                snap_c = len(captures) if captures is not None else 0
+                snap_s = len(capture_spans) if capture_spans is not None else 0
+                snap_sub = (
+                    len(sub_capture_lists) if sub_capture_lists is not None else 0
+                )
+                result = _match_sequence(
+                    remaining,
+                    text,
+                    current + n,
+                    captures,
+                    bindings,
+                    capture_spans,
+                    sub_capture_lists,
+                )
+                if isinstance(result, _SkipTo):
+                    return result
+                if result is not None:
+                    # Insert wildcard capture at its natural left-to-right position
+                    wc = text[current : current + n]
                     if captures is not None:
-                        del captures[snap_c:]
+                        captures.insert(snap_c, wc)
                     if capture_spans is not None:
-                        del capture_spans[snap_s:]
+                        capture_spans.insert(snap_s, (current, current + n))
                     if sub_capture_lists is not None:
-                        del sub_capture_lists[snap_sub:]
-                return None
+                        sub_capture_lists.insert(snap_sub, [wc])
+                    return result
+                if captures is not None:
+                    del captures[snap_c:]
+                if capture_spans is not None:
+                    del capture_spans[snap_s:]
+                if sub_capture_lists is not None:
+                    del sub_capture_lists[snap_sub:]
+            return None
         end = _match_node(
             node, text, current, captures, bindings, capture_spans, sub_capture_lists
         )
@@ -202,13 +229,31 @@ def _match_bracket(
 ) -> int | None:
     if not node.children:
         return None
-    content = node.children[0]
     options = _flatten_options(node.metadata.get("options", []))
     min_count, max_count, lazy = _parse_repetition(options, bindings)
-
     ctx = MatchCtx(
         _parse_case_insensitive(options), _parse_alphabet(options), _parse_pad(options)
     )
+
+    # Multi-child bracket containing <<>> or <<sep>>: treat children as a sequence.
+    # e.g. [hello<<>>world] or [hello<<,>>world]
+    if len(node.children) > 1 and any(
+        c.type == "double_chevrons" for c in node.children
+    ):
+        return _match_bracket_span(
+            node.children,
+            text,
+            pos,
+            captures,
+            capture_spans,
+            sub_capture_lists,
+            min_count,
+            max_count,
+            lazy,
+            ctx,
+        )
+
+    content = node.children[0]
     start_pos = pos
     positions = [pos]
     current = pos
@@ -233,6 +278,81 @@ def _match_bracket(
         subs = [text[positions[i] : positions[i + 1]] for i in range(end_idx)]
         sub_capture_lists.append(subs)
     return result
+
+
+def _match_bracket_span(
+    children: list[HMKNode],
+    text: str,
+    pos: int,
+    captures: list[str] | None,
+    capture_spans: list[tuple[int, int]] | None,
+    sub_capture_lists: list[list[str]] | None,
+    min_count: int,
+    max_count: int | None,
+    lazy: bool,
+    ctx: MatchCtx,
+) -> int | None:
+    """Handle [A<<>>B] / [A<<sep>>B] brackets: match children as an ordered sequence."""
+    start_pos = pos
+    current = pos
+    count = 0
+    all_subs: list[str] = []
+
+    while max_count is None or count < max_count:
+        end, subs = _match_span_children(children, text, current, ctx)
+        if end is None or end == current:
+            break
+        count += 1
+        all_subs.extend(subs)
+        current = end
+
+    if count < min_count:
+        return None
+
+    result = current
+    if captures is not None:
+        captures.append(text[start_pos:result])
+    if capture_spans is not None:
+        capture_spans.append((start_pos, result))
+    if sub_capture_lists is not None:
+        sub_capture_lists.append(all_subs)
+    return result
+
+
+def _match_span_children(
+    children: list[HMKNode], text: str, pos: int, ctx: MatchCtx
+) -> tuple[int | None, list[str]]:
+    """Match a child sequence for span brackets; returns (end_pos, sub_captures)."""
+    current = pos
+    subs: list[str] = []
+
+    for i, child in enumerate(children):
+        if child.type == "double_chevrons":
+            sep = _chevron_sep(child)
+            remaining = children[i + 1 :]
+
+            if not remaining:
+                # Last item: consume everything left
+                consumed = text[current:]
+                subs.extend(consumed.split(sep) if sep else [consumed])
+                return len(text), subs
+
+            # Lazy: find minimum n so remaining matches from current+n
+            for n in range(len(text) - current + 1):
+                end, tail = _match_span_children(remaining, text, current + n, ctx)
+                if end is not None:
+                    consumed = text[current : current + n]
+                    subs.extend(consumed.split(sep) if sep else [consumed])
+                    subs.extend(tail)
+                    return end, subs
+            return None, []
+
+        end = _match_content(child, text, current, ctx)
+        if end is None:
+            return None, []
+        current = end
+
+    return current, subs
 
 
 def _match_bracket_negated(
@@ -337,8 +457,8 @@ def _match_double_chevrons_node(
 ) -> int | None:
     s = node.children[0].content if node.children else ""
     if not s:
-        # <<>> inside brackets: match any single character
-        return pos + 1
+        # <<>> inside brackets: match any single non-newline character
+        return pos + 1 if pos < len(text) and text[pos] != "\n" else None
     # <<sep>> inside brackets: match the separator string as a literal
     if ctx.ci:
         return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
@@ -484,6 +604,20 @@ def _match_alphabet_range(
 # ---------------------------------------------------------------------------
 # Option parsing helpers
 # ---------------------------------------------------------------------------
+
+
+def _chevron_sep(node: HMKNode) -> str:
+    """Return the separator string of a double_chevrons node (empty string for <<>>)."""
+    return node.children[0].content if node.children else ""
+
+
+def _has_explicit_count(options: list[HMKNode]) -> bool:
+    """True when options contain an explicit repetition count or range."""
+    return any(
+        o.type == "repetition_range"
+        or (o.type == "option" and (o.content.isdigit() or _is_var(o.content)))
+        for o in options
+    )
 
 
 def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
