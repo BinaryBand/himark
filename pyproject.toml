@@ -8,6 +8,7 @@ dependencies = [
     "emoji>=2.0",
     "unicodeit>=0.7",
     "typer>=0.9",
+    "vulture (>=2.16,<3.0)",
 ]
 
 [project.optional-dependencies]

@@ -46,12 +46,14 @@ def _render_count_ref(expr: HMKNode, match: Match) -> str:
 
 def _render_emoji(expr: HMKNode, _match: Match) -> str:
     r = _RESOLVERS.get("emoji")
-    return r.resolve(expr.metadata["code"]) if r else f":{expr.metadata['code']}:"
+    return (
+        r.resolve(expr.metadata[r.metadata_key]) if r else f":{expr.metadata['code']}:"
+    )
 
 
 def _render_latex(expr: HMKNode, _match: Match) -> str:
     r = _RESOLVERS.get("latex")
-    return r.resolve(expr.metadata["expr"]) if r else expr.metadata["expr"]
+    return r.resolve(expr.metadata[r.metadata_key]) if r else expr.metadata["expr"]
 
 
 _EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {
