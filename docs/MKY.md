@@ -6,21 +6,22 @@
 
 ---
 
-The three primary constructs:
+`[...]` and `<<...>>` are the primary constructs — they match and capture. `{...}` and `(...)` are modifiers that refine a capture's character class and repetition. Neither modifier is valid without an accompanying primary construct.
 
-| Construct | Role                        |
-| --------- | --------------------------- |
-| `[text]`  | Literal match               |
-| `{class}` | Character class / alphabet  |
-| `(count)` | Content-equality repetition |
+| Construct | Role                     |
+| --------- | ------------------------ |
+| `[text]`  | Match and capture        |
+| `<<sep>>` | Span, split, and capture |
+| `{class}` | Character class modifier |
+| `(count)` | Repetition modifier      |
 
-These compose: `{class}[range](count)`, with any subset valid.
+Every `[...]` and `<<...>>` implicitly carries `{unicode}` and `(1)` unless overridden. These compose as `{class}[range](count)` and `{class}<<sep>>(count)`, with modifiers optional.
 
 ---
 
-## Literals
+## Match
 
-`[text]` matches a literal string. Does not create a capture group.
+`[text]` matches a literal string and captures it.
 
 ```proto
 [a]       // 'a'
@@ -29,9 +30,11 @@ These compose: `{class}[range](count)`, with any subset valid.
 [\n]      // newline
 ```
 
+> A top-level expression without outer brackets is implicitly one group. Therefore, a lone `abc` is equivalent to `[abc]`.
+
 ## Character Classes
 
-`{...}` declares a character class using `..` (range) and `,` (ordered join and enumeration).
+`{...}` is a class modifier on a following `[...]` or `<<...>>`. It declares the valid character set using `..` (range) and `,` (ordered join and enumeration).
 
 ```proto
 {a..z}                // a through z
@@ -56,7 +59,7 @@ Unicode codepoint order is the default for all ranges. No implicit inference.
 
 ### Named alphabets
 
-Named alphabets are aliases for `,`-joined ranges and are second-class.
+Named alphabets are aliases for `,`-joined ranges.
 
 | Alias | Expands to                |
 | ----- | ------------------------- |
@@ -67,44 +70,58 @@ Named alphabets are aliases for `,`-joined ranges and are second-class.
 | `b64` | `A..Z,a..z,0..9,+,/`      |
 
 ```proto
-{b58}    // one base58 character
-{hex}    // one hex character
+{b58}[1..z]    // one base58 character
+{hex}[0..f]    // one hex character
 ```
 
 ## Value Ranges
 
-`{class}[min..max]` matches strings whose value falls between `min` and `max` under the class ordering. The class defines both the valid characters and their ordering.
+`{class}[min..max]` matches strings whose value falls within a range. Values are interpreted as positional integers in the alphabet defined by the class, with the first character in class order as digit zero. Strings must be in canonical form — no leading zeros, where the zero character is the first character in class order — unless the `:` padding prefix is used.
 
 ```proto
 {dec}[5..99]        // '5' to '99'
 {dec}[0..255]       // any decimal 0–255
 {hex}[0..ff]        // '0' to 'ff'
 {b58}[1..z]         // base58 '1' to 'z' (single char)
-{a..z}[a..zzz]      // any lowercase string of 1–3 chars
-{a..z}[aa..zz,!ff]  // any 2-char lowercase string excluding 'ff'
+{a..z}[a..zzz]      // lowercase strings 1–3 chars, canonical ('aa', 'ab', 'aaa' … excluded)
 {a..z}[a..]         // any lowercase string, unbounded
+```
+
+### Value exclusion
+
+`,!value` excludes a specific string from the range. `,!min..max` excludes a contiguous sub-range of values.
+
+```proto
+{a..z}[aa..zz,!ff]       // any 2-char lowercase string, excluding 'ff'
+{a..z}[aa..zz,!ee..ff]   // any 2-char lowercase string, excluding 'ee' and 'ff'
+{dec}[0..255,!128..191]  // decimal 0–255, excluding 128–191
 ```
 
 ### Padding
 
+`[N:min..max]` fixes the width to exactly `N` characters. `[:min..max]` accepts any width from 1 up to `len(max)`, allowing leading zeros. The upper bound must be a literal string when using `[:]`; use `[N:]` when the upper bound is not fixed.
+
 ```proto
-{dec}[2:0..99]      // '00' to '99' (exactly 2 digits)
-{dec}[:0..255]      // '0' to '255', leading zeros accepted
-{hex}[2:0..ff]      // '00' to 'ff'
+{dec}[2:0..99]    // '00' to '99' (exactly 2 digits)
+{dec}[3:0..255]   // '000' to '255' (exactly 3 digits)
+{dec}[:0..255]    // '0', '00', '000' through '255' — any width up to 3
+{dec}[:..255]     // Same as '{dec}[:0..255]'
+{hex}[2:0..ff]    // '00' to 'ff'
+{a..z}[:a..zzz]   // 'a'..'z', 'aa'..'zz', 'aaa'..'zzz' — leading 'a's accepted
 ```
 
 ## Repetition
 
-`(count)` enforces content equality — every repetition must match the same value as the first. Applies to the immediately preceding construct.
+`(count)` is a repetition modifier on the preceding `[...]` or `<<...>>`. It enforces content equality — every repetition must match the same value as the first.
 
 ```proto
-{a..z}(2)          // same letter twice: 'aa', 'bb', …
-{a..z}(2..5)       // same letter 2–5 times
-{0..9}(1..)        // same digit one or more times
+{a..z}[a..z](2)    // same letter twice: 'aa', 'bb', …
+{a..z}[a..z](2..5) // same letter 2–5 times
+{0..9}[0..9](1..)  // same digit one or more times
 [ab](3)            // 'ababab'
 [#](n)             // n hash chars, n bound as variable
-[#](2..n)          // n hash chars where N is at least 2
-[#](2..n..5)       // n hash chars where N is between 2 and 5
+[#](2..n)          // n hash chars where n is at least 2
+[#](2..n..5)       // n hash chars where n is between 2 and 5
 ```
 
 ### Varied repetition
@@ -112,19 +129,19 @@ Named alphabets are aliases for `,`-joined ranges and are second-class.
 Variable letters bind at first occurrence (left-to-right) and must be consistent.
 
 ```proto
-[#](n) {!\n}[a..](m)   // n hashes then m non-newline chars, n and m independent
+[#](n) {!\n}[..](m)   // n hashes then m non-newline chars, n and m independent
 ```
 
 A conflicting variable bound is a compile error.
 
 ## Negation
 
-`{!}[..]` matches maximal runs of characters not containing `pattern`.
+`{!class}[..]` matches maximal runs of characters not in the class.
 
 ```proto
 {!*}[..]        // runs with no '*'
 {!\n}[..]       // runs not containing newline (= one line of text)
-{!a..z}[..]     // runs not containing any lowercase word
+{!a..z}[..]     // runs not containing any lowercase letter
 ```
 
 ## Sequences
@@ -141,7 +158,7 @@ Constructs placed adjacently match left to right. Whitespace between constructs 
 
 ## Alternation
 
-`||` separates alternative patterns at any level.
+`||` separates alternative patterns. Alternation binds less tightly than sequencing.
 
 ```proto
 [hello] || [world]
@@ -151,15 +168,32 @@ Constructs placed adjacently match left to right. Whitespace between constructs 
 
 ## Captures
 
-`{...}` and `{...}[...]` constructs create numbered capture groups, left to right. Literals `[...]` do not capture. Nested groups use dot notation.
+Every `[...]` and `<<...>>` creates a capture group, numbered left to right from 0. `{...}` and `(...)` modifiers do not create groups. Sub-captures within a group use dot notation and are also 0-indexed.
 
 ```proto
 [**]<<>>[**]
-// Group 1: <<>>
+// Group 0: [**]   Group 1: <<>>   Group 2: [**]
 
 {dec}[0..255] [.] {dec}[0..255] [.] {dec}[0..255] [.] {dec}[0..255]
-// Groups 1–4: each {dec}[0..255]
+// Groups 0,2,4,6: each {dec}[0..255]   Groups 1,3,5: each [.]
 ```
+
+The pattern root is transparent to indexing — references start from the root's children. This applies whether the root is implicit or an explicit outer `[...]`, so wrapping a pattern in `[...]` does not renumber internal references. Only the outermost level is transparent; any non-root `[...]` occupies an index normally.
+
+```proto
+[[a][b]][c]
+// {{0}} = [[a][b]],  {{0.0}} = [a],  {{0.1}} = [b],  {{1}} = [c]
+```
+
+Capture references:
+
+| Reference  | Resolves to                        |
+| ---------- | ---------------------------------- |
+| `{{.}}`    | Full matched text                  |
+| `{{0}}`    | First capture group                |
+| `{{N}}`    | Capture group N (0-indexed)        |
+| `{{N.M}}`  | Sub-group M of group N (0-indexed) |
+| `{{N..M}}` | Groups N through M inclusive       |
 
 ## Nesting
 
@@ -174,12 +208,13 @@ The range slot `[...]` in a value range expression accepts a nested Marky patter
 
 `=>` applies a replacement template to a match.
 
-| Variable  | Resolves to                                 |
-| --------- | ------------------------------------------- |
-| `{{.}}`   | Full matched text (or deferred — see below) |
-| `{{N}}`   | Capture group N                             |
-| `{{N.M}}` | Sub-group M of group N                      |
-| `{{n}}`   | Varied-repetition count variable n          |
+| Variable   | Resolves to                                 |
+| ---------- | ------------------------------------------- |
+| `{{.}}`    | Full matched text (or deferred — see below) |
+| `{{N}}`    | Capture group N (0-indexed)                 |
+| `{{N.M}}`  | Sub-group M of group N                      |
+| `{{N..M}}` | Groups N through M inclusive                |
+| `{{n}}`    | Varied-repetition count variable n          |
 
 ```proto
 [**]<<>>[**] => <strong>{{1}}</strong>
@@ -191,8 +226,8 @@ The range slot `[...]` in a value range expression accepts a nested Marky patter
 `pattern => template1 => pattern2 => template2` — the output of each template becomes the input for the next pattern match.
 
 ```proto
-[X][Y] => {{1}}   // positive lookahead: keep X, discard Y
-[X][Y] => {{2}}   // positive lookbehind: discard X, keep Y
+[X][Y] => {{0}}   // positive lookahead: keep X, discard Y
+[X][Y] => {{1}}   // positive lookbehind: discard X, keep Y
 ```
 
 ### Nested chains
@@ -220,12 +255,12 @@ Each level's `{{.}}` defers to the transformed output of the levels below it. Th
 
 ## Separators
 
-`<<sep>>` splits the input on a delimiter, producing segments.
+`<<sep>>` captures the span between its bounding context and splits it on every occurrence of `sep`. With no sep, the full span is returned as one unsplit segment. The right boundary resolves to the **nearest** match — `<<>>` is lazy by default.
 
 ```proto
-<<\n>>            // split on newlines
-<<>>              // no split — full span as one segment
-[X <<sep>> Y]     // span from X to Y, split on sep
+<<\n>>            // split full input on newlines
+<<>>              // full input as one segment
+[X]<<sep>>[Y]     // span from X to Y, split on sep; X and Y captured as separate groups
 ```
 
 ---
@@ -276,19 +311,19 @@ P2PKH or P2SH:
 **Headings** (`#`–`######`):
 
 ```proto
-<<\n>> => [#](1..n..6) [ ] {!\n}[..] => <h{{n}}>{{1}}</h{{n}}>
+<<\n>> => [#](1..n..6) [ ] {!\n}[..] => <h{{n}}>{{2}}</h{{n}}>
 ```
 
 **Bold**:
 
 ```proto
-[**]<<>>[**] => <strong>{{1}}</strong>
+[**<<>>**] => <strong>{{0.0}}</strong>
 ```
 
 **Italic**:
 
 ```proto
-[*]<<>>[*] => <em>{{1}}</em>
+[*<<>>*] => <em>{{0.0}}</em>
 ```
 
 **Inline code**:
@@ -300,7 +335,7 @@ P2PKH or P2SH:
 **Link**:
 
 ```proto
-[\[]<<>>[\]] [(]<<>>[)] => <a href="{{2}}">{{1}}</a>
+[\[<<>>\]] [(<<>>)] => <a href="{{1.0}}">{{0.0}}</a>
 ```
 
 **Paragraph** (blank-line separated):
