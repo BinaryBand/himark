@@ -166,45 +166,57 @@ def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int
         n = state.count_refs.get(count_ref, 0)
         min_reps = max_reps = n
 
-    start = pos
-    current = pos
-    reps = 0
-    sub: list[str] = []
-    first_val: str | None = None
     is_zip = semantic.type == "zip_range"
 
-    while max_reps is None or reps < max_reps:
-        if is_zip and first_val is not None:
-            # Equality check: must match same group sequence
-            end = _match_zip_equal(semantic, text, current, first_val)
-        elif first_val is not None:
-            # Literal equality: must equal first captured value
-            if text[current : current + len(first_val)] == first_val:
-                end = current + len(first_val)
-            else:
-                end = None
-        else:
-            end = _match_semantic(semantic, text, current)
+    def record(end: int, subs: list[str]) -> int:
+        idx = len(state.captures)
+        state.captures.append(text[pos:end])
+        state.spans.append((pos, end))
+        state.sub_groups.append(subs)
+        state.count_refs[idx] = len(subs)
+        return end
 
-        if end is None or end == current:
-            break
+    greedy_end = _match_semantic(semantic, text, pos)
+    if greedy_end is None or greedy_end == pos:
+        # No unit matches here; only a zero-or-more count tolerates that.
+        return record(pos, []) if min_reps == 0 else None
 
-        val = text[current:end]
-        if first_val is None:
-            first_val = val
-        sub.append(val)
-        reps += 1
-        current = end
+    # Repetition with value equality: the first unit need not be greedy-maximal.
+    # A shorter first unit may let the remainder split into equal repetitions
+    # (e.g. "2525" → 25+25, "abAB" → ab+AB). Try lengths longest-first and take
+    # the first that satisfies the count.
+    max_unit_len = greedy_end - pos
+    for unit_len in range(max_unit_len, 0, -1):
+        first_val = text[pos : pos + unit_len]
+        if not _unit_accepts(semantic, first_val):
+            continue
+        subs = [first_val]
+        current = pos + unit_len
+        while max_reps is None or len(subs) < max_reps:
+            nxt = _match_equal_block(semantic, text, current, first_val, is_zip)
+            if nxt is None:
+                break
+            subs.append(text[current:nxt])
+            current = nxt
+        if len(subs) >= min_reps:
+            return record(current, subs)
 
-    if reps < min_reps:
-        return None
+    return record(pos, []) if min_reps == 0 else None
 
-    capture_idx = len(state.captures)
-    state.captures.append(text[start:current])
-    state.spans.append((start, current))
-    state.sub_groups.append(sub)
-    state.count_refs[capture_idx] = reps
-    return current
+
+def _unit_accepts(semantic: HMKNode, s: str) -> bool:
+    """True if `semantic` matches the exact string `s` as a single unit."""
+    return bool(s) and _match_semantic(semantic, s, 0) == len(s)
+
+
+def _match_equal_block(
+    semantic: HMKNode, text: str, pos: int, first_val: str, is_zip: bool
+) -> int | None:
+    """Match one more repetition that must equal `first_val` (group-equal if zip)."""
+    if is_zip:
+        return _match_zip_equal(semantic, text, pos, first_val)
+    n = len(first_val)
+    return pos + n if text[pos : pos + n] == first_val else None
 
 
 # ---------------------------------------------------------------------------

@@ -181,6 +181,27 @@ def test_count_range():
     assert "c" not in result
 
 
+def test_token_repetition():
+    result = matches("{cat,dog}[2]", "catcat dogdog catdog")
+    assert "catcat" in result
+    assert "dogdog" in result
+
+
+def test_variable_number_repetition():
+    # First unit backs off from greedy "252" to "25" so 25+25 matches.
+    assert matches("{{dec}..255}[2]", "2525") == ["2525"]
+
+
+def test_grouped_word_repetition_case_folded():
+    # Spec headline: same word twice, any casing. "Hello" then "HELLO".
+    assert matches("{{a,A}..{z,Z}}[2]", "HelloHELLO") == ["HelloHELLO"]
+
+
+def test_grouped_word_repetition_mixed():
+    # "ab" and "AB" are group-equal (a↔A, b↔B).
+    assert matches("{{a,A}..{z,Z}}[2]", "abAB") == ["abAB"]
+
+
 # ── Separator ─────────────────────────────────────────────────────────────────
 
 
