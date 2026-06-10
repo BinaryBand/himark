@@ -8,8 +8,6 @@ dependencies = [
     "emoji>=2.0",
     "unicodeit>=0.7",
     "typer>=0.9",
-    "fastapi>=0.100",
-    "uvicorn>=0.20",
 ]
 
 [project.optional-dependencies]

@@ -46,20 +46,6 @@ def find_cmd(
         typer.echo(f"{start} {end}")
 
 
-@app.command()
-def serve(
-    host: str = typer.Option("127.0.0.1", help="Host to bind to"),
-    port: int = typer.Option(8000, help="Port to listen on"),
-) -> None:
-    """Start a local HTTP server exposing the HMK engine as an API."""
-    import uvicorn
-
-    from marky.server import api
-
-    typer.echo(f"Serving at http://{host}:{port}  (docs: http://{host}:{port}/docs)")
-    uvicorn.run(api, host=host, port=port)
-
-
 def main() -> None:
     app()
 
