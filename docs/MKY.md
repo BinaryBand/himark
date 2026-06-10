@@ -73,24 +73,37 @@ Named alphabets are aliases for `,`-joined ranges and are second-class.
 
 ## Value Ranges
 
-`{class}[min..max]` matches strings whose value falls between `min` and `max` under the class ordering. The class defines both the valid characters and their ordering.
+`{class}[min..max]` matches strings whose value falls between `min` and `max`. Values are interpreted as positional integers in the alphabet defined by the class, with the first character in class order as digit zero. By default, strings must be in canonical form — no leading zeros, where the zero character is the first character in class order.
 
 ```proto
 {dec}[5..99]        // '5' to '99'
 {dec}[0..255]       // any decimal 0–255
 {hex}[0..ff]        // '0' to 'ff'
 {b58}[1..z]         // base58 '1' to 'z' (single char)
-{a..z}[a..zzz]      // any lowercase string of 1–3 chars
-{a..z}[aa..zz,!ff]  // any 2-char lowercase string excluding 'ff'
+{a..z}[a..zzz]      // lowercase strings 1–3 chars, canonical ('aa', 'ab', 'aaa' … excluded)
 {a..z}[a..]         // any lowercase string, unbounded
+```
+
+### Value exclusion
+
+`,!value` excludes a specific string from the range. `,!min..max` excludes a contiguous sub-range of values.
+
+```proto
+{a..z}[aa..zz,!ff]       // any 2-char lowercase string, excluding 'ff'
+{a..z}[aa..zz,!ee..ff]   // any 2-char lowercase string, excluding 'ee' and 'ff'
+{dec}[0..255,!128..191]  // decimal 0–255, excluding 128–191
 ```
 
 ### Padding
 
+`[N:min..max]` fixes the width to exactly `N` characters. `[:min..max]` accepts any width from 1 up to `len(max)`, allowing leading zeros. The upper bound must be a literal string when using `[:]`; use `[N:]` when the upper bound is not fixed.
+
 ```proto
-{dec}[2:0..99]      // '00' to '99' (exactly 2 digits)
-{dec}[:0..255]      // '0' to '255', leading zeros accepted
-{hex}[2:0..ff]      // '00' to 'ff'
+{dec}[2:0..99]    // '00' to '99' (exactly 2 digits)
+{dec}[3:0..255]   // '000' to '255' (exactly 3 digits)
+{dec}[:0..255]    // '0', '00', '000' through '255' — any width up to 3
+{hex}[2:0..ff]    // '00' to 'ff'
+{a..z}[:a..zzz]   // 'a'..'z', 'aa'..'zz', 'aaa'..'zzz' — leading 'a's accepted
 ```
 
 ## Repetition
