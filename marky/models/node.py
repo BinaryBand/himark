@@ -16,46 +16,82 @@ class HMKNode:
 
 def print_tree(node, indent=0):
     prefix = "  " * indent
-    if node.type == "leaf":
+    t = node.type
+    m = node.metadata
+
+    if t == "leaf":
         print(f"{prefix}LEAF: {node.content!r}")
-    elif node.type == "literal":
+    elif t == "root":
+        print(f"{prefix}root")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "brace_group":
+        count = m.get("count")
+        count_str = f"[{count}]" if count else ""
+        print(f"{prefix}brace_group{count_str}: {node.content!r}")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "separator":
+        count = m.get("count")
+        count_str = f"[{count}]" if count else ""
+        print(f"{prefix}separator{count_str}: {node.content!r}")
+    elif t == "literal":
         print(f"{prefix}literal: {node.content!r}")
-    elif node.type == "full_match":
+    elif t == "char_range":
+        print(f"{prefix}char_range: {m['start']!r}..{m['end']!r}")
+    elif t == "named_alpha":
+        print(f"{prefix}named_alpha: {m['name']}")
+    elif t == "full_alpha":
+        print(f"{prefix}full_alpha")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "upper_bound":
+        print(f"{prefix}upper_bound: ..{m['upper']!r}")
+        print_tree(m["alpha"], indent + 1)
+    elif t == "lower_bound":
+        print(f"{prefix}lower_bound: {m['lower']!r}..")
+        print_tree(m["alpha"], indent + 1)
+    elif t == "bounded_range":
+        print(f"{prefix}bounded_range: {m['lower']!r}..{m['upper']!r}")
+        print_tree(m["alpha"], indent + 1)
+    elif t == "zip_range":
+        print(f"{prefix}zip_range")
+        print_tree(m["left"], indent + 1)
+        print_tree(m["right"], indent + 1)
+    elif t == "union":
+        excl = m.get("exclusions", [])
+        print(f"{prefix}union (exclusions: {excl})")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "complement":
+        print(f"{prefix}complement")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "token_set":
+        print(f"{prefix}token_set: {m['tokens']}")
+    elif t == "group_class":
+        print(f"{prefix}group_class: {m['groups']}")
+    elif t == "padded":
+        width = m.get("width")
+        print(f"{prefix}padded: width={width}")
+        for child in node.children:
+            print_tree(child, indent + 1)
+    elif t == "full_match":
         print(f"{prefix}full_match")
-    elif node.type == "group_ref":
-        idx = ".".join(str(i) for i in node.metadata["index"])
+    elif t == "group_ref":
+        idx = ".".join(str(i) for i in m["index"])
         print(f"{prefix}group_ref: {idx}")
-    elif node.type == "span_ref":
-        start = ".".join(str(i) for i in node.metadata["start"])
-        end = ".".join(str(i) for i in node.metadata["end"])
+    elif t == "span_ref":
+        start = ".".join(str(i) for i in m["start"])
+        end = ".".join(str(i) for i in m["end"])
         print(f"{prefix}span_ref: {start}..{end}")
-    elif node.type == "var_ref":
-        print(f"{prefix}var_ref: {node.content!r}")
-    elif node.type == "emoji":
-        print(f"{prefix}emoji: :{node.metadata['code']}:")
-    elif node.type == "latex":
-        print(f"{prefix}latex: {node.metadata['expr']!r}")
-    elif node.type == "shortcut":
-        print(f"{prefix}shortcut: {node.metadata.get('kind')} ({node.content!r})")
-    elif node.type == "range":
-        start, end = node.metadata.get("start", ""), node.metadata.get("end", "")
-        print(f"{prefix}range: {start!r}..{end!r}")
-    elif node.type in ("repetition_range",):
-        mn, mx = node.metadata.get("min", ""), node.metadata.get("max", "")
-        print(f"{prefix}repetition_range: {mn!r}..{mx!r}")
-    elif node.type == "pad":
-        print(f"{prefix}pad: {node.metadata.get('width')!r}")
-    elif node.type == "lazy":
-        print(f"{prefix}lazy")
-    elif node.type == "option":
-        print(f"{prefix}option: {node.content!r}")
+    elif t == "count_ref":
+        print(f"{prefix}count_ref: #{m['group']}")
+    elif t == "emoji":
+        print(f"{prefix}emoji: :{m['code']}:")
+    elif t == "latex":
+        print(f"{prefix}latex: {m['expr']!r}")
     else:
-        print(f"{prefix}{node.type}: {node.content!r}")
-        if node.metadata:
-            for key, val in node.metadata.items():
-                if isinstance(val, list):
-                    print(f"{prefix}  @{key}:")
-                    for child in val:
-                        print_tree(child, indent + 2)
+        print(f"{prefix}{t}: {node.content!r}")
         for child in node.children:
             print_tree(child, indent + 1)

@@ -1,687 +1,519 @@
-from collections.abc import Callable
+"""HMK match engine — walks the phase3 AST against a text string."""
 
-from marky.engine._types import Match, MatchCtx
+from marky.engine._types import Match
 from marky.models.node import HMKNode
-from marky.utils.alphabet import ALPHABETS as _ALPHABETS
-from marky.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
-from marky.utils.alphabet import all_in_alphabet as _all_in_alphabet
-from marky.utils.alphabet import alpha_value as _alpha_value
-from marky.utils.varied_rep import collect_var_specs, iter_bindings
+from marky.utils.alphabet import NAMED_ALPHABETS, alpha_value
 
 
-class _SkipTo:
-    """Sentinel: negation found its excluded content at the scan start; skip past it."""
+class _State:
+    __slots__ = ("captures", "spans", "sub_groups", "count_refs")
 
-    __slots__ = ("pos",)
+    def __init__(self):
+        self.captures: list[str] = []
+        self.spans: list[tuple[int, int]] = []
+        self.sub_groups: list[list[str]] = []
+        self.count_refs: dict[int, int] = {}
 
-    def __init__(self, pos: int) -> None:
-        self.pos = pos
+    def snapshot(self):
+        return (
+            len(self.captures),
+            len(self.spans),
+            len(self.sub_groups),
+            dict(self.count_refs),
+        )
+
+    def restore(self, snap):
+        nc, ns, ng, cr = snap
+        del self.captures[nc:]
+        del self.spans[ns:]
+        del self.sub_groups[ng:]
+        self.count_refs.clear()
+        self.count_refs.update(cr)
 
 
 # ---------------------------------------------------------------------------
-# Top-level match driver
+# Public API
 # ---------------------------------------------------------------------------
 
 
 def find_matches(tree: HMKNode, text: str) -> list[Match]:
+    # Standalone separator: entire pattern is <<sep>> or <<>>
     if (
         tree.type == "root"
         and len(tree.children) == 1
-        and tree.children[0].type == "double_chevrons"
+        and tree.children[0].type == "separator"
     ):
-        node = tree.children[0]
-        sep = node.children[0].content if node.children else ""
-        if not sep:
-            # <<>> alone: one match covering the entire text
-            return [Match(text, 0, len(text))] if text else []
-        return _split_by_separator(node, text)
+        return _split_by_separator(tree.children[0], text)
 
-    specs = collect_var_specs(tree)
-    matches = []
+    matches: list[Match] = []
     pos = 0
     while pos < len(text):
-        remaining = len(text) - pos
-        found = False
-        for bindings in iter_bindings(specs, remaining):
-            captures: list[str] = []
-            capture_spans: list[tuple[int, int]] = []
-            sub_capture_lists: list[list[str]] = []
-            end = _match_node(
-                tree, text, pos, captures, bindings, capture_spans, sub_capture_lists
-            )
-            if isinstance(end, _SkipTo):
-                pos = end.pos
-                found = True
-                break
-            if end is not None and end > pos:
-                rel_spans = [(s - pos, e - pos) for s, e in capture_spans]
-                matches.append(
-                    Match(
-                        text[pos:end],
-                        pos,
-                        end,
-                        captures,
-                        rel_spans,
-                        sub_capture_lists,
-                        bindings,
-                    )
+        state = _State()
+        end = _match_sequence(tree.children, text, pos, state)
+        if end is not None and end > pos:
+            rel_spans = [(s - pos, e - pos) for s, e in state.spans]
+            matches.append(
+                Match(
+                    text[pos:end],
+                    pos,
+                    end,
+                    state.captures,
+                    rel_spans,
+                    state.sub_groups,
+                    state.count_refs,
                 )
-                pos = end
-                found = True
-                break
-        if not found:
+            )
+            pos = end
+        else:
             pos += 1
     return matches
 
 
 def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
-    if not node.children:
-        return []
-    sep = node.children[0].content
+    sep = node.content
+    if not sep:
+        return [Match(text, 0, len(text))] if text else []
     parts = text.split(sep)
-    matches, pos = [], 0
+    result, pos = [], 0
     for part in parts:
-        matches.append(Match(part, pos, pos + len(part)))
+        result.append(Match(part, pos, pos + len(part)))
         pos += len(part) + len(sep)
-    return matches
+    return result
 
 
 # ---------------------------------------------------------------------------
-# Node matching
+# Sequence matching
 # ---------------------------------------------------------------------------
-
-
-def _match_node(
-    node: HMKNode,
-    text: str,
-    pos: int,
-    captures: list[str] | None = None,
-    bindings: dict[str, int] | None = None,
-    capture_spans: list[tuple[int, int]] | None = None,
-    sub_capture_lists: list[list[str]] | None = None,
-) -> int | _SkipTo | None:
-    if node.type == "root":
-        return _match_sequence(
-            node.children,
-            text,
-            pos,
-            captures,
-            bindings,
-            capture_spans,
-            sub_capture_lists,
-        )
-    if node.type == "single_brackets":
-        return _match_bracket(
-            node, text, pos, captures, bindings, capture_spans, sub_capture_lists
-        )
-    if node.type == "double_brackets":
-        return _match_bracket_negated(
-            node, text, pos, captures, bindings, capture_spans, sub_capture_lists
-        )
-    if node.type == "double_chevrons":
-        if not node.children:
-            return None
-        s = node.children[0].content
-        return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if node.type == "leaf":
-        s = node.content
-        if s == "^^":
-            return pos if pos == 0 else None
-        if s == "$$":
-            return pos if pos == len(text) else None
-        if s == "^":
-            return pos if (pos == 0 or text[pos - 1] == "\n") else None
-        if s == "$":
-            return pos if (pos == len(text) or text[pos] == "\n") else None
-        return pos + len(s) if text[pos : pos + len(s)] == s else None
-    return None
 
 
 def _match_sequence(
-    nodes: list[HMKNode],
-    text: str,
-    pos: int,
-    captures: list[str] | None = None,
-    bindings: dict[str, int] | None = None,
-    capture_spans: list[tuple[int, int]] | None = None,
-    sub_capture_lists: list[list[str]] | None = None,
-) -> int | _SkipTo | None:
+    nodes: list[HMKNode], text: str, pos: int, state: _State
+) -> int | None:
     current = pos
-    for i, node in enumerate(nodes):
-        # Detect lazy wildcard: bare <<>> or [<<>>] without explicit count modifier.
-        # Both act as "match minimum chars until the rest of the sequence can succeed"
-        # and both create a capture group for what they consumed.
-        is_chevron_wildcard = node.type == "double_chevrons" and not _chevron_sep(node)
-        is_bracket_wildcard = (
-            node.type == "single_brackets"
-            and len(node.children) == 1
-            and node.children[0].type == "double_chevrons"
-            and not _chevron_sep(node.children[0])
-            and not _has_explicit_count(
-                _flatten_options(node.metadata.get("options", []))
-            )
-        )
-        if is_chevron_wildcard or is_bracket_wildcard:
+    i = 0
+    while i < len(nodes):
+        node = nodes[i]
+
+        # Separator acting as lazy wildcard
+        if node.type == "separator":
+            sep = node.content
             remaining = nodes[i + 1 :]
+            snap = state.snapshot()
             if not remaining:
-                # Greedy terminal: consume everything left
                 wc = text[current:]
-                if captures is not None:
-                    captures.append(wc)
-                if capture_spans is not None:
-                    capture_spans.append((current, len(text)))
-                if sub_capture_lists is not None:
-                    sub_capture_lists.append([wc])
+                _record_sep_capture(state, wc, current, len(text))
                 return len(text)
             for n in range(len(text) - current + 1):
-                snap_c = len(captures) if captures is not None else 0
-                snap_s = len(capture_spans) if capture_spans is not None else 0
-                snap_sub = (
-                    len(sub_capture_lists) if sub_capture_lists is not None else 0
-                )
-                result = _match_sequence(
-                    remaining,
-                    text,
-                    current + n,
-                    captures,
-                    bindings,
-                    capture_spans,
-                    sub_capture_lists,
-                )
-                if isinstance(result, _SkipTo):
-                    return result
-                if result is not None:
-                    # Insert wildcard capture at its natural left-to-right position
+                state.restore(snap)
+                end = _match_sequence(remaining, text, current + n, state)
+                if end is not None:
                     wc = text[current : current + n]
-                    if captures is not None:
-                        captures.insert(snap_c, wc)
-                    if capture_spans is not None:
-                        capture_spans.insert(snap_s, (current, current + n))
-                    if sub_capture_lists is not None:
-                        sub_capture_lists.insert(snap_sub, [wc])
-                    return result
-                if captures is not None:
-                    del captures[snap_c:]
-                if capture_spans is not None:
-                    del capture_spans[snap_s:]
-                if sub_capture_lists is not None:
-                    del sub_capture_lists[snap_sub:]
+                    _insert_sep_capture(state, snap, wc, current, current + n)
+                    return end
+            state.restore(snap)
             return None
-        end = _match_node(
-            node, text, current, captures, bindings, capture_spans, sub_capture_lists
-        )
+
+        end = _match_node(node, text, current, state)
         if end is None:
             return None
-        if isinstance(end, _SkipTo):
-            return end
         current = end
+        i += 1
     return current
 
 
-def _match_bracket(
-    node: HMKNode,
-    text: str,
-    pos: int,
-    captures: list[str] | None = None,
-    bindings: dict[str, int] | None = None,
-    capture_spans: list[tuple[int, int]] | None = None,
-    sub_capture_lists: list[list[str]] | None = None,
-) -> int | None:
-    if not node.children:
-        return None
-    options = _flatten_options(node.metadata.get("options", []))
-    min_count, max_count, lazy = _parse_repetition(options, bindings)
-    ctx = MatchCtx(
-        _parse_case_insensitive(options), _parse_alphabet(options), _parse_pad(options)
-    )
-
-    # Multi-child bracket containing <<>> or <<sep>>: treat children as a sequence.
-    # e.g. [hello<<>>world] or [hello<<,>>world]
-    if len(node.children) > 1 and any(
-        c.type == "double_chevrons" for c in node.children
-    ):
-        return _match_bracket_span(
-            node.children,
-            text,
-            pos,
-            captures,
-            capture_spans,
-            sub_capture_lists,
-            min_count,
-            max_count,
-            lazy,
-            ctx,
-        )
-
-    content = node.children[0]
-    start_pos = pos
-    positions = [pos]
-    current = pos
-    count = 0
-    while max_count is None or count < max_count:
-        end = _match_content(content, text, current, ctx)
-        if end is None or end == current:
-            break
-        count += 1
-        current = end
-        positions.append(current)
-
-    if count < min_count:
-        return None
-    result = positions[min_count] if lazy else positions[-1]
-    if captures is not None:
-        captures.append(text[start_pos:result])
-    if capture_spans is not None:
-        capture_spans.append((start_pos, result))
-    if sub_capture_lists is not None:
-        end_idx = min_count if lazy else len(positions) - 1
-        subs = [text[positions[i] : positions[i + 1]] for i in range(end_idx)]
-        sub_capture_lists.append(subs)
-    return result
+def _record_sep_capture(state: _State, text: str, start: int, end: int):
+    state.captures.append(text)
+    state.spans.append((start, end))
+    state.sub_groups.append([text])
 
 
-def _match_bracket_span(
-    children: list[HMKNode],
-    text: str,
-    pos: int,
-    captures: list[str] | None,
-    capture_spans: list[tuple[int, int]] | None,
-    sub_capture_lists: list[list[str]] | None,
-    min_count: int,
-    max_count: int | None,
-    lazy: bool,
-    ctx: MatchCtx,
-) -> int | None:
-    """Handle [A<<>>B] / [A<<sep>>B] brackets: match children as an ordered sequence."""
-    start_pos = pos
-    current = pos
-    count = 0
-    all_subs: list[str] = []
-
-    while max_count is None or count < max_count:
-        end, subs = _match_span_children(children, text, current, ctx)
-        if end is None or end == current:
-            break
-        count += 1
-        all_subs.extend(subs)
-        current = end
-
-    if count < min_count:
-        return None
-
-    result = current
-    if captures is not None:
-        captures.append(text[start_pos:result])
-    if capture_spans is not None:
-        capture_spans.append((start_pos, result))
-    if sub_capture_lists is not None:
-        sub_capture_lists.append(all_subs)
-    return result
-
-
-def _match_span_children(
-    children: list[HMKNode], text: str, pos: int, ctx: MatchCtx
-) -> tuple[int | None, list[str]]:
-    """Match a child sequence for span brackets; returns (end_pos, sub_captures)."""
-    current = pos
-    subs: list[str] = []
-
-    for i, child in enumerate(children):
-        if child.type == "double_chevrons":
-            sep = _chevron_sep(child)
-            remaining = children[i + 1 :]
-
-            if not remaining:
-                # Last item: consume everything left
-                consumed = text[current:]
-                subs.extend(consumed.split(sep) if sep else [consumed])
-                return len(text), subs
-
-            # Lazy: find minimum n so remaining matches from current+n
-            for n in range(len(text) - current + 1):
-                end, tail = _match_span_children(remaining, text, current + n, ctx)
-                if end is not None:
-                    consumed = text[current : current + n]
-                    subs.extend(consumed.split(sep) if sep else [consumed])
-                    subs.extend(tail)
-                    return end, subs
-            return None, []
-
-        end = _match_content(child, text, current, ctx)
-        if end is None:
-            return None, []
-        current = end
-
-    return current, subs
-
-
-def _match_bracket_negated(
-    node: HMKNode,
-    text: str,
-    pos: int,
-    captures: list[str] | None = None,
-    bindings: dict[str, int] | None = None,
-    capture_spans: list[tuple[int, int]] | None = None,
-    sub_capture_lists: list[list[str]] | None = None,
-) -> int | _SkipTo | None:
-    if not node.children:
-        return None
-    content = node.children[0]
-    options = _flatten_options(node.metadata.get("options", []))
-
-    # Default when no count modifier: one or more, greedy (historic behaviour)
-    has_count = any(
-        o.type == "repetition_range"
-        or (o.type == "option" and (o.content.isdigit() or _is_var(o.content)))
-        for o in options
-    )
-    if has_count:
-        min_count, max_count, lazy = _parse_repetition(options, bindings)
-    else:
-        min_count, max_count, lazy = 1, None, False
-
-    # Build the run: consume characters that do NOT match the excluded content
-    run_end = pos
-    while (max_count is None or (run_end - pos) < max_count) and run_end < len(text):
-        if _match_content(content, text, run_end, MatchCtx()) is not None:
-            break
-        run_end += 1
-
-    run_length = run_end - pos
-
-    if run_length < min_count:
-        # Can't satisfy minimum — skip past the excluded content if it matched here
-        inner_end = _match_content(content, text, pos, MatchCtx())
-        if inner_end is not None and inner_end > pos:
-            return _SkipTo(inner_end)
-        return _SkipTo(pos + 1) if min_count > 0 else pos
-
-    result = (pos + min_count) if lazy else run_end
-
-    if captures is not None:
-        captures.append(text[pos:result])
-    if capture_spans is not None:
-        capture_spans.append((pos, result))
-    if sub_capture_lists is not None:
-        sub_capture_lists.append(
-            [text[pos + i : pos + i + 1] for i in range(result - pos)]
-        )
-
-    return result
+def _insert_sep_capture(state: _State, snap: tuple, wc: str, start: int, end: int):
+    nc = snap[0]
+    state.captures.insert(nc, wc)
+    state.spans.insert(snap[1], (start, end))
+    state.sub_groups.insert(snap[2], [wc])
 
 
 # ---------------------------------------------------------------------------
-# Content matchers
+# Node dispatch
 # ---------------------------------------------------------------------------
 
 
-def _match_literal_node(
-    node: HMKNode, text: str, pos: int, ctx: MatchCtx
-) -> int | None:
-    s = node.content
-    if ctx.ci:
-        return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
-    return pos + len(s) if text[pos : pos + len(s)] == s else None
+def _match_node(node: HMKNode, text: str, pos: int, state: _State) -> int | None:
+    t = node.type
+    if t == "root":
+        return _match_sequence(node.children, text, pos, state)
+    if t == "brace_group":
+        return _match_brace_group(node, text, pos, state)
+    if t == "leaf":
+        s = node.content
+        return pos + len(s) if text[pos : pos + len(s)] == s else None
+    # Semantic nodes used inside brace_group — shouldn't appear naked in sequence
+    return _match_semantic(node, text, pos)
 
 
-def _match_shortcut_node(
-    node: HMKNode, text: str, pos: int, _ctx: MatchCtx
-) -> int | None:
-    return _match_shortcut(node.metadata["kind"], text, pos)
+def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int | None:
+    if not node.children:
+        return None
+    semantic = node.children[0]
+    count = node.metadata.get("count", {"min": 1, "max": 1})
+
+    min_reps = count.get("min", 1)
+    max_reps = count.get("max", 1)
+    count_ref = count.get("count_ref")
+
+    # Resolve count_ref ({{#N}} in count position)
+    if count_ref is not None:
+        n = state.count_refs.get(count_ref, 0)
+        min_reps = max_reps = n
+
+    start = pos
+    current = pos
+    reps = 0
+    sub: list[str] = []
+    first_val: str | None = None
+    is_zip = semantic.type == "zip_range"
+
+    while max_reps is None or reps < max_reps:
+        if is_zip and first_val is not None:
+            # Equality check: must match same group sequence
+            end = _match_zip_equal(semantic, text, current, first_val)
+        elif first_val is not None:
+            # Literal equality: must equal first captured value
+            if text[current : current + len(first_val)] == first_val:
+                end = current + len(first_val)
+            else:
+                end = None
+        else:
+            end = _match_semantic(semantic, text, current)
+
+        if end is None or end == current:
+            break
+
+        val = text[current:end]
+        if first_val is None:
+            first_val = val
+        sub.append(val)
+        reps += 1
+        current = end
+
+    if reps < min_reps:
+        return None
+
+    capture_idx = len(state.captures)
+    state.captures.append(text[start:current])
+    state.spans.append((start, current))
+    state.sub_groups.append(sub)
+    state.count_refs[capture_idx] = reps
+    return current
 
 
-def _match_range_node(node: HMKNode, text: str, pos: int, ctx: MatchCtx) -> int | None:
-    return _match_range(
-        node.metadata["start"],
-        node.metadata["end"],
-        text,
-        pos,
-        ctx.ci,
-        ctx.alphabet,
-        ctx.pad,
-    )
+# ---------------------------------------------------------------------------
+# Semantic node matchers
+# ---------------------------------------------------------------------------
 
 
-def _match_alternation_node(
-    node: HMKNode, text: str, pos: int, ctx: MatchCtx
-) -> int | None:
-    for arm in node.children:
-        end = _match_content(arm, text, pos, ctx)
-        if end is not None:
-            return end
+def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
+    if pos >= len(text):
+        return None
+    t = node.type
+    if t == "literal":
+        s = node.content
+        return pos + len(s) if text[pos : pos + len(s)] == s else None
+    if t == "char_range":
+        ch = text[pos]
+        return pos + 1 if node.metadata["start"] <= ch <= node.metadata["end"] else None
+    if t == "named_alpha":
+        return _match_named_alpha(node, text, pos)
+    if t == "full_alpha":
+        return _match_full_alpha(node, text, pos)
+    if t == "upper_bound":
+        return _match_upper_bound(node, text, pos)
+    if t == "lower_bound":
+        return _match_lower_bound(node, text, pos)
+    if t == "bounded_range":
+        return _match_bounded_range(node, text, pos)
+    if t == "zip_range":
+        return _match_zip_range(node, text, pos)
+    if t == "union":
+        return _match_union(node, text, pos)
+    if t == "complement":
+        return _match_complement(node, text, pos)
+    if t == "token_set":
+        return _match_token_set(node, text, pos)
+    if t == "group_class":
+        return _match_group_class(node, text, pos)
+    if t == "padded":
+        return _match_padded(node, text, pos)
     return None
 
 
-def _match_double_chevrons_node(
-    node: HMKNode, text: str, pos: int, ctx: MatchCtx
-) -> int | None:
-    s = node.children[0].content if node.children else ""
-    if not s:
-        # <<>> inside brackets: match any single non-newline character
-        return pos + 1 if pos < len(text) and text[pos] != "\n" else None
-    # <<sep>> inside brackets: match the separator string as a literal
-    if ctx.ci:
-        return pos + len(s) if text[pos : pos + len(s)].lower() == s.lower() else None
-    return pos + len(s) if text[pos : pos + len(s)] == s else None
-
-
-_CONTENT_MATCHERS: dict[str, Callable[[HMKNode, str, int, MatchCtx], int | None]] = {
-    "literal": _match_literal_node,
-    "shortcut": _match_shortcut_node,
-    "range": _match_range_node,
-    "alternation": _match_alternation_node,
-    "double_chevrons": _match_double_chevrons_node,
-}
-
-
-def _match_content(
-    node: HMKNode, text: str, pos: int, ctx: MatchCtx = MatchCtx()
-) -> int | None:
-    if pos >= len(text):
-        return None
-    matcher = _CONTENT_MATCHERS.get(node.type)
-    return matcher(node, text, pos, ctx) if matcher is not None else None
-
-
-_SHORTCUT_PREDS = {
-    "digits": lambda c: c.isdigit(),
-    "word_chars": lambda c: c.isalnum() or c == "_",
-    "whitespace": str.isspace,
-}
-
-
-def _match_shortcut(kind: str, text: str, pos: int) -> int | None:
-    if kind == "any_char":
-        return pos + 1
-    pred = _SHORTCUT_PREDS[kind]
-    if not pred(text[pos]):
-        return None
-    end = pos + 1
-    while end < len(text) and pred(text[end]):
-        end += 1
-    return end
-
-
-# ---------------------------------------------------------------------------
-# Range matching
-# ---------------------------------------------------------------------------
-
-
-def _match_range(
-    start: str,
-    end: str,
-    text: str,
-    pos: int,
-    ci: bool = False,
-    alphabet: str | None = None,
-    pad: int | None = None,
-) -> int | None:
-    if not start or not end:
-        return None
-    if alphabet is not None and alphabet not in ("b10", "dec"):
-        alpha = _ALPHABETS[alphabet]
-        case_agnostic = alphabet in _CASE_AGNOSTIC_ALPHABETS
-        return _match_alphabet_range(start, end, alpha, case_agnostic, text, pos, pad)
-    if start.isdigit() and end.isdigit():
-        return _match_integer_range(int(start), int(end), text, pos, pad)
+def _match_named_alpha(node: HMKNode, text: str, pos: int) -> int | None:
+    name = node.metadata["name"]
+    alph = NAMED_ALPHABETS[name]
     ch = text[pos]
-    if start.islower() and end.isupper():
-        return pos + 1 if (start <= ch <= "z" or "A" <= ch <= "Z") else None
-    if ci:
-        return pos + 1 if start.lower() <= ch.lower() <= end.lower() else None
-    return pos + 1 if start <= ch <= end else None
+    if alph is None:
+        # Virtual: ascii or uni
+        if name == "ascii":
+            return pos + 1 if ord(ch) <= 0x7F else None
+        if name == "uni":
+            return pos + 1  # every char is in uni
+        return None
+    return pos + 1 if ch in alph else None
 
 
-def _match_integer_range(
-    lo: int, hi: int, text: str, pos: int, pad: int | None = None
-) -> int | None:
-    if pad is not None:
-        candidate = text[pos : pos + pad]
-        if len(candidate) != pad or not candidate.isdigit():
-            return None
-        return (pos + pad) if lo <= int(candidate) <= hi else None
+def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
+    """Greedy: consume 1+ chars that each match the inner alpha node."""
+    inner = node.children[0]
     end = pos
-    while end < len(text) and text[end].isdigit():
+    while end < len(text):
+        next_end = _match_semantic(inner, text, end)
+        if next_end is None or next_end == end:
+            break
+        end = next_end
+    return end if end > pos else None
+
+
+def _alpha_str(node: HMKNode) -> str:
+    """Extract the alphabet string for range-value comparisons."""
+    t = node.type
+    if t == "named_alpha":
+        name = node.metadata["name"]
+        alph = NAMED_ALPHABETS[name]
+        if alph is None:
+            raise ValueError(f"Virtual alphabet {name!r} cannot be used as range bound")
+        return alph
+    if t == "char_range":
+        s, e = node.metadata["start"], node.metadata["end"]
+        return "".join(chr(c) for c in range(ord(s), ord(e) + 1))
+    if t == "union":
+        return "".join(_alpha_str(ch) for ch in node.children)
+    if t == "literal":
+        return node.content
+    raise ValueError(f"Cannot extract alphabet from node type {t!r}")
+
+
+def _match_alpha_value_range(
+    alph: str, lo: int | None, hi: int | None, text: str, pos: int
+) -> int | None:
+    """Greedily consume alphabet chars at pos; return longest end where lo ≤ val ≤ hi."""
+    zero = alph[0]
+    end = pos
+    while end < len(text) and text[end] in alph:
         end += 1
     if end == pos:
         return None
     for length in range(end - pos, 0, -1):
         candidate = text[pos : pos + length]
-        if length > 1 and candidate[0] == "0":
-            continue
-        if lo <= int(candidate) <= hi:
-            return pos + length
-    return None
-
-
-def _match_alphabet_range(
-    start: str,
-    end: str,
-    alpha: str,
-    case_agnostic: bool,
-    text: str,
-    pos: int,
-    pad: int | None,
-) -> int | None:
-    if case_agnostic:
-        start, end = start.lower(), end.lower()
-    if not start or not end:
-        return None
-    if not _all_in_alphabet(start, alpha) or not _all_in_alphabet(end, alpha):
-        return None
-    lo, hi = _alpha_value(start, alpha), _alpha_value(end, alpha)
-    zero = alpha[0]
-
-    if pad is not None:
-        candidate = text[pos : pos + pad]
-        if len(candidate) != pad:
-            return None
-        if case_agnostic:
-            candidate = candidate.lower()
-        if not all(c in alpha for c in candidate):
-            return None
-        return (pos + pad) if lo <= _alpha_value(candidate, alpha) <= hi else None
-
-    end_pos = pos
-    while end_pos < len(text):
-        ch = text[end_pos].lower() if case_agnostic else text[end_pos]
-        if ch not in alpha:
-            break
-        end_pos += 1
-    if end_pos == pos:
-        return None
-    for length in range(end_pos - pos, 0, -1):
-        candidate = text[pos : pos + length]
-        if case_agnostic:
-            candidate = candidate.lower()
         if length > 1 and candidate[0] == zero:
-            continue
-        if lo <= _alpha_value(candidate, alpha) <= hi:
+            continue  # no leading zeros
+        v = alpha_value(candidate, alph)
+        if (lo is None or v >= lo) and (hi is None or v <= hi):
             return pos + length
     return None
 
 
-# ---------------------------------------------------------------------------
-# Option parsing helpers
-# ---------------------------------------------------------------------------
+def _match_upper_bound(node: HMKNode, text: str, pos: int) -> int | None:
+    alph_str = _alpha_str(node.metadata["alpha"])
+    hi = alpha_value(node.metadata["upper"], alph_str)
+    return _match_alpha_value_range(alph_str, None, hi, text, pos)
 
 
-def _chevron_sep(node: HMKNode) -> str:
-    """Return the separator string of a double_chevrons node (empty string for <<>>)."""
-    return node.children[0].content if node.children else ""
+def _match_lower_bound(node: HMKNode, text: str, pos: int) -> int | None:
+    alph_str = _alpha_str(node.metadata["alpha"])
+    lo = alpha_value(node.metadata["lower"], alph_str)
+    return _match_alpha_value_range(alph_str, lo, None, text, pos)
 
 
-def _has_explicit_count(options: list[HMKNode]) -> bool:
-    """True when options contain an explicit repetition count or range."""
-    return any(
-        o.type == "repetition_range"
-        or (o.type == "option" and (o.content.isdigit() or _is_var(o.content)))
-        for o in options
-    )
+def _match_bounded_range(node: HMKNode, text: str, pos: int) -> int | None:
+    alph_str = _alpha_str(node.metadata["alpha"])
+    lo = alpha_value(node.metadata["lower"], alph_str)
+    hi = alpha_value(node.metadata["upper"], alph_str)
+    return _match_alpha_value_range(alph_str, lo, hi, text, pos)
 
 
-def _flatten_options(options: list[HMKNode]) -> list[HMKNode]:
-    result = []
-    for opt in options:
-        if opt.type == "option_list":
-            result.extend(_flatten_options(opt.children))
-        else:
-            result.append(opt)
-    return result
+def _build_zip_groups(node: HMKNode) -> list[list[str]]:
+    """Expand zip_range into a list of groups (one list of equivalent chars each)."""
+    left_node = node.metadata["left"]
+    right_node = node.metadata["right"]
+
+    try:
+        left_alph = _alpha_str(left_node)
+        right_alph = _alpha_str(right_node)
+    except ValueError:
+        return []
+
+    if len(left_alph) != len(right_alph):
+        # Zip requires equal-length alphabets
+        return []
+
+    groups: list[list[str]] = []
+    # Each position i in left corresponds to position i in right
+    # But left and right are multi-member groups (e.g., {a,A} and {z,Z})
+    # The sub-members must be expanded in parallel
+    left_members = _group_members(left_node)
+    right_members = _group_members(right_node)
+
+    if len(left_members) != len(right_members):
+        return []
+
+    # Each member is a single-char string; build ranges between left[j] and right[j]
+    member_ranges = []
+    for lm, rm in zip(left_members, right_members):
+        if len(lm) != 1 or len(rm) != 1:
+            return []
+        lo, hi = ord(lm), ord(rm)
+        if lo > hi:
+            lo, hi = hi, lo
+        member_ranges.append((lo, hi))
+
+    if not member_ranges:
+        return []
+
+    # All ranges must have the same length
+    range_len = member_ranges[0][1] - member_ranges[0][0] + 1
+    if any((hi - lo + 1) != range_len for lo, hi in member_ranges):
+        return []
+
+    for i in range(range_len):
+        groups.append([chr(lo + i) for lo, _ in member_ranges])
+
+    return groups
 
 
-def _parse_case_insensitive(options: list[HMKNode]) -> bool:
-    return any(opt.type == "option" and opt.content == "i" for opt in options)
+def _group_members(node: HMKNode) -> list[str]:
+    """Extract the individual character members from a simple alpha node."""
+    t = node.type
+    if t == "literal":
+        return [node.content]
+    if t == "char_range":
+        s, e = node.metadata["start"], node.metadata["end"]
+        return [chr(c) for c in range(ord(s), ord(e) + 1)]
+    if t == "named_alpha":
+        alph = NAMED_ALPHABETS[node.metadata["name"]]
+        return list(alph) if alph else []
+    if t == "union":
+        result = []
+        for child in node.children:
+            result.extend(_group_members(child))
+        return result
+    return []
 
 
-def _parse_alphabet(options: list[HMKNode]) -> str | None:
-    for opt in options:
-        if opt.type == "option" and opt.content in _ALPHABETS:
-            return opt.content
+def _match_zip_range(node: HMKNode, text: str, pos: int) -> int | None:
+    groups = _build_zip_groups(node)
+    if not groups:
+        return None
+    char_set = {ch for grp in groups for ch in grp}
+    end = pos
+    while end < len(text) and text[end] in char_set:
+        end += 1
+    return end if end > pos else None
+
+
+def _match_zip_equal(node: HMKNode, text: str, pos: int, first_val: str) -> int | None:
+    """Match a zip_range repetition that must be group-equivalent to first_val."""
+    groups = _build_zip_groups(node)
+    if not groups or len(first_val) == 0:
+        return None
+
+    char_to_group = {}
+    for idx, grp in enumerate(groups):
+        for ch in grp:
+            char_to_group[ch] = idx
+
+    # Normalize first_val to group index sequence
+    first_groups = []
+    for ch in first_val:
+        if ch not in char_to_group:
+            return None
+        first_groups.append(char_to_group[ch])
+
+    # Check that text[pos:pos+len(first_val)] has the same group sequence
+    candidate = text[pos : pos + len(first_val)]
+    if len(candidate) != len(first_val):
+        return None
+    for ch, expected_grp in zip(candidate, first_groups):
+        if char_to_group.get(ch) != expected_grp:
+            return None
+    return pos + len(first_val)
+
+
+def _match_union(node: HMKNode, text: str, pos: int) -> int | None:
+    excl = node.metadata.get("exclusions", [])
+    for arm in node.children:
+        end = _match_semantic(arm, text, pos)
+        if end is not None:
+            val = text[pos:end]
+            if not _is_excluded(val, excl):
+                return end
     return None
 
 
-def _parse_pad(options: list[HMKNode]) -> int | None:
-    for opt in options:
-        if opt.type == "pad":
-            w = opt.metadata.get("width", "")
-            return int(w) if w.isdigit() else None
+def _is_excluded(val: str, exclusions: list[str]) -> bool:
+    """Return True if val matches any exclusion (single value or range)."""
+    for excl in exclusions:
+        if ".." in excl:
+            parts = excl.split("..", 1)
+            lo, hi = parts[0], parts[1]
+            if lo <= val <= hi:
+                return True
+        elif val == excl:
+            return True
+    return False
+
+
+def _match_complement(node: HMKNode, text: str, pos: int) -> int | None:
+    """Greedily consume chars NOT matching the inner node."""
+    inner = node.children[0]
+    end = pos
+    while end < len(text):
+        if _match_semantic(inner, text, end) is not None:
+            break
+        end += 1
+    return end if end > pos else None
+
+
+def _match_token_set(node: HMKNode, text: str, pos: int) -> int | None:
+    tokens = sorted(node.metadata["tokens"], key=len, reverse=True)
+    excl = node.metadata.get("exclusions", [])
+    for token in tokens:
+        if text[pos : pos + len(token)] == token and token not in excl:
+            return pos + len(token)
     return None
 
 
-def _is_var(s: str) -> bool:
-    return len(s) == 1 and s.isalpha()
+def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
+    groups = node.metadata["groups"]
+    char_set = {ch for grp in groups for item in grp for ch in item}
+    end = pos
+    while end < len(text) and text[end] in char_set:
+        end += 1
+    return end if end > pos else None
 
 
-def _resolve(s: str, bindings: dict[str, int] | None) -> int | None:
-    if s.isdigit():
-        return int(s)
-    if bindings and _is_var(s) and s in bindings:
-        return bindings[s]
-    return None
+def _match_padded(node: HMKNode, text: str, pos: int) -> int | None:
+    inner = node.children[0]
+    width = node.metadata.get("width")
 
+    if width is not None:
+        # Fixed width: try exactly width chars
+        candidate = text[pos : pos + width]
+        if len(candidate) != width:
+            return None
+        # Check that the stripped version matches the inner node
+        stripped = candidate.lstrip(NAMED_ALPHABETS.get("dec", "0") or "0")
+        stripped = stripped or candidate[-1]  # keep at least one char
+        # Match inner against stripped form; if matches, accept full padded width
+        if _match_semantic(inner, stripped, 0) == len(stripped):
+            return pos + width
+        return None
 
-def _parse_repetition(
-    options: list[HMKNode],
-    bindings: dict[str, int] | None = None,
-) -> tuple[int, int | None, bool]:
-    min_count, max_count, lazy = 1, 1, False
-    for opt in options:
-        if opt.type == "repetition_range":
-            mn, mx = opt.metadata["min"], opt.metadata["max"]
-            resolved_mn = _resolve(mn, bindings) if mn else None
-            resolved_mx = _resolve(mx, bindings) if mx else None
-            min_count = (
-                resolved_mn if resolved_mn is not None else (0 if not mn else min_count)
-            )
-            max_count = resolved_mx
-        elif opt.type == "option":
-            if opt.content.isdigit():
-                min_count = max_count = int(opt.content)
-            elif opt.content in _ALPHABETS or opt.content == "i":
-                pass
-            elif _is_var(opt.content) and bindings and opt.content in bindings:
-                min_count = max_count = bindings[opt.content]
-        elif opt.type == "lazy":
-            lazy = True
-    return min_count, max_count, lazy
+    # Variable width ({: expr}): try longest match down to 1
+    max_end = pos
+    while max_end < len(text):
+        next_end = _match_semantic(inner, text, max_end)
+        if next_end is None or next_end == max_end:
+            break
+        max_end = next_end
+    return max_end if max_end > pos else None

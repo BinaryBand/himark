@@ -2,10 +2,10 @@
 
 from marky.engine._match import find_matches as _find_matches
 from marky.engine._render import render as _render
-from marky.engine._types import Match, MatchCtx
+from marky.engine._types import Match
 from marky.models.node import HMKNode
 
-__all__ = ["execute", "find", "Match", "MatchCtx"]
+__all__ = ["execute", "find", "Match"]
 
 
 def find(steps: list[HMKNode], target: str) -> list[tuple[int, int]]:

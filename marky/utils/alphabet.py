@@ -1,32 +1,25 @@
-"""Alphabet utilities for alternate-base matching used by the engine.
+"""Alphabet utilities for HMK named alphabets and range matching."""
 
-This module centralizes alphabet definitions and small helpers so the
-engine can focus on matching semantics.
-"""
-
-from typing import Dict, FrozenSet
-
-
-ALPHABETS: Dict[str, str] = {
-    "b10": "0123456789",
+NAMED_ALPHABETS: dict[str, str | None] = {
     "dec": "0123456789",
     "hex": "0123456789abcdef",
-    "b16": "0123456789abcdef",
+    "HEX": "0123456789ABCDEF",
+    "hexi": None,  # zip of hex + HEX; engine expands at match time
     "b32": "0123456789abcdefghijklmnopqrstuv",
     "b58": "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz",
     "b64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+    "b85": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~",
+    "ascii": None,  # U+0000–U+007F; engine uses ord() bounds
+    "uni": None,  # U+0000–U+10FFFF; engine uses ord() bounds
 }
 
-# Alphabets that are treated case-agnostic by convention (stored lowercase)
-CASE_AGNOSTIC_ALPHABETS: FrozenSet[str] = frozenset({"hex", "b16", "b32"})
+
+def is_named_alpha(name: str) -> bool:
+    return name in NAMED_ALPHABETS
 
 
 def alpha_value(s: str, alphabet: str) -> int:
-    """Convert a string `s` in `alphabet` to its integer value.
-
-    The alphabet is treated as a positional numeral system where the leftmost
-    character is the most-significant digit.
-    """
+    """Convert string `s` to its integer value in the given alphabet (positional numeral system)."""
     v = 0
     base = len(alphabet)
     for c in s:
@@ -34,10 +27,15 @@ def alpha_value(s: str, alphabet: str) -> int:
     return v
 
 
-def all_in_alphabet(s: str, alphabet: str) -> bool:
-    """Return True if every character in `s` appears in `alphabet`.
+def alpha_index(ch: str, alphabet: str) -> int:
+    """Return the 0-based position of character `ch` in `alphabet`."""
+    return alphabet.index(ch)
 
-    This is a tiny helper used by the engine to validate multi-character
-    endpoints and candidate strings.
-    """
+
+def alpha_len(alphabet: str) -> int:
+    return len(alphabet)
+
+
+def all_in_alphabet(s: str, alphabet: str) -> bool:
+    """Return True if every character in `s` appears in `alphabet`."""
     return all(c in alphabet for c in s)
