@@ -23,11 +23,13 @@ These compose as `{class}((range))[count]` and `{class}<<sep>>[count]`, with mod
 
 ### Full-range wildcard
 
-`((..))` matches the full range of the associated class — any value the class can produce.
+`((..))` matches the full range of the associated class — any value the class can produce. For flat classes this is one character or token. For grouped-class alphabets (zip ranges) this is any string of any length.
 
 ```proto
-{a..z}((..))   // any one lowercase letter     (same as {a..z}((a..z)))
-{hex}((..))    // any one hex character         (same as {hex}((0..f)))
+{a..z}((..))          // any one lowercase letter — flat, one char
+{hex}((..))           // any one hex character — flat, one char
+{a..z,A..Z}((..))     // any single letter either case — flat, still one char
+{{a,A}..{z,Z}}((..))  // any word, any case, any length — zip, word-level
 ```
 
 ### Count ranges
@@ -123,6 +125,8 @@ When comma-separated items in `{...}` contain more than one character, the class
 {cat,dog}((..))[2]           // 'catcat' or 'dogdog'
 ```
 
+String-token alphabets are flat — each token is a distinct item with no internal equivalences. For equivalence groups and word-level matching, see Grouped-class alphabets.
+
 ### Pattern-expression classes
 
 Items in `{...}` may be full Marky pattern expressions, defining a class whose members are all strings any item can match. `((..))` matches any one member. `..` ranges are not supported over pattern-expression classes — only `,` enumeration. Sub-pattern captures inside `{...}` are opaque; only the outer `((..))` group is accessible.
@@ -131,6 +135,38 @@ Items in `{...}` may be full Marky pattern expressions, defining a class whose m
 {{dec}((0..255)), {hex}((0..ff))}((..))              // decimal 0–255 OR hex 0–ff
 {((ha))[2..4], ((ho))[3..6]}((..))                   // 2–4 'ha's OR 3–6 'ho's
 {((key))<<,>>((value)), ((key))<<;>>((value))}((..)) // comma- or semicolon-delimited pair
+```
+
+### Grouped-class alphabets
+
+When items in `{...}` are themselves class expressions, the alphabet defines **equivalence groups** — sets of surface forms that represent the same abstract letter. Each group is one letter in the alphabet regardless of the physical character length of its members. Groups may be enumerated with `,` or ranged with `..`.
+
+`..` between two class expressions is a **zip range** — it steps through corresponding elements of each class in parallel, producing one group per step. Both classes must have the same number of elements; a mismatch is a compile error.
+
+```proto
+{{a,A}..{z,Z}}       // zip: a↔A, b↔B, … z↔Z — 26 groups
+{{a,A},{b,B},{c,C}}  // enumerated: same idea, 3 groups — no zip
+{{a,bc},{def,ghij}}  // enumerated: 2 groups with multi-char tokens
+```
+
+`((..))` on a grouped-class alphabet matches **any string of any length** where each character satisfies one of the groups — word-level matching, not single-character matching.
+
+**Surface forms are transparent.** Literal match, value ranges, and ordering all operate on group indices. `((hello))` in `{{a,A}..{z,Z}}` matches `'hello'`, `'Hello'`, `'HELLO'`, `'hElLo'` — the alphabet defines the equivalence. `((hello..hello))` is a single-value range, identical to `((hello))`.
+
+```proto
+{{a,A}..{z,Z}}((hello))    // any casing of 'hello'
+{{a,A}..{z,Z}}((a..z))     // any single letter, either case
+{{a,A}..{z,Z}}((a..zz))    // any 1–2 letter word, any case
+{{a,A}..{z,Z}}((a..))      // any word, any case, unbounded
+{{a,A}..{z,Z}}((..))       // same — full-range wildcard
+```
+
+**No canonical form restriction.** Grouped-class alphabets have no zero group — all group sequences at all lengths are valid. `"aa"` (group 0 twice) is valid.
+
+**`[count]` enforces same-word equality** under group equivalence — any surface form of the same group sequence counts as equal.
+
+```proto
+{{a,A}..{z,Z}}((..))[2]    // same word twice, any casing: 'Hello' then 'hello' matches
 ```
 
 ## Value Ranges

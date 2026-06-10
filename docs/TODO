@@ -18,7 +18,8 @@
 - [ ] Define per-character exclusion syntax
   - `{a..z,!d..f}` appears in the spec as an example but the `,!char` mechanism inside `{...}` is never formally defined.
 - [ ] Negative lookahead (?!Y)
-- [ ] Case-insensitive
+- [x] Case-insensitive
+  - Resolved natively via grouped-class alphabets: `{{a,A}..{z,Z}}((..))` matches any word any case. Literal matches are alphabet-aware: `((hello))` matches all casings. No `(i)` flag needed as a primitive.
 - [ ] Greedy/lazy toggle on [count]
 - [ ] Unicode categories \p{L}
 - [ ] Add second-layer shortcuts for common patterns
