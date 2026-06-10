@@ -1,5 +1,5 @@
-from himark import parser
-from himark.engine import execute
+from marky import parser
+from marky.engine import execute
 
 
 def run_and_print(pat, target):

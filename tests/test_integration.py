@@ -1,6 +1,6 @@
 import pytest
 
-from himark.parser import parse
+from marky.parser import parse
 
 
 @pytest.mark.parametrize(

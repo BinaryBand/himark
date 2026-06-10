@@ -1,5 +1,5 @@
-from himark import parser
-from himark.parser import phase2
+from marky import parser
+from marky.parser import phase2
 
 
 def dump(node, indent=0):
@@ -33,7 +33,7 @@ if __name__ == "__main__":
             except Exception as e:
                 print("phase3 error:", e)
             try:
-                from himark.engine import execute
+                from marky.engine import execute
 
                 print("execute on [x]:", execute(parser.parse(pat), "[x]"))
             except Exception as e:

@@ -3,8 +3,8 @@
 import re
 from collections.abc import Callable
 
-from himark.models.exceptions import CompileError
-from himark.models.node import HMKNode
+from marky.models.exceptions import CompileError
+from marky.models.node import HMKNode
 
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
 _GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")

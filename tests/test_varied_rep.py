@@ -4,9 +4,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from himark import parser
-from himark.engine import execute
-from himark.utils.varied_rep import VarSpec, collect_var_specs, iter_bindings
+from marky import parser
+from marky.engine import execute
+from marky.utils.varied_rep import VarSpec, collect_var_specs, iter_bindings
 
 
 def run(hmk: str, target: str) -> list[str]:

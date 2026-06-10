@@ -1,9 +1,10 @@
 import pytest
 
 pytest.importorskip("hypothesis")
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
-from himark.parser import parse
+from marky.parser import parse
 
 
 @given(
@@ -35,7 +36,7 @@ def test_sequence_of_bracketed_tokens_preserves_order(tokens):
 
 
 def test_group_numbering_basic():
-    from himark.engine import execute
+    from marky.engine import execute
 
     results = execute(parse("[0..9](1..)[px||em||rem] => {{ 1 }}"), "12px solid")
     assert results == ["12"]

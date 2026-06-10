@@ -2,13 +2,13 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from himark import parser
-from himark.engine import find
-from himark.engine._match import find_matches
-from himark.engine._render import render
-from himark.models.exceptions import CompileError
+from marky import parser
+from marky.engine import find
+from marky.engine._match import find_matches
+from marky.engine._render import render
+from marky.models.exceptions import CompileError
 
-api = FastAPI(title="himark", description="HMK pattern matching API")
+api = FastAPI(title="marky", description="HMK pattern matching API")
 
 
 class Request(BaseModel):

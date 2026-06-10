@@ -1,3 +1,3 @@
-from himark.main import main
+from marky.main import main
 
 main()

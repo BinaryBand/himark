@@ -1,8 +1,8 @@
 from collections.abc import Callable
 
-from himark.engine._types import Match
-from himark.models.node import HMKNode
-from himark.utils.resolver import RESOLVERS as _RESOLVERS
+from marky.engine._types import Match
+from marky.models.node import HMKNode
+from marky.utils.resolver import RESOLVERS as _RESOLVERS
 
 
 def _render_full_match(expr: HMKNode, match: Match) -> str:

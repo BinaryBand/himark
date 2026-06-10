@@ -1,4 +1,4 @@
-# himark
+# marky
 
 A pattern-matching and text-transformation language for people who find regex write-only.
 
@@ -16,7 +16,7 @@ Patterns are readable, composable, and compile to direct execution — no regex 
 ## Install
 
 ```sh
-pip install himark
+poetry install --no-root
 ```
 
 Requires Python 3.11+.
@@ -26,13 +26,13 @@ Requires Python 3.11+.
 ## Usage
 
 ```sh
-himark '<pattern>' '<target>'
+poetry run marky '<pattern>' '<target>'
 
 # file inputs work too
-himark pattern.hmk target.txt
+poetry run marky pattern.hmk target.txt
 
 # pipe pattern to avoid shell quoting issues with || on Windows
-echo '[a||b](1..)' | himark - 'aabbab'
+echo '[a||b](1..)' | poetry run marky - 'aabbab'
 ```
 
 ---
@@ -84,4 +84,4 @@ Each `=>` pipes matched text into the next step. Template variables refer to the
 
 ## Full spec
 
-[docs/HMK.md](docs/HMK.md)
+[docs/MKY.md](docs/MKY.md)

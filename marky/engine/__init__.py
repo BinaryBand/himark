@@ -1,9 +1,9 @@
 """Direct execution engine for parsed HMK expressions."""
 
-from himark.engine._match import find_matches as _find_matches
-from himark.engine._render import render as _render
-from himark.engine._types import Match, MatchCtx
-from himark.models.node import HMKNode
+from marky.engine._match import find_matches as _find_matches
+from marky.engine._render import render as _render
+from marky.engine._types import Match, MatchCtx
+from marky.models.node import HMKNode
 
 __all__ = ["execute", "find", "Match", "MatchCtx"]
 

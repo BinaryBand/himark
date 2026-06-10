@@ -3,8 +3,8 @@ from pathlib import Path
 
 import typer
 
-from himark import parser
-from himark.engine import execute, find
+from marky import parser
+from marky.engine import execute, find
 
 app = typer.Typer()
 
@@ -54,7 +54,7 @@ def serve(
     """Start a local HTTP server exposing the HMK engine as an API."""
     import uvicorn
 
-    from himark.server import api
+    from marky.server import api
 
     typer.echo(f"Serving at http://{host}:{port}  (docs: http://{host}:{port}/docs)")
     uvicorn.run(api, host=host, port=port)

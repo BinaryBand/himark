@@ -5,10 +5,11 @@ Hypothesis tests verify structural properties across arbitrary inputs.
 """
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
-from himark import parser
-from himark.engine import execute
+from marky import parser
+from marky.engine import execute
 
 
 def run(hmk: str, target: str) -> list[str]:

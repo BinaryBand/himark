@@ -2,7 +2,7 @@
 
 import re
 
-from himark.models.node import HMKNode
+from marky.models.node import HMKNode
 
 _parenthesis = r"\(([^)]+)\)"
 _single_brackets = r"\[((?:[^\]\\]|\\.)+)\]"

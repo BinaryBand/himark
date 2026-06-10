@@ -1,8 +1,8 @@
-"""Tests for the SymbolResolver Protocol and central registry (himark/utils/resolver.py)."""
+"""Tests for the SymbolResolver Protocol and central registry (marky/utils/resolver.py)."""
 
-from himark import parser
-from himark.engine import execute
-from himark.utils.resolver import RESOLVERS, SymbolResolver, register
+from marky import parser
+from marky.engine import execute
+from marky.utils.resolver import RESOLVERS, SymbolResolver, register
 
 
 def run(hmk: str, target: str) -> list[str]:

@@ -1,9 +1,10 @@
 import pytest
 
 pytest.importorskip("hypothesis")
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
-from himark.parser import parse, phase2
+from marky.parser import parse, phase2
 
 
 @given(
@@ -43,7 +44,7 @@ def test_two_paren_groups_both_stored_in_options():
     # [a](hex)(1..) — two separate paren groups both end up in the options list
     tree = parse("[a..f](hex)(1..)")[0]
     bracket = tree.children[0]
-    from himark.parser.phase3 import _flatten
+    from marky.parser.phase3 import _flatten
 
     opts = _flatten(bracket.metadata.get("options", []))
     opt_contents = [o.content for o in opts if o.type == "option"]

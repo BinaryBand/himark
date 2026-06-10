@@ -6,7 +6,7 @@ Falls back to the original $expr$ string when the expression is not recognised.
 
 import unicodeit as _unicodeit
 
-from himark.utils.resolver import register
+from marky.utils.resolver import register
 
 
 class _LaTeXResolver:

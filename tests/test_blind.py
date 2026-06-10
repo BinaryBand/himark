@@ -2,9 +2,9 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from himark import parser
-from himark.engine import execute
-from himark.models.exceptions import CompileError
+from marky import parser
+from marky.engine import execute
+from marky.models.exceptions import CompileError
 
 
 def run(hmk: str, target: str) -> list[str]:

@@ -1,5 +1,5 @@
 [project]
-name = "himark"
+name = "marky"
 version = "0.1.0"
 description = ""
 authors = [{ name = "Your Name", email = "you@example.com" }]
@@ -23,14 +23,11 @@ addopts = "-v --tb=short"
 
 
 [project.scripts]
-himark = "himark.main:main"
+marky = "marky.main:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = [
-    "ruff (>=0.15.16,<0.16.0)",
-    "ty (>=0.0.44,<0.0.45)"
-]
+dev = ["ruff (>=0.15.16,<0.16.0)", "ty (>=0.0.44,<0.0.45)", "pytest (>=9.0.3,<10.0.0)", "hypothesis (>=6.155.2,<7.0.0)"]

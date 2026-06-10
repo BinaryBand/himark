@@ -6,7 +6,7 @@ Falls back to the original :code: string when the shortcode is not recognised.
 
 import emoji as _emoji_lib
 
-from himark.utils.resolver import register
+from marky.utils.resolver import register
 
 
 class _EmojiResolver:

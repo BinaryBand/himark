@@ -1,12 +1,12 @@
 from collections.abc import Callable
 
-from himark.engine._types import Match, MatchCtx
-from himark.models.node import HMKNode
-from himark.utils.alphabet import ALPHABETS as _ALPHABETS
-from himark.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
-from himark.utils.alphabet import all_in_alphabet as _all_in_alphabet
-from himark.utils.alphabet import alpha_value as _alpha_value
-from himark.utils.varied_rep import collect_var_specs, iter_bindings
+from marky.engine._types import Match, MatchCtx
+from marky.models.node import HMKNode
+from marky.utils.alphabet import ALPHABETS as _ALPHABETS
+from marky.utils.alphabet import CASE_AGNOSTIC_ALPHABETS as _CASE_AGNOSTIC_ALPHABETS
+from marky.utils.alphabet import all_in_alphabet as _all_in_alphabet
+from marky.utils.alphabet import alpha_value as _alpha_value
+from marky.utils.varied_rep import collect_var_specs, iter_bindings
 
 
 class _SkipTo:
