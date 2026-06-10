@@ -19,6 +19,48 @@ Every `[...]` and `<<...>>` implicitly carries `{unicode}` and `(1)` unless over
 
 ---
 
+## Formal Rules
+
+### Implicit defaults
+
+Every construct expands to the full `{class}[range](count)` form. Omitted components take these defaults:
+
+| Written      | Expands to            |
+| ------------ | --------------------- |
+| `[...]`      | `{unicode}[...](1)`   |
+| `{...}[...]` | `{...}[...](1)`       |
+| `[...](...)` | `{unicode}[...](...)` |
+| `{...}`      | `{...}[..](1)`        |
+| `(...)`      | compile error         |
+
+`{...}` standing alone is a shortcut exception to the modifier-requires-primary rule. It expands to `{...}[..](1)` at parse time before semantic analysis. `{...}` = `{...}[..]` = `{...}[..](1)` are all equivalent.
+
+> `<<...>>` is interchangeable with `[...]` in the first three rows. The `{...}` shorthand expands to `[..]` specifically — `<<..>>` has no equivalent shorthand.
+
+### Full-range wildcard
+
+`[..]` matches the full range of the associated class — any value the class can produce. With the implicit `{unicode}` class, `[..]` matches any single character.
+
+```proto
+{a..z}[..]   // any one lowercase letter     (same as {a..z}[a..z])
+{hex}[..]    // any one hex character         (same as {hex}[0..f])
+[..]         // any one unicode character
+```
+
+### Count ranges
+
+| Form   | Meaning                        |
+| ------ | ------------------------------ |
+| `N`    | Exactly N                      |
+| `N..`  | N or more                      |
+| `..N`  | Zero to N (sugar for `0..N`)   |
+| `N..M` | N to M                         |
+| `..`   | Zero or more (sugar for `0..`) |
+
+`(..)` and `(0..)` are identical.
+
+---
+
 ## Match
 
 `[text]` matches a literal string and captures it.

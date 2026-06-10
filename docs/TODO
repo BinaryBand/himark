@@ -3,9 +3,9 @@
 - [x] Value range semantics are undefined
   - The spec says matching is "under the class ordering" but the examples imply numeric semantics.
 - [x] `<<sep>>` semantics are under-defined
-  - `<<\n>>`, `<<>>`, `[**]<<>>[**]` don't follow a single, coherent rule.
-- [ ] `[...]` is overloaded without disambiguation rules
-  - Clearer now: `{class}` prefix → value range, no prefix → literal, `:` → padding. Disambiguation rules not yet written as a formal parsing rule.
+  - `<<\n>>`, `<<>>`, `[**]<<>>[**]` don't follow a unified, coherent rule.
+- [x] `[...]` is overloaded without disambiguation rules
+  - Resolved: `{class}` prefix → value range, no prefix → literal, `:` → padding. Formalized in the Implicit Defaults table. Nested range slots fall out from root transparency — no behavioral consequence to disambiguate.
 - [x] Does `<<sep>>` form a capture group?
   - Yes. Every `[...]` and `<<...>>` creates a capture group; this is now the core rule.
 - [ ] Three-argument repetition range `2..n..5` is unexplained
@@ -16,4 +16,4 @@
 - [ ] Formalize transformer chain nesting notation
 - [ ] Define per-character exclusion syntax
   - `{a..z,!d..f}` appears in the spec as an example but the `,!char` mechanism inside `{...}` is never formally defined.
-- [ ] Add shortcuts second layer shortcuts
+- [ ] Add second-layer shortcuts for common patterns
