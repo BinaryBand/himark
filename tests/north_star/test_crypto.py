@@ -14,6 +14,14 @@ def matches(pattern, text):
 
 BTC = "{1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}"
 
+# The same pattern written with singleton constructors instead of literal runs.
+BTC_SINGLETON = "{1}{{1}[23]..{b58}..{z}[33]}"
+
+
+def test_btc_singleton_form_is_equivalent():
+    addr = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+    assert matches(BTC, addr) == matches(BTC_SINGLETON, addr)
+
 
 def test_btc_genesis_address():
     assert "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" in matches(

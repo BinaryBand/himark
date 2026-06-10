@@ -146,60 +146,120 @@ def _parse_inner_brace_items(brace_text: str) -> list[str]:
     return [s.strip(" \t") for s in _split_top(",", brace_text[1:-1])]
 
 
+def _brace_end(expr: str) -> int | None:
+    """Index just past the '}' matching the '{' at position 0, or None if unbalanced."""
+    depth = 0
+    for i, ch in enumerate(expr):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return None
+
+
+def _inner_of(part: str) -> str:
+    """Return the content inside the outer braces of an α part like '{a..z}'."""
+    end = _brace_end(part)
+    return part[1 : end - 1] if end is not None else part[1:-1]
+
+
+def _singleton_value(expr: str) -> str | None:
+    """Return the single concrete value of `expr` if it has cardinality 1, else None.
+
+    A singleton is τ: a bare literal, or a `{...}` (with an optional exact `[N]`
+    count) whose inner expression is itself a singleton. `{a}` is implicitly
+    `{a}[1]`, so `{a}[3]` → 'aaa'. Named alphabets, unions, value ranges, and
+    range-counts all have cardinality > 1 and yield None.
+    """
+    expr = expr.strip(" \t")
+    if not expr:
+        return None
+    if expr.startswith("{"):
+        end = _brace_end(expr)
+        if end is None:
+            return None
+        inner_val = _singleton_value(expr[1 : end - 1])
+        if inner_val is None:
+            return None
+        rest = expr[end:]
+        if not rest:
+            return inner_val
+        m = re.fullmatch(r"\[(\d+)\]", rest)
+        return inner_val * int(m.group(1)) if m else None
+    if is_named_alpha(expr):
+        return None
+    if len(_split_top(",", expr)) > 1 or len(_split_top("..", expr)) > 1:
+        return None
+    return expr
+
+
 def _resolve_arm(arm: str) -> HMKNode:
-    """Resolve one arm (no top-level commas) into a typed node."""
+    """Resolve one arm (no top-level commas) into a typed node.
+
+    Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
+    one concrete value; anything else is an abstract group (α).
+    """
     parts = [p.strip(" \t") or p for p in _split_top("..", arm)]
+    svals = [_singleton_value(p) for p in parts]
 
     if len(parts) == 1:
-        part = parts[0]
+        part, sval = parts[0], svals[0]
         if part.startswith("{"):
+            if sval is not None:
+                # Singleton {…} → literal match of its single value
+                return HMKNode("literal", sval)
             # α — full range (any length, any value in the alphabet)
-            inner = _resolve_brace(part[1:-1])
-            return HMKNode("full_alpha", arm, [inner])
+            return HMKNode("full_alpha", arm, [_resolve_brace(_inner_of(part))])
         if is_named_alpha(part):
             return HMKNode("named_alpha", part, metadata={"name": part})
         return HMKNode("literal", part)
 
     if len(parts) == 2:
         a, b = parts
-        a_alpha, b_alpha = a.startswith("{"), b.startswith("{")
+        av, bv = svals
 
-        if not a_alpha and not b_alpha:
+        if av is not None and bv is not None:
             # τ..τ — single-char character range
-            if len(a) != 1 or len(b) != 1:
+            if len(av) != 1 or len(bv) != 1:
                 raise CompileError(
                     f"Character range endpoints must be single characters: {arm!r}"
                 )
-            return HMKNode("char_range", arm, metadata={"start": a, "end": b})
+            return HMKNode("char_range", arm, metadata={"start": av, "end": bv})
 
-        if a_alpha and not b_alpha:
+        if av is None and bv is not None:
             # α..τ — upper bound
-            alpha_node = _resolve_brace(a[1:-1])
+            alpha_node = _resolve_brace(_inner_of(a))
             return HMKNode(
-                "upper_bound", arm, metadata={"alpha": alpha_node, "upper": b}
+                "upper_bound", arm, metadata={"alpha": alpha_node, "upper": bv}
             )
 
-        if not a_alpha and b_alpha:
+        if av is not None and bv is None:
             # τ..α — lower bound
-            alpha_node = _resolve_brace(b[1:-1])
+            alpha_node = _resolve_brace(_inner_of(b))
             return HMKNode(
-                "lower_bound", arm, metadata={"lower": a, "alpha": alpha_node}
+                "lower_bound", arm, metadata={"lower": av, "alpha": alpha_node}
             )
 
         # α..α — zip range
-        left = _resolve_brace(a[1:-1])
-        right = _resolve_brace(b[1:-1])
+        left = _resolve_brace(_inner_of(a))
+        right = _resolve_brace(_inner_of(b))
         return HMKNode("zip_range", arm, metadata={"left": left, "right": right})
 
     if len(parts) == 3:
         a, b, c = parts
-        if a.startswith("{") or c.startswith("{") or not b.startswith("{"):
+        av, bv, cv = svals
+        # Bounded range must be τ..α..τ — singleton endpoints, abstract middle.
+        if av is None or cv is None or bv is not None:
             raise CompileError(
                 f"Bounded range must be τ..α..τ (e.g. aa..{{dec}}..zz), got: {arm!r}"
             )
-        alpha_node = _resolve_brace(b[1:-1])
+        alpha_node = _resolve_brace(_inner_of(b))
         return HMKNode(
-            "bounded_range", arm, metadata={"lower": a, "alpha": alpha_node, "upper": c}
+            "bounded_range",
+            arm,
+            metadata={"lower": av, "alpha": alpha_node, "upper": cv},
         )
 
     raise CompileError(f"Too many '..' separators in: {arm!r}")

@@ -90,6 +90,56 @@ def test_full_alpha():
     assert node.children[0].type == "char_range"
 
 
+# ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
+
+
+def test_singleton_value_helper():
+    from marky.parser.phase3 import _singleton_value
+
+    # Singletons (τ): bare literals and {literal}[N] with exact count.
+    assert _singleton_value("hello") == "hello"
+    assert _singleton_value("{a}") == "a"
+    assert _singleton_value("{a}[3]") == "aaa"
+    assert _singleton_value("{hello}[2]") == "hellohello"
+    assert _singleton_value("{ {a}[2] }[3]") == "aaaaaa"  # nested singletons
+
+    # Non-singletons (α) → None.
+    assert _singleton_value("dec") is None  # named alphabet
+    assert _singleton_value("{a..z}") is None  # range
+    assert _singleton_value("{a..z}[3]") is None  # range inner
+    assert _singleton_value("{a,b}") is None  # union
+    assert _singleton_value("{a}[2..4]") is None  # range count
+
+
+def test_singleton_bounded_range_synonym():
+    # {z}[3] is a singleton τ, equivalent to writing the literal 'zzz'.
+    node = first_semantic("{{1}[3]..{a..z}..{z}[3]}")
+    assert node.type == "bounded_range"
+    assert node.metadata["lower"] == "111"
+    assert node.metadata["upper"] == "zzz"
+    assert node.metadata["alpha"].type == "char_range"
+
+
+def test_singleton_upper_bound():
+    # α..τ where τ is a singleton constructor.
+    node = first_semantic("{{dec}..{9}[3]}")
+    assert node.type == "upper_bound"
+    assert node.metadata["upper"] == "999"
+
+
+def test_singleton_lower_bound():
+    node = first_semantic("{{0}[3]..{dec}}")
+    assert node.type == "lower_bound"
+    assert node.metadata["lower"] == "000"
+
+
+def test_singleton_single_part_is_literal():
+    # A standalone singleton {…} resolves to a literal, not a full_alpha.
+    node = first_semantic("{{ab}[2]}")
+    assert node.type == "literal"
+    assert node.content == "abab"
+
+
 # ── Union / token_set / group_class ─────────────────────────────────────────
 
 

@@ -22,8 +22,10 @@ These compose as `{expr}[count]` and `<<sep>>[count]`.
 
 Expressions inside `{...}` are built from two types:
 
-- **$\tau$** — a concrete string: `hello`, `a`, `ff`, `\n`
+- **$\tau$** — any expression with cardinality 1: a bare string (`hello`, `a`, `ff`, `\n`), or a `{...}` whose only possible value is a single concrete string
 - **$\alpha$** — an abstract group: a `{...}` expression representing every value it can produce
+
+Every `{expr}` without an explicit count has an implicit `[1]`. This makes `{hello}` identical to `{hello}[1]` — and since it can only produce one value, it is $\tau$. The τ/α distinction is therefore about **cardinality**, not syntax: cardinality 1 is τ, cardinality > 1 is α.
 
 | Form                         | Meaning                       |
 | ---------------------------- | ----------------------------- |
@@ -37,7 +39,20 @@ Expressions inside `{...}` are built from two types:
 
 `,` joins expressions as a union. `{!expr}` is the complement — any value NOT in the group.
 
-A bare value inside `{...}` is $\tau$; a nested `{...}` sub-expression is $\alpha$. This determines which row of the table applies.
+Which row applies is determined by cardinality. A bare string is always τ. A `{...}` sub-expression is τ if it is a singleton (e.g. `{z}[33]` → `"zzz…z"`), α otherwise.
+
+```proto
+{a..z, A..Z, 0..9}    // alphanumeric
+{a..z, !d..f}         // lowercase, excluding d–f
+```
+
+Singleton `{...}` expressions used as bounds evaluate to their single concrete value at parse time:
+
+```proto
+{{1}[23]..{b58}..{z}[33]}  // b58 body bounded to the P2PKH value range
+```
+
+A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range). `{a}[3]` → `"aaa"` ✓. `{a..z}[3]` ✗ (inner has cardinality 26). `{a}[2..4]` ✗ (count is a range).
 
 ```proto
 {a..z, A..Z, 0..9}    // alphanumeric
