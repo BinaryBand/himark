@@ -1,0 +1,36 @@
+[project]
+name = "himark"
+version = "0.1.0"
+description = ""
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.11"
+dependencies = [
+    "emoji>=2.0",
+    "unicodeit>=0.7",
+    "typer>=0.9",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0", "hypothesis>=6.50", "pytest-cov"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+
+
+[project.scripts]
+himark = "himark.main:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.15.16,<0.16.0)",
+    "ty (>=0.0.44,<0.0.45)"
+]
