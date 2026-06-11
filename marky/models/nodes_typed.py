@@ -98,43 +98,43 @@ class StringRangeNode:
     end: str = ""
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class FullAlphaNode:
+    inner: SemanticNode
     type: Literal["full_alpha"] = "full_alpha"
-    inner: SemanticNode | None = None
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class UpperBoundNode:
+    alpha: SemanticNode
     type: Literal["upper_bound"] = "upper_bound"
-    alpha: SemanticNode | None = None
     upper: str = ""
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class LowerBoundNode:
+    alpha: SemanticNode
     type: Literal["lower_bound"] = "lower_bound"
     lower: str = ""
-    alpha: SemanticNode | None = None
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class BoundedRangeNode:
+    alpha: SemanticNode
     type: Literal["bounded_range"] = "bounded_range"
     lower: str = ""
-    alpha: SemanticNode | None = None
     upper: str = ""
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class ZipRangeNode:
+    left: SemanticNode
+    right: SemanticNode
     type: Literal["zip_range"] = "zip_range"
-    left: SemanticNode | None = None
-    right: SemanticNode | None = None
 
 
 @dataclass(slots=True)
@@ -144,10 +144,10 @@ class UnionNode:
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class ComplementNode:
+    inner: SemanticNode
     type: Literal["complement"] = "complement"
-    inner: SemanticNode | None = None
 
 
 @dataclass(slots=True)
@@ -164,10 +164,10 @@ class GroupClassNode:
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class PaddedNode:
+    inner: SemanticNode
     type: Literal["padded"] = "padded"
-    inner: SemanticNode | None = None
     width: int | None = None
 
 

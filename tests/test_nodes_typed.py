@@ -37,7 +37,9 @@ def test_typed_count_and_refs():
 
 
 def test_semantic_payload_fields():
-    bounded = BoundedRangeNode(lower="10", upper="20")
+    bounded = BoundedRangeNode(
+        lower="10", alpha=CharRangeNode(start="0", end="9"), upper="20"
+    )
     tokens = TokenSetNode(tokens=["cat", "dog"], exclusions=["dog"])
 
     assert bounded.type == "bounded_range"

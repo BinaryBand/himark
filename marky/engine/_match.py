@@ -10,13 +10,6 @@ from marky.utils.alphabet import alpha_value
 _MAX_MATERIALIZE = 0x10000
 
 
-def _req(node: t.SemanticNode | None) -> t.SemanticNode:
-    """Unwrap an operand field that the parser always populates."""
-    if node is None:
-        raise ValueError("missing semantic operand")
-    return node
-
-
 class _State:
     __slots__ = ("captures", "spans", "sub_groups", "count_refs")
 
@@ -325,7 +318,7 @@ def _match_string_range(node: t.StringRangeNode, text: str, pos: int) -> int | N
 
 def _match_full_alpha(node: t.FullAlphaNode, text: str, pos: int) -> int | None:
     """Greedy: consume 1+ chars that each match the inner alpha node."""
-    inner = _req(node.inner)
+    inner = node.inner
     excl = node.exclusions
     end = pos
     while end < len(text):
@@ -363,18 +356,18 @@ def _value_bounds(
     (a single value or a `v1..v2` sub-range) checked numerically at match time.
     """
     if isinstance(node, t.UpperBoundNode):
-        alph = _alpha_str(_req(node.alpha))
+        alph = _alpha_str(node.alpha)
         return alph, None, alpha_value(node.upper, alph), node.exclusions
     if isinstance(node, t.LowerBoundNode):
-        alph = _alpha_str(_req(node.alpha))
+        alph = _alpha_str(node.alpha)
         return alph, alpha_value(node.lower, alph), None, node.exclusions
     if isinstance(node, t.BoundedRangeNode):
-        alph = _alpha_str(_req(node.alpha))
+        alph = _alpha_str(node.alpha)
         lo = alpha_value(node.lower, alph)
         hi = alpha_value(node.upper, alph)
         return alph, lo, hi, node.exclusions
     if isinstance(node, t.FullAlphaNode):
-        return _alpha_str(_req(node.inner)), None, None, node.exclusions
+        return _alpha_str(node.inner), None, None, node.exclusions
     raise ValueError(f"{type(node).__name__} has no value bounds")
 
 
@@ -423,8 +416,8 @@ def _match_value_range(node: t.SemanticNode, text: str, pos: int) -> int | None:
 def _build_zip_groups(node: t.ZipRangeNode) -> list[list[str]]:
     """Expand zip_range into a list of groups (one list of equivalent chars each)."""
     try:
-        left_alph = _alpha_str(_req(node.left))
-        right_alph = _alpha_str(_req(node.right))
+        left_alph = _alpha_str(node.left)
+        right_alph = _alpha_str(node.right)
     except (ValueError, CompileError):
         return []
 
@@ -433,8 +426,8 @@ def _build_zip_groups(node: t.ZipRangeNode) -> list[list[str]]:
 
     # Each position i in left corresponds to position i in right, but left and
     # right are multi-member groups (e.g. {a,A} and {z,Z}) expanded in parallel.
-    left_members = _group_members(_req(node.left))
-    right_members = _group_members(_req(node.right))
+    left_members = _group_members(node.left)
+    right_members = _group_members(node.right)
     if len(left_members) != len(right_members):
         return []
 
@@ -564,7 +557,7 @@ def _is_excluded(val: str, exclusions: list[str]) -> bool:
 
 def _match_complement(node: t.ComplementNode, text: str, pos: int) -> int | None:
     """Greedily consume chars NOT matching the inner node."""
-    inner = _req(node.inner)
+    inner = node.inner
     end = pos
     while end < len(text):
         if _match_semantic(inner, text, end) is not None:
@@ -607,7 +600,7 @@ def _match_group_class(node: t.GroupClassNode, text: str, pos: int) -> int | Non
 
 
 def _match_padded(node: t.PaddedNode, text: str, pos: int) -> int | None:
-    inner = _req(node.inner)
+    inner = node.inner
     width = node.width
 
     if width is not None:
