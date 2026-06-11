@@ -341,16 +341,23 @@ def _alpha_str(node: t.SemanticNode) -> str:
             )
         return "".join(chr(c) for c in range(ord(s), ord(e) + 1))
     if isinstance(node, t.UnionNode):
-        s = "".join(_alpha_str(ch) for ch in node.options)
-        if len(set(s)) != len(s):
-            raise CompileError(
-                "Alphabet has duplicate symbols — symbol values would be "
-                "ambiguous; use congruence (<->) for case-folding"
-            )
-        return s
+        return "".join(_alpha_str(ch) for ch in node.options)
     if isinstance(node, t.LiteralNode):
         return node.content
     raise ValueError(f"Cannot extract alphabet from {type(node).__name__}")
+
+
+def _bound_alpha(node: t.SemanticNode) -> str:
+    """Alphabet for a `..`-endpoint (value arithmetic): symbols must be
+    distinct, or positional values would be ambiguous. Membership-only
+    alphabets (full_alpha) tolerate duplicates."""
+    alph = _alpha_str(node)
+    if len(set(alph)) != len(alph):
+        raise CompileError(
+            "Alphabet has duplicate symbols — symbol values would be "
+            "ambiguous; use congruence (<->) for case-folding"
+        )
+    return alph
 
 
 def _value_bounds(
@@ -365,14 +372,14 @@ def _value_bounds(
     the 2-char lowercase strings.
     """
     if isinstance(node, t.UpperBoundNode):
-        alph = _alpha_str(node.alpha)
+        alph = _bound_alpha(node.alpha)
         return alph, None, alpha_value(node.upper, alph), node.exclusions, 1
     if isinstance(node, t.LowerBoundNode):
-        alph = _alpha_str(node.alpha)
+        alph = _bound_alpha(node.alpha)
         lo = alpha_value(node.lower, alph)
         return alph, lo, None, node.exclusions, len(node.lower)
     if isinstance(node, t.BoundedRangeNode):
-        alph = _alpha_str(node.alpha)
+        alph = _bound_alpha(node.alpha)
         lo = alpha_value(node.lower, alph)
         hi = alpha_value(node.upper, alph)
         return alph, lo, hi, node.exclusions, len(node.lower)
@@ -534,25 +541,42 @@ def _match_group_equal(
 ) -> int | None:
     """Match a group_class repetition that must be group-equivalent to first_val.
 
-    Single-char members map each char to its group index; the repetition is equal
-    when it has the same group sequence (so `a<->A` makes 'a' and 'A' equal). If
-    any member is multi-char, fall back to literal equality.
-    """
-    char_to_group: dict[str, int] = {}
-    for idx, grp in enumerate(node.groups):
-        for m in grp:
-            if len(m) != 1:
-                n = len(first_val)
-                return pos + n if text[pos : pos + n] == first_val else None
-            char_to_group[m] = idx
-    n = len(first_val)
-    candidate = text[pos : pos + n]
-    if len(candidate) != n:
+    Repetition-equality is checked against the congruence group: first_val is
+    tokenized into a group-index sequence, and the repetition must walk the
+    same sequence — any member of each group, so `a<->bc` makes 'a' and 'bc'
+    equal (and repetitions may differ in surface length)."""
+    members = sorted(
+        ((m, idx) for idx, grp in enumerate(node.groups) for m in grp if m),
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
+    seq = _group_seq(first_val, members)
+    if seq is None:
         return None
-    for a, b in zip(first_val, candidate):
-        if a not in char_to_group or char_to_group.get(b) != char_to_group[a]:
+    cur = pos
+    for gidx in seq:
+        for m, idx in members:
+            if idx == gidx and text.startswith(m, cur):
+                cur += len(m)
+                break
+        else:
             return None
-    return pos + n
+    return cur
+
+
+def _group_seq(s: str, members: list[tuple[str, int]]) -> list[int] | None:
+    """Tokenize `s` into a group-index sequence (longest member first)."""
+    seq: list[int] = []
+    i = 0
+    while i < len(s):
+        for m, idx in members:
+            if s.startswith(m, i):
+                seq.append(idx)
+                i += len(m)
+                break
+        else:
+            return None
+    return seq
 
 
 def _match_union(node: t.UnionNode, text: str, pos: int) -> int | None:

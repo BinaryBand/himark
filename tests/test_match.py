@@ -358,6 +358,17 @@ def test_grouped_word_repetition_mixed():
     assert matches("{a<->A..z<->Z}[2]", "abAB") == ["abAB"]
 
 
+def test_multichar_group_repetition():
+    # Repetition-equality is group-based even for multi-char members:
+    # 'a' and 'bc' share a group, so repetitions may differ in surface length.
+    result = matches("{a<->bc}[2]", "abc aa bcbc bca xy")
+    assert "abc" in result
+    assert "aa" in result
+    assert "bcbc" in result
+    assert "bca" in result
+    assert "xy" not in result
+
+
 # ── Separator ─────────────────────────────────────────────────────────────────
 
 

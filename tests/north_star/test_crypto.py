@@ -49,10 +49,11 @@ def test_btc_leading_one_required():
 
 
 # ── Ethereum ──────────────────────────────────────────────────────────────────
-# 0x prefix + exactly 40 hex digits (case-insensitive).
-# {0..9,a..f,A..F} is a char union; {40: ...} enforces the fixed width.
+# 0x prefix + exactly 40 hex digits (case-insensitive). The doc form: a
+# membership-only union (duplicate digits are harmless without a value bound)
+# width-fixed to 40.
 
-ETH = "{0x}{40: {0..9,a..f,A..F}}"
+ETH = "{0x}{40:{@hex,@HEX}}"
 
 
 def test_eth_valid_address():

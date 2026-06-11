@@ -26,9 +26,9 @@ Himark is designed to be strictly logically consistent at the cost of brevity. T
 
 ### Implicit Containers
 
-Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement is not wrapped at root, we can assume it's implicitly `{}` wrapped before tokenization.
+Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement contains no `{}` or `<<>>` construct at all, it is implicitly `{}` wrapped before tokenization. A step that already contains a construct is never rewrapped -- its bare text is literal.
 
-**E.g.:** {0..9}..5 $\to$ {{0..9}..5}
+**E.g.:** a..z $\to$ {a..z}
 
 ### Macros
 
@@ -91,7 +91,7 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 ```proto
 {a..z,A..Z,0..9}  // alphanumeric
 {a..z,!d..f}      // lowercase, excluding d, e, through f
-{{@d}..255}     // decimal: 0, 1, through '255'
+{{@d}..255}       // decimal: 0, 1, through '255'
 {{@hex}..ff}      // hex: 0, 1, through 'ff'
 {m..{a..z}}       // lowercase: m, n, and upward
 {m..{a..z}..zz}   // lowercase: m, n, through 'zz'
@@ -103,8 +103,8 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 
 ```proto
 {aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
-{aa..{a..z}..zz,!ee..ff}   // 2-char lowercase, excluding 'ee', 'ef', 'fe`, and 'ff'
-{{@d}..255,!128..191}     // decimal 0, 1, through '255', excluding '128', '129', through '191'
+{aa..{a..z}..zz,!ee..ff}   // 2-char lowercase, excluding 'ee', 'ef', 'fe', and 'ff'
+{{@d}..255,!128..191}      // decimal 0, 1, through '255', excluding '128', '129', through '191'
 ```
 
 ### Padding
@@ -115,11 +115,11 @@ A multi-character lower endpoint sets a **minimum width**: values are zero-padde
 
 Padding relaxes the width:
 
-| Form         | Width                              |
-| ------------ | ---------------------------------- |
-| `{N:expr}`   | Exactly `N`, zero-character padded |
-| `{N..M:expr}`| `N` through `M`                    |
-| `{:expr}`    | 1 through `len(max)`               |
+| Form          | Width                              |
+| ------------- | ---------------------------------- |
+| `{N:expr}`    | Exactly `N`, zero-character padded |
+| `{N..M:expr}` | `N` through `M`                    |
+| `{:expr}`     | 1 through `len(max)`               |
 
 ```proto
 {2:{@d}..99}     // '00', '01', through '99'
