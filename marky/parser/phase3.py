@@ -4,8 +4,8 @@ Transforms:
   brace_group  → literal | char_range | full_alpha |
                  upper_bound | lower_bound | bounded_range | zip_range |
                  union | complement | token_set | group_class | padded
-  double_braces → full_match | group_ref | span_ref | count_ref | emoji | latex
-  separator    → separator (with parsed count metadata)
+  double_braces → template node (see parser/templates.py)
+  separator    → separator (resolved to sep_value or sep_class)
 
 A brace group whose content holds a top-level `<<...>>` is not arithmetic — it
 encloses a pattern sub-sequence (e.g. `{**<<>>**}`). Such a brace is transparent:
@@ -18,6 +18,8 @@ import re
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser import phase2
+from marky.parser._text import brace_end, inner_of, split_top, strict_split, unescape
+from marky.parser.templates import parse_template_expr
 
 # Semantic node kinds that carry an `exclusions` field.
 _EXCLUDABLE = (
@@ -31,21 +33,15 @@ _EXCLUDABLE = (
     t.GroupClassNode,
 )
 
+_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
+_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
+
 
 def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.SemanticNode:
     """Set `exclusions` on a node that supports them; ignore for those that don't."""
     if exclusions and isinstance(node, _EXCLUDABLE):
         node.exclusions = exclusions
     return node
-
-
-_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
-_SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
-_GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
-_EMOJI_RE = re.compile(r"^:([^:]+):$")
-_LATEX_RE = re.compile(r"^\$(.+)\$$", re.DOTALL)
-_COUNT_REF_EXPR_RE = re.compile(r"^#(\d+)$")
-_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
 
 
 def parse(node: t.RootNode) -> t.RootNode:
@@ -71,7 +67,7 @@ def parse(node: t.RootNode) -> t.RootNode:
                 child.count_src = None
             new_children.append(child)
         elif isinstance(child, t.DoubleBracesNode):
-            new_children.append(_parse_template_expr(child.content))
+            new_children.append(parse_template_expr(child.content))
         elif isinstance(child, t.SeparatorNode):
             if child.count_src is not None:
                 raise CompileError(
@@ -101,8 +97,8 @@ def _resolve_separator(node: t.SeparatorNode) -> None:
     if not content:
         return
 
-    dot_parts = _split_top("..", content)
-    comma_parts = _split_top(",", content)
+    dot_parts = split_top("..", content)
+    comma_parts = split_top(",", content)
     has_ops = len(dot_parts) > 1 or len(comma_parts) > 1 or content.startswith("{")
 
     # τ: bare constant with no arithmetic operators (<<\n>>, << >>, <<abc>>)
@@ -151,21 +147,23 @@ def _has_top_level_separator(content: str) -> bool:
     return False
 
 
+def _parse_padding(content: str) -> tuple[tuple[int, int | None] | None, str]:
+    """Strip a padding prefix ({N: }, {N..M: }, {: }) → ((min, max), rest)."""
+    pm = _PADDING_RE.match(content)
+    if not pm:
+        return None, content
+    spec, rest = pm.group(1), pm.group(2)
+    if not spec:
+        return (1, None), rest  # {:expr} — engine derives max from the range
+    if ".." in spec:
+        lo, hi = spec.split("..", 1)
+        return (int(lo), int(hi)), rest
+    return (int(spec), int(spec)), rest
+
+
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
-    # Padding prefix: {N: expr}, {N..M: expr}, or {: expr}
-    pad: tuple[int, int | None] | None = None
-    pm = _PADDING_RE.match(content)
-    if pm:
-        spec = pm.group(1)
-        if not spec:
-            pad = (1, None)  # {:expr} — engine derives max from the inner range
-        elif ".." in spec:
-            lo, hi = spec.split("..", 1)
-            pad = (int(lo), int(hi))
-        else:
-            pad = (int(spec), int(spec))
-        content = pm.group(2)
+    pad, content = _parse_padding(content)
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")
@@ -175,13 +173,11 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     # Split on top-level commas. Whitespace is significant — reject leading/trailing
     # spaces on arms unless the arm is purely whitespace (e.g. { } = literal space)
     # or is a single nested-brace arm needing disambiguation space (e.g. { {a..z} }).
-    raw_arms = _split_top(",", content)
+    raw_arms = split_top(",", content)
     arms = []
     for a in raw_arms:
         stripped = a.strip(" \t")
-        if stripped == "":
-            arms.append(a)  # pure-whitespace: literal space arm
-        elif stripped != a:
+        if stripped and stripped != a:
             if len(raw_arms) == 1 and stripped.startswith("{"):
                 arms.append(stripped)  # single nested-brace: disambiguation space
             else:
@@ -193,14 +189,8 @@ def _resolve_brace(content: str) -> t.SemanticNode:
             arms.append(a)
 
     # Separate exclusion arms (!value or !v1..v2)
-    include_arms = []
-    exclusions: list[str] = []
-    for arm in arms:
-        if arm.startswith("!"):
-            exclusions.append(arm[1:].strip())
-        else:
-            include_arms.append(arm)
-
+    exclusions = [a[1:].strip() for a in arms if a.startswith("!")]
+    include_arms = [a for a in arms if not a.startswith("!")]
     if not include_arms:
         raise CompileError(f"Empty brace group: {{{content}}}")
 
@@ -208,10 +198,8 @@ def _resolve_brace(content: str) -> t.SemanticNode:
 
     if is_complement:
         node = t.ComplementNode(inner=node)
-
     if pad is not None:
         node = t.PaddedNode(inner=node, min_width=pad[0], max_width=pad[1])
-
     return node
 
 
@@ -223,76 +211,44 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     # All arms are brace sub-expressions → group_class. Members must be
     # singletons — a range of groups is written with `<->` ranges instead.
     if all(a.startswith("{") for a in arms):
-        groups = []
-        for a in arms:
-            members = []
-            for item in _parse_inner_brace_items(a):
-                sv = _singleton_value(item)
-                if sv is None:
-                    raise CompileError(
-                        f"Group members must be singletons, got: {item!r} "
-                        f"(a range of groups is written a<->A..z<->Z)"
-                    )
-                members.append(sv)
-            groups.append(members)
+        groups = [_group_members(a) for a in arms]
         return _attach_exclusions(t.GroupClassNode(groups=groups), exclusions)
 
-    bare_arms = [a for a in arms if not a.startswith("{")]
-    brace_arms = [a for a in arms if a.startswith("{")]
-
-    # Mixed brace + bare → union
-    if brace_arms:
+    # Any brace arm mixed with bare arms → plain union.
+    if any(a.startswith("{") for a in arms):
         options = [_resolve_arm(a) for a in arms]
         return _attach_exclusions(t.UnionNode(options=options), exclusions)
 
-    # All bare — any multi-char token (not a single-char range like a..z, and
-    # not a single escaped char like \! )?
+    # All bare. Any multi-char token (not a range, not a lone escaped char)
+    # makes this a string-token alphabet.
     has_multi = any(
         len(a) > 1
-        and not (len(a) == 4 and a[1:3] == "..")  # not a..b form
-        and not (len(a) == 2 and a.startswith("\\"))  # not an escaped char
         and ".." not in a
-        for a in bare_arms
+        and not (len(a) == 2 and a.startswith("\\"))  # not an escaped char
+        for a in arms
     )
     if has_multi:
-        return _attach_exclusions(t.TokenSetNode(tokens=bare_arms), exclusions)
+        return _attach_exclusions(t.TokenSetNode(tokens=arms), exclusions)
 
     # Single-char or single-char ranges → union
     options = [_resolve_arm(a) for a in arms]
     return _attach_exclusions(t.UnionNode(options=options), exclusions)
 
 
-def _parse_inner_brace_items(brace_text: str) -> list[str]:
-    """Return the top-level comma-separated items inside a {…} expression."""
+def _group_members(brace_text: str) -> list[str]:
+    """Resolve a `{…}` group arm into its singleton member values."""
     if not (brace_text.startswith("{") and brace_text.endswith("}")):
         raise CompileError(f"Expected brace expression, got: {brace_text!r}")
-    items = _split_top("<->", brace_text[1:-1])
-    for item in items:
-        stripped = item.strip(" \t")
-        if stripped and stripped != item:
+    members = []
+    for item in strict_split("<->", brace_text[1:-1], brace_text):
+        sv = _singleton_value(item)
+        if sv is None:
             raise CompileError(
-                f"Unexpected whitespace in {brace_text!r}: remove spaces around '<->'"
+                f"Group members must be singletons, got: {item!r} "
+                f"(a range of groups is written a<->A..z<->Z)"
             )
-    return [s.strip(" \t") or s for s in items]
-
-
-def _brace_end(expr: str) -> int | None:
-    """Index just past the '}' matching the '{' at position 0, or None if unbalanced."""
-    depth = 0
-    for i, ch in enumerate(expr):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return i + 1
-    return None
-
-
-def _inner_of(part: str) -> str:
-    """Return the content inside the outer braces of an α part like '{a..z}'."""
-    end = _brace_end(part)
-    return part[1 : end - 1] if end is not None else part[1:-1]
+        members.append(sv)
+    return members
 
 
 def _singleton_value(expr: str) -> str | None:
@@ -307,7 +263,7 @@ def _singleton_value(expr: str) -> str | None:
     if not expr:
         return None
     if expr.startswith("{"):
-        end = _brace_end(expr)
+        end = brace_end(expr)
         if end is None:
             return None
         inner_val = _singleton_value(expr[1 : end - 1])
@@ -318,9 +274,14 @@ def _singleton_value(expr: str) -> str | None:
             return inner_val
         m = re.fullmatch(r"\[(\d+)\]", rest)
         return inner_val * int(m.group(1)) if m else None
-    if len(_split_top(",", expr)) > 1 or len(_split_top("..", expr)) > 1:
+    if len(split_top(",", expr)) > 1 or len(split_top("..", expr)) > 1:
         return None
     return expr
+
+
+def _alpha(part: str) -> t.SemanticNode:
+    """Resolve an α part like '{a..z}' into its class node."""
+    return _resolve_brace(inner_of(part))
 
 
 def _resolve_arm(arm: str) -> t.SemanticNode:
@@ -329,18 +290,11 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
     one concrete value; anything else is an abstract group (α).
     """
-    parts = _split_top("..", arm)
-    for p in parts:
-        stripped = p.strip(" \t")
-        if stripped and stripped != p:
-            raise CompileError(
-                f"Unexpected whitespace in '{arm}': remove spaces around '..'"
-            )
-    parts = [p.strip(" \t") or p for p in parts]
+    parts = strict_split("..", arm, arm)
 
     # `<->` (congruence) binds tighter than `..`. If any `..`-part holds a
     # top-level `<->`, the arm is a congruence group or a range of them.
-    cong = [_split_top("<->", p) for p in parts]
+    cong = [split_top("<->", p) for p in parts]
     if any(len(c) > 1 for c in cong):
         return _resolve_congruence(parts, cong)
 
@@ -353,43 +307,31 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 # Singleton {…} → literal match of its single value
                 return t.LiteralNode(content=sval)
             # α — full range (any length, any value in the alphabet)
-            return t.FullAlphaNode(inner=_resolve_brace(_inner_of(part)))
-        return t.LiteralNode(content=_unescape(part))
+            return t.FullAlphaNode(inner=_alpha(part))
+        return t.LiteralNode(content=unescape(part))
 
     if len(parts) == 2:
         a, b = parts
         av, bv = svals
-
         if av is not None and bv is not None:
             # τ..τ — character range (single-char) or string range (multi-char)
             if len(av) == 1 and len(bv) == 1:
                 return t.CharRangeNode(start=av, end=bv)
             return t.StringRangeNode(start=av, end=bv)
-
         if av is None and bv is not None:
-            # α..τ — upper bound
-            return t.UpperBoundNode(alpha=_resolve_brace(_inner_of(a)), upper=bv)
-
+            return t.UpperBoundNode(alpha=_alpha(a), upper=bv)  # α..τ
         if av is not None and bv is None:
-            # τ..α — lower bound
-            return t.LowerBoundNode(lower=av, alpha=_resolve_brace(_inner_of(b)))
-
-        # α..α — zip range
-        return t.ZipRangeNode(
-            left=_resolve_brace(_inner_of(a)), right=_resolve_brace(_inner_of(b))
-        )
+            return t.LowerBoundNode(lower=av, alpha=_alpha(b))  # τ..α
+        return t.ZipRangeNode(left=_alpha(a), right=_alpha(b))  # α..α
 
     if len(parts) == 3:
-        a, b, c = parts
-        av, bv, cv = svals
+        (av, bv, cv) = svals
         # Bounded range must be τ..α..τ — singleton endpoints, abstract middle.
         if av is None or cv is None or bv is not None:
             raise CompileError(
                 f"Bounded range must be τ..α..τ (e.g. aa..{{dec}}..zz), got: {arm!r}"
             )
-        return t.BoundedRangeNode(
-            lower=av, alpha=_resolve_brace(_inner_of(b)), upper=cv
-        )
+        return t.BoundedRangeNode(lower=av, alpha=_alpha(parts[1]), upper=cv)
 
     raise CompileError(f"Too many '..' separators in: {arm!r}")
 
@@ -413,9 +355,7 @@ def _congruence_union(members: list[str]) -> t.SemanticNode:
     children: list[t.SemanticNode] = [
         t.LiteralNode(content=v) for v in _congruence_members(members)
     ]
-    if len(children) == 1:
-        return children[0]
-    return t.UnionNode(options=children)
+    return children[0] if len(children) == 1 else t.UnionNode(options=children)
 
 
 def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNode:
@@ -429,10 +369,7 @@ def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNo
         members = cong[0]
         # α<->α — congruence of two classes (zip).
         if len(members) == 2 and all(m.startswith("{") for m in members):
-            return t.ZipRangeNode(
-                left=_resolve_brace(_inner_of(members[0])),
-                right=_resolve_brace(_inner_of(members[1])),
-            )
+            return t.ZipRangeNode(left=_alpha(members[0]), right=_alpha(members[1]))
         # Singleton members — one enumerated congruence group.
         return t.GroupClassNode(groups=[_congruence_members(members)])
 
@@ -456,100 +393,10 @@ def _parse_count(src: str) -> t.CountSpec:
     m = _COUNT_SRC_REF_RE.match(src)
     if m:
         return t.CountRef(index=int(m.group(1)))
-    m = re.match(r"^(\d*)\.\.(\d*)$", src)
-    if m:
-        lo, hi = m.group(1), m.group(2)
-        return t.CountRange(min=int(lo) if lo else 0, max=int(hi) if hi else None)
-    if re.match(r"^\d+$", src):
-        n = int(src)
-        return t.CountRange(min=n, max=n)
+    m = re.fullmatch(r"(\d*)(\.\.)?(\d*)", src)
+    if m and (m.group(1) or m.group(2)):
+        lo, dots, hi = m.groups()
+        if dots:
+            return t.CountRange(min=int(lo) if lo else 0, max=int(hi) if hi else None)
+        return t.CountRange(min=int(lo), max=int(lo))
     raise CompileError(f"Invalid count expression: [{src}]")
-
-
-# ── Template expression parsing ───────────────────────────────────────────────
-
-
-def _parse_capture_path(dotted: str) -> list[int]:
-    return [int(p) for p in dotted.split(".")]
-
-
-def _parse_template_expr(content: str) -> t.TemplateNode:
-    expr = content.strip()
-
-    if expr == ".":
-        return t.FullMatchNode()
-
-    m = _COUNT_REF_EXPR_RE.match(expr)
-    if m:
-        return t.CountRefNode(group=int(m.group(1)))
-
-    m = _SPAN_RE.match(expr)
-    if m:
-        return t.SpanRefNode(
-            start=_parse_capture_path(m.group(1)),
-            end=_parse_capture_path(m.group(2)),
-        )
-
-    m = _GROUP_RE.match(expr)
-    if m:
-        return t.GroupRefNode(index=_parse_capture_path(expr))
-
-    m = _EMOJI_RE.match(expr)
-    if m:
-        return t.EmojiNode(code=m.group(1))
-
-    m = _LATEX_RE.match(expr)
-    if m:
-        return t.LatexNode(expr=m.group(1))
-
-    raise CompileError(f"Unknown template expression: {{{{{content}}}}}")
-
-
-# ── Utility ───────────────────────────────────────────────────────────────────
-
-
-_ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
-
-
-def _unescape(s: str) -> str:
-    """Resolve backslash escapes in a literal arm (\\!, \\{, \\n, …)."""
-    if "\\" not in s:
-        return s
-    out: list[str] = []
-    i = 0
-    while i < len(s):
-        if s[i] == "\\" and i + 1 < len(s):
-            out.append(_ESCAPES.get(s[i + 1], s[i + 1]))
-            i += 2
-        else:
-            out.append(s[i])
-            i += 1
-    return "".join(out)
-
-
-def _split_top(sep: str, text: str) -> list[str]:
-    """Split `text` on `sep` only at brace depth 0."""
-    parts: list[str] = []
-    depth = 0
-    cur: list[str] = []
-    sep_len = len(sep)
-    i = 0
-    while i < len(text):
-        ch = text[i]
-        if ch == "{":
-            depth += 1
-            cur.append(ch)
-            i += 1
-        elif ch == "}":
-            depth -= 1
-            cur.append(ch)
-            i += 1
-        elif depth == 0 and text[i : i + sep_len] == sep:
-            parts.append("".join(cur))
-            cur = []
-            i += sep_len
-        else:
-            cur.append(ch)
-            i += 1
-    parts.append("".join(cur))
-    return parts
