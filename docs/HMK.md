@@ -1,8 +1,18 @@
-# Himark
+# Himark Specification
 
-**Version:** 0.1.0-draft  
+**Version:** 0.4.0-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
+
+<!--
+- Avoid using non-ASCII characters in this document
+- Use '$\dots$' instead of '...' where context allows (e.g. not in codeblocks/comments)
+- '$\dots$/...' means arithmetic, '..' means Himark.
+- Use $\to$ instead of '->' where context allows
+- Codeblock: '<series> // <explain>: <0>,...,<n>'
+- Definition: '**<key>** -- <definition>'
+- <char>, '<string>'
+-->
 
 ---
 
@@ -22,29 +32,26 @@ These compose as `{expr}[count]` and `<<sep>>[count]`.
 
 Expressions inside `{...}` are built from two types:
 
-- **$\tau$** — any expression with cardinality 1: a bare string (`hello`, `a`, `ff`, `\n`), or a `{...}` whose only possible value is a single concrete string
-- **$\alpha$** — an abstract group: a `{...}` expression representing every value it can produce
+- **$\tau$** -- any expression with cardinality 1: a bare string (`hello`, `a`, `ff`, `\n`), or a `{...}` whose only possible value is a single concrete string
+- **$\alpha$** -- an abstract group: a `{...}` expression representing every value it can produce
 
-Every `{expr}` without an explicit count has an implicit `[1]`. This makes `{hello}` identical to `{hello}[1]` — and since it can only produce one value, it is $\tau$. The τ/α distinction is therefore about **cardinality**, not syntax: cardinality 1 is τ, cardinality > 1 is α.
+`{expr}` is identical to `{expr}[1]` -- and since it can only produce one value, it is $\tau$.
 
-| Form                         | Meaning                   |
-| ---------------------------- | ------------------------- |
-| $\tau$                       | Literal match             |
-| $\tau_1$..$\tau_2$           | Character/string range    |
-| $\alpha$                     | Full range                |
-| $\alpha$..$\tau$             | Upper bound $\tau$        |
-| $\tau$..$\alpha$             | Lower bound $\tau$        |
-| $\tau_1$..$\alpha$..$\tau_2$ | Bounded range in $\alpha$ |
-| $\alpha_1$..$\alpha_2$       | Zip (counts must match)   |
+| Form                     | Meaning                   |
+| ------------------------ | ------------------------- |
+| $\tau$                   | Literal match             |
+| $\tau_1..\tau_2$         | Character/string range    |
+| $\alpha$                 | Full range                |
+| $\alpha..\tau$           | Upper bound $\tau$        |
+| $\tau..\alpha$           | Lower bound $\tau$        |
+| $\tau_1..\alpha..\tau_2$ | Bounded range in $\alpha$ |
+| $\alpha_1..\alpha_2$     | Zip (counts must match)   |
 
-`,` joins expressions as a union. `{!expr}` is the complement — any value NOT in the group.
+<!-- DECISION: All members of the same equation share a $...$ -->
 
-Which row applies is determined by cardinality. A bare string is always τ. A `{...}` sub-expression is τ if it is a singleton (e.g. `{z}[33]` → `"zzz…z"`), α otherwise.
+`,` joins expressions as a union. `{!expr}` is the complement -- any value NOT in the group.
 
-```proto
-{a..z, A..Z, 0..9}    // alphanumeric
-{a..z, !d..f}         // lowercase, excluding d–f
-```
+Which row applies is determined by cardinality. A bare string is always $\tau$. A `{...}` sub-expression is $\tau$ if it is a singleton (e.g. `{z}[33]` $\to$ `"z...z"`), $\alpha$ otherwise.
 
 Singleton `{...}` expressions used as bounds evaluate to their single concrete value at parse time:
 
@@ -52,31 +59,35 @@ Singleton `{...}` expressions used as bounds evaluate to their single concrete v
 {{1}[23]..{b58}..{z}[33]}  // b58 body bounded to the P2PKH value range
 ```
 
-A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range). `{a}[3]` → `"aaa"` ✓. `{a..z}[3]` ✗ (inner has cardinality 26). `{a}[2..4]` ✗ (count is a range).
+A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
+
+**Valid** -- `{a}[3]` $\to$ `"aaa"`
+**Invalid** -- `{a..z}[3]` (inner has cardinality 26)
+**Invalid** -- `{a}[2..4]` (count is a range).
 
 ```proto
-{a..z, A..Z, 0..9}    // alphanumeric
-{a..z, !d..f}         // lowercase, excluding d–f
+{a..z,A..Z,0..9}    // alphanumeric
+{a..z,!d..f}        // lowercase, excluding d,...,f
 ```
 
 ### Value Exclusion
 
-`,!σ` and `,!σ_1..σ_2` exclude a value or contiguous sub-range from any range expression:
+!$\sigma$ and !$\sigma_1..\sigma_2$ exclude a value or contiguous sub-range from any range expression:
 
 ```proto
-{aa..{a..z}..zz, !ff}       // 2-char lowercase, excluding 'ff'
-{aa..{a..z}..zz, !ee..ff}   // same, excluding 'ee' and 'ff'
-{{dec}..255, !128..191}      // decimal 0–255, excluding 128–191
+{aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
+{aa..{a..z}..zz,!ee..ff}   // same, excluding 'ee,...,ff'
+{{dec}..255,!128..191}     // decimal 0,...,255, excluding 128,...,191
 ```
 
 ### Padding
 
-`{N: expr}` fixes the match width to exactly `N` characters, padding with the alphabet's zero character. `{: expr}` accepts any width from 1 up to `len(max)`, allowing leading zeros.
+`{N:expr}` fixes the match width to exactly `N` characters, padding with the alphabet's zero character. `{:expr}` accepts any width from 1 up to `len(max)`, allowing leading zeros.
 
 ```proto
-{2: {dec}..99}    // '00' to '99'
-{3: {dec}..255}   // '000' to '255'
-{: {dec}..255}    // '0', '00', '000' through '255'
+{2:{dec}..99}    // '00' to '99'
+{3:{dec}..255}   // '000' to '255'
+{:{dec}..255}    // '0', '00', '000' through '255'
 ```
 
 ---
@@ -94,12 +105,12 @@ Named alphabets expand to their equivalent class and act as $\alpha$ in arithmet
 | `b58`   | `1..9,A..Z,a..z,!I,!O,!l` |
 | `b64`   | `A..Z,a..z,0..9,+,/`      |
 | `b85`   | RFC 1924 Base85           |
-| `ascii` | U+0000–U+007F             |
-| `uni`   | U+0000–U+10FFFF           |
+| `ascii` | U+0000-U+007F             |
+| `uni`   | U+0000-U+10FFFF           |
 
 ```proto
-{{dec}..255}     // decimal 0–255
-{{hex}..ff}      // hex 0–ff
+{{dec}..255}     // decimal: 0,...,255
+{{hex}..ff}      // hex: 0,...,ff
 {m..{a..z}}      // lowercase, from 'm' upward
 {m..{a..z}..zz}  // lowercase, from 'm' to 'zz'
 ```
@@ -108,14 +119,14 @@ Named alphabets expand to their equivalent class and act as $\alpha$ in arithmet
 
 ## String-Token Alphabets
 
-When comma-separated items inside `{...}` are multi-character, the class defines a string-token alphabet — each item is a discrete token treated as $\tau$.
+When comma-separated items inside `{...}` are multi-character, the class defines a string-token alphabet -- each item is a discrete token treated as $\tau$.
 
 ```proto
 {cat,dog}     // 'cat' or 'dog'
 {http,https}  // 'http' or 'https'
 ```
 
-Token order matches write order. `..` between string tokens defines a lexicographic range — any string between the two endpoints inclusive:
+Token order matches write order. `..` between string tokens defines a lexicographic range -- any string between the two endpoints inclusive:
 
 ```proto
 {cat,dog,fish}   // 'cat', 'dog', or 'fish'
@@ -126,9 +137,9 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 
 ## Grouped-class Alphabets
 
-When `{...}` items are class expressions, the alphabet defines **equivalence groups** — sets of surface forms mapping to the same abstract position. Each group is one letter regardless of the physical length of its members.
+When `{...}` items are class expressions, the alphabet defines **equivalence groups** -- sets of surface forms mapping to the same abstract position. Each group is one letter regardless of the physical length of its members.
 
-Zip ($\alpha_1$..$\alpha_2$) steps through both classes in parallel:
+Zip ($\alpha_1..\alpha_2$) steps through both classes in parallel:
 
 ```proto
 {{a,A}..{z,Z}}       // 26 groups: a↔A, b↔B … z↔Z
@@ -140,7 +151,7 @@ A grouped-class alphabet matches any string where each position satisfies one of
 
 ```proto
 {{a,A}..{z,Z}}      // any word, any casing, any length
-{{a,A}..{z,Z}}[2]   // same word twice — 'Hello' then 'hello' matches
+{{a,A}..{z,Z}}[2]   // same word twice -- 'Hello' then 'hello' matches
 ```
 
 ---
@@ -158,15 +169,15 @@ A grouped-class alphabet matches any string where each position satisfies one of
 | `..`   | Zero or more |
 
 ```proto
-{a..z}[3]     // same letter three times: 'aaa', 'bbb' …
-{a..z}[2..5]  // same letter 2–5 times
+{a..z}[3]     // same letter three times: 'aaa',...,'zzz'
+{a..z}[2..5]  // same letter 2-5 times
 {0..9}[..]    // same digit any number of times
 ```
 
 The repeat count of any group is accessible as `{{#N}}`:
 
 ```proto
-{#}[1..] { } {!\n}    // n hashes then a line; {{#0}} = hash count
+{#}[1..]{ }{!\n}    // n hashes then a line; {{#0}} = hash count
 {a}[2..5]{b}[{{#0}}]  // [b] repeats same number of times as [a]
 ```
 
@@ -188,7 +199,7 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 
 ## Separators
 
-`<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default — the right boundary resolves to the nearest match.
+`<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default -- the right boundary resolves to the nearest match.
 
 ```proto
 <<\n>>         // split full input on newlines
@@ -207,27 +218,27 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 {*}<<>>{*}   => <em>{{1}}</em>
 ```
 
-Chains: `pattern => template => pattern => template`. Each template output feeds the next match. `{{.}}` in a chained template is deferred — it resolves to the result of applying the remaining chain to the current match, not the raw text.
+Chains: `pattern => template => pattern => template`. `{{.}}` in a chained template is deferred -- it resolves to the result of applying the remaining chain to the current match, not the raw text.
 
----
+Each step is a **pattern** (a matcher) or a **template** (it contains `{{…}}` references and renders output). Two fold behaviors compose:
 
-## Nesting
-
-A `{...}` range expression may contain a full Himark sub-pattern, allowing complex structural constraints. Nesting syntax is not yet finalized — this section is a placeholder.
+- At the **top level**, every match of the leading pattern is transformed, yielding one result per match; non-matches are dropped. A run of patterns (`pattern => pattern => … => template`) narrows successively before the trailing template renders.
+- A **deferred `{{.}}`** applies the remaining chain to the current match _in place_ -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
 
 ```proto
-// intended: a b58 string whose first character is '1'
-// syntax TBD
+{dec}[1..] => <{{.}}> => {dec} => #{{.}}   // '42' -> '<#4>', '<#2>'
 ```
 
 ---
 
 ## North Star Examples
 
+Patterns are whitespace-significant outside `{...}`: any space written between constructs is a literal space the input must contain. The examples below are written compactly so they match the canonical forms (no surrounding spaces).
+
 **Markdown headings:**
 
 ```proto
-<<\n>> => {#}[1..6] { } {!\n} => <h{{#0}}>{{2}}</h{{#0}}>
+<<\n>> => {#}[1..6]{ }{!\n} => <h{{#0}}>{{2}}</h{{#0}}>
 ```
 
 **Bitcoin P2PKH address:**
@@ -236,8 +247,13 @@ A `{...}` range expression may contain a full Himark sub-pattern, allowing compl
 {1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
 ```
 
+<!-- TODO: Append second, more concise example of the same query -->
+
 **IPv4:**
 
 ```proto
-{{dec}..255} {.} {{dec}..255} {.} {{dec}..255} {.} {{dec}..255}
+{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}
 ```
+
+<!-- DECISION: Whitespace should be significant regardless of context to improve uniformity -->
+<!-- TODO: Replace all non-ASCII characters document-wide: [^\x00-\x7F] -->

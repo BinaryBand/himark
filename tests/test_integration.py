@@ -78,6 +78,34 @@ def test_template_full_match():
     assert result == ["<a>", "<b>", "<c>"]
 
 
+# ── Chained transformers (alternating pattern => template) ────────────────────
+
+
+def test_chain_deferred_full_match():
+    # P => T => P => T. {{.}} in the first template is deferred: it resolves to
+    # the result of applying the remaining chain (`{dec} => #{{.}}`) to the match.
+    result = execute(parser.parse("{dec}[1..] => <{{.}}> => {dec} => #{{.}}"), "42")
+    assert result == ["<#4>", "<#2>"]
+
+
+def test_chain_deferred_preserves_surrounding_text():
+    # The deferred chain transforms in place — non-matched characters survive.
+    result = execute(
+        parser.parse("{x}<<>>{x} => [{{.}}] => {dec} => #{{.}}"), "x a4b2 x"
+    )
+    assert result == ["[x a#4b#2 x]"]
+
+
+def test_chain_filter_then_template_still_works():
+    # A run of patterns before a single trailing template (filter style) is
+    # unchanged: non-matching lines are dropped.
+    result = execute(
+        parser.parse("<<\n>> => {#}[1..6]{ }{!\n} => <h{{#0}}>{{2}}</h{{#0}}>"),
+        "## Hello\nplain line\n### World",
+    )
+    assert result == ["<h2>Hello</h2>", "<h3>World</h3>"]
+
+
 # ── Separator ─────────────────────────────────────────────────────────────────
 
 

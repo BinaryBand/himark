@@ -66,11 +66,33 @@ _EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {
 }
 
 
-def render(template_tree: HMKNode, match: Match) -> str:
+def is_template(tree: HMKNode) -> bool:
+    """True if `tree` is a template step (renders output) rather than a matcher.
+
+    A step is a template when it contains any template-expression node
+    (`{{.}}`, `{{N}}`, `{{#N}}`, …). Pattern steps contain only matchable
+    constructs (brace groups, separators) and literal leaves.
+    """
+    return any(n.type in _TEMPLATE_NODE_TYPES for n in tree.children)
+
+
+def render(
+    template_tree: HMKNode,
+    match: Match,
+    full_match_override: str | None = None,
+) -> str:
+    """Render a template against a match.
+
+    `full_match_override` supplies the deferred value for `{{.}}` in a chained
+    template — the result of applying the remaining chain to the current match.
+    When None, `{{.}}` resolves to the raw matched text.
+    """
     parts = []
     for node in template_tree.children:
         if node.type == "leaf":
             parts.append(node.content)
+        elif node.type == "full_match" and full_match_override is not None:
+            parts.append(full_match_override)
         elif node.type in _TEMPLATE_NODE_TYPES:
             renderer = _EXPR_RENDERERS.get(node.type)
             if renderer is not None:

@@ -41,14 +41,9 @@ bound — case is ambiguous for positional arithmetic).
 codepoint. `uni` (1.1M codepoints) and `hexi` (case-ambiguous) now raise a clean
 `CompileError` instead of an uncaught `ValueError`.
 
-### Issue 6 — Chained `{{.}}` deferred resolution not implemented
+### ~~Issue 6 — Chained `{{.}}` deferred resolution not implemented~~ ✅ Fixed
 
-**Decision: documented, not implemented.** The engine executes a chain as
-`pattern => pattern => … => template` — every step before the last is a pattern,
-only the final step is rendered. The spec's alternating
-`pattern => template => pattern => template` with deferred `{{.}}` is a larger
-architectural change and is not exercised by any North Star example. The spec
-now carries an "Implementation status" note under Transformers.
+Steps are now classified as _pattern_ or _template_ (a template contains `{{…}}` nodes). `execute` is split into two recursions in `engine/__init__.py`: `_run` (top-level extract → `list[str]`, drops non-matches) and `_transform` (in-place replace → `str`, preserves surrounding text). A template's `{{.}}` is deferred: it substitutes `_transform(remaining_chain, match.text)`. Filter chains (`pattern => … => template`) are unchanged; alternating `pattern => template => pattern => template` now works. Covered by `test_integration.py::test_chain_deferred_*`.
 
 ---
 
