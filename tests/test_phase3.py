@@ -251,3 +251,46 @@ def test_invalid_count_raises():
         from marky.parser.phase3 import _parse_count
 
         _parse_count("abc")
+
+
+# ── Whitespace enforcement ────────────────────────────────────────────────────
+
+
+def test_space_after_comma_raises():
+    with pytest.raises(CompileError):
+        first_semantic("{a, b}")
+
+
+def test_space_before_comma_raises():
+    with pytest.raises(CompileError):
+        first_semantic("{a ,b}")
+
+
+def test_space_around_dots_raises():
+    with pytest.raises(CompileError):
+        first_semantic("{a .. z}")
+
+
+def test_space_after_dots_raises():
+    with pytest.raises(CompileError):
+        first_semantic("{a.. z}")
+
+
+def test_space_in_exclusion_raises():
+    with pytest.raises(CompileError):
+        first_semantic("{a..z, !d..f}")
+
+
+def test_pure_whitespace_arm_is_literal_space():
+    # { } — lone whitespace arm is an intentional literal-space match.
+    node = first_semantic("{ }")
+    assert node.type == "literal"
+    assert node.content == " "
+
+
+def test_full_alpha_disambiguation_space_allowed():
+    # { {a..z} } — surrounding space is syntactically necessary to prevent
+    # {{...}} being parsed as a template ref; it is stripped silently.
+    node = first_semantic("{ {a..z} }")
+    assert node.type == "full_alpha"
+    assert node.children[0].type == "char_range"

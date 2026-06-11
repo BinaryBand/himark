@@ -4,17 +4,6 @@
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
-<!--
-- Avoid using non-ASCII characters in this document
-- Use '$\dots$' instead of '...' where context allows (e.g. not in codeblocks/comments)
-- Use $\to$ instead of '->' where context allows
-- Use $\leftrightarrow$ instead of '<->' where context allows
-- '$\dots$/...' means arithmetic, '..' means Himark
-- Codeblock: <series> // <note>: <0>, <1>, through <n>
-- Definition: **<key>** -- <definition>
-- <char>, '<string>'
--->
-
 ---
 
 Three constructs: `{...}` matches and captures, `<<...>>` spans and splits, `[...]` repeats.
@@ -236,21 +225,33 @@ Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` 
 
 ## North Star Examples
 
-Patterns are whitespace-significant outside `{...}`: any space written between constructs is a literal space the input must contain. The examples below are written compactly so they match the canonical forms (no surrounding spaces).
+Patterns are whitespace-significant: any space written between constructs is a literal space the input must contain.
 
-**Markdown headings:**
+### Markdown translations
 
-```proto
-<<\n>> => {#}[1..6]{ }{!\n} => <h{{#0}}>{{2}}</h{{#0}}>
-```
-
-**Bitcoin P2PKH address:**
+#### Headers
 
 ```proto
-{1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}  // any valid Bitcoin address (not accounting for checksum)
+<<\n>> => {#}[1..6]<<>> => <h{{#0}}>{{1}}</h{{#0}}>
 ```
 
-<!-- TODO: Append second, more concise example of the same query -->
+#### Decorators
+
+```proto
+{**<<>>**} => <strong>{{0}}</strong> // bold
+{*<<>>*}   => <em>{{0}}</em>         // italic
+{`<<>>`}   => <code>{{0}}</code>     // inline code
+```
+
+### Crypto Wallet Addresses
+
+```proto
+{1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{{1}[23]..{b58}..{z}[33]}  // any valid Bitcoin address (not accounting for checksum)
+{0x}{40: {0..9,a..f,A..F}} // any valid Ethereum address (not accounting for checksum)
+```
+
+> The above do not account for checksum verifications.
 
 **IPv4:**
 
@@ -258,4 +259,13 @@ Patterns are whitespace-significant outside `{...}`: any space written between c
 {{dec}..255}{.}{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}
 ```
 
-<!-- DECISION: Whitespace should be significant regardless of context to improve uniformity -->
+<!--
+- Avoid using non-ASCII characters in this document
+- Use '$\dots$' instead of '...' where context allows (e.g. not in codeblocks/comments)
+- Use $\to$ instead of '->' where context allows
+- Use $\leftrightarrow$ instead of '<->' where context allows
+- '$\dots$/...' means arithmetic, '..' means Himark
+- Codeblock: <series> // <note>: <0>, <1>, through <n>
+- Definition: **<key>** -- <definition>
+- <char>, '<string>'
+-->

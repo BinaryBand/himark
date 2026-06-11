@@ -128,7 +128,7 @@ def test_bounded_range():
 
 def test_exclusion_subrange_on_upper_bound():
     # 0–255 excluding 128–191; 130 is excluded, 100 and 200 are kept
-    result = matches("{{dec}..255, !128..191}", "130 100 200")
+    result = matches("{{dec}..255,!128..191}", "130 100 200")
     assert "100" in result
     assert "200" in result
     assert "130" not in result
@@ -136,7 +136,7 @@ def test_exclusion_subrange_on_upper_bound():
 
 def test_exclusion_single_value():
     # 0–255 excluding exactly 200
-    result = matches("{{dec}..255, !200}", "199 200 201")
+    result = matches("{{dec}..255,!200}", "199 200 201")
     assert "199" in result
     assert "201" in result
     assert "200" not in result
@@ -145,7 +145,7 @@ def test_exclusion_single_value():
 def test_exclusion_char_range_stress():
     # Stress Bug 1 on char_range: excluded chars must never match.
     text = "abcdefghijklmnopqrstuvwxyz" * 50
-    result = matches("{a..z, !d..f}", text)
+    result = matches("{a..z,!d..f}", text)
     expected = [ch for ch in text if "a" <= ch <= "z" and not ("d" <= ch <= "f")]
     assert result == expected
 
@@ -153,7 +153,7 @@ def test_exclusion_char_range_stress():
 def test_exclusion_named_alpha_stress():
     # Stress Bug 1 on named_alpha: exclusions should filter matches.
     text = ("0123456789abcdefxyzABC" * 60) + "face"
-    result = matches("{hex, !a..c, !f}", text)
+    result = matches("{hex,!a..c,!f}", text)
     expected = [
         ch
         for ch in text
@@ -165,7 +165,7 @@ def test_exclusion_named_alpha_stress():
 def test_exclusion_full_alpha_stress():
     # Stress Bug 1 on full_alpha: excluded chars should split greedy runs.
     text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
-    result = matches("{{a..z}, !m..p}", text)
+    result = matches("{{a..z},!m..p}", text)
 
     expected = []
     run = ""
@@ -360,3 +360,100 @@ def test_template_group_ref():
 def test_template_full_match():
     result = execute(parser.parse("{hello} => <b>{{.}}</b>"), "say hello")
     assert result == ["<b>hello</b>"]
+
+
+# ── zip_range ─────────────────────────────────────────────────────────────────
+
+
+def test_zip_range_matches_letter_sequence():
+    # {{a..z}..{A..Z}} — any sequence of chars drawn from [a-z, A-Z].
+    result = matches("{{a..z}..{A..Z}}", "Hello 123 World")
+    assert "Hello" in result
+    assert "World" in result
+    assert "123" not in result
+
+
+def test_zip_range_rejects_non_alpha():
+    assert matches("{{a..z}..{A..Z}}", "123") == []
+
+
+# ── variable-width padding ────────────────────────────────────────────────────
+
+
+def test_variable_padding_matches_values_in_bound():
+    # {:{dec}..255} delegates to the inner upper_bound, accepting any valid width.
+    result = matches("{:{dec}..255}", "0 9 99 255 256 999")
+    assert "0" in result
+    assert "9" in result
+    assert "99" in result
+    assert "255" in result
+    assert "256" not in result
+    assert "999" not in result
+
+
+# ── complement on char range ──────────────────────────────────────────────────
+
+
+def test_complement_char_range():
+    # {!a..z} greedily matches entire runs of non-lowercase chars.
+    # "a1B2c3" → "1B2" (between 'a' and 'c') and "3" (after 'c').
+    result = matches("{!a..z}", "a1B2c3")
+    assert "1B2" in result
+    assert "3" in result
+    assert "a" not in result
+    assert "c" not in result
+
+
+# ── named alphabets: b32, b64, b85 ───────────────────────────────────────────
+
+
+def test_named_alpha_b32():
+    # b32 = 0-9, a-v (RFC 4648 §7). Letters w-z are outside.
+    result = matches("{b32}", "01v wxyz")
+    assert "0" in result
+    assert "1" in result
+    assert "v" in result
+    assert "w" not in result
+    assert "x" not in result
+
+
+def test_named_alpha_b64():
+    # b64 = A-Z, a-z, 0-9, +, /
+    result = matches("{b64}", "Az+/ !")
+    assert "A" in result
+    assert "z" in result
+    assert "+" in result
+    assert "/" in result
+    assert " " not in result
+    assert "!" not in result
+
+
+def test_named_alpha_b85():
+    # b85 = RFC 1924: 0-9, A-Z, a-z, !#$%&()*+-;<=>?@^_`{|}~
+    result = matches("{b85}", "A! , ")
+    assert "A" in result
+    assert "!" in result
+    assert "," not in result
+    assert " " not in result
+
+
+# ── separator with explicit bounds ────────────────────────────────────────────
+
+
+def test_separator_bounded_span():
+    # {(}<<>>{)} lazily spans from '(' to the nearest ')', capturing in between.
+    trees = parser.parse("{(}<<>>{)}")
+    ms = find_matches(trees[0], "say (hello world) done")
+    assert len(ms) == 1
+    assert ms[0].text == "(hello world)"
+    assert ms[0].groups[0] == "("
+    assert ms[0].groups[1] == "hello world"
+    assert ms[0].groups[2] == ")"
+
+
+def test_separator_bounded_multiple_spans():
+    trees = parser.parse("{(}<<>>{)}")
+    ms = find_matches(trees[0], "(one) and (two)")
+    assert len(ms) == 2
+    assert ms[0].groups[1] == "one"
+    assert ms[1].groups[1] == "two"

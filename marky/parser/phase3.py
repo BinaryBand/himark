@@ -65,8 +65,25 @@ def _resolve_brace(content: str) -> HMKNode:
     if is_complement:
         content = content[1:]
 
-    # Split on top-level commas; preserve purely-whitespace arms (e.g. { } = literal space)
-    arms = [a.strip(" \t") or a for a in _split_top(",", content)]
+    # Split on top-level commas. Whitespace is significant — reject leading/trailing
+    # spaces on arms unless the arm is purely whitespace (e.g. { } = literal space)
+    # or is a single nested-brace arm needing disambiguation space (e.g. { {a..z} }).
+    raw_arms = _split_top(",", content)
+    arms = []
+    for a in raw_arms:
+        stripped = a.strip(" \t")
+        if stripped == "":
+            arms.append(a)  # pure-whitespace: literal space arm
+        elif stripped != a:
+            if len(raw_arms) == 1 and stripped.startswith("{"):
+                arms.append(stripped)  # single nested-brace: disambiguation space
+            else:
+                raise CompileError(
+                    f"Unexpected whitespace in '{{{content}}}': "
+                    f"remove spaces around ','"
+                )
+        else:
+            arms.append(a)
 
     # Separate exclusion arms (!value or !v1..v2)
     include_arms = []
@@ -143,7 +160,14 @@ def _parse_inner_brace_items(brace_text: str) -> list[str]:
     """Return the top-level comma-separated items inside a {…} expression."""
     if not (brace_text.startswith("{") and brace_text.endswith("}")):
         raise CompileError(f"Expected brace expression, got: {brace_text!r}")
-    return [s.strip(" \t") for s in _split_top(",", brace_text[1:-1])]
+    items = _split_top(",", brace_text[1:-1])
+    for item in items:
+        stripped = item.strip(" \t")
+        if stripped and stripped != item:
+            raise CompileError(
+                f"Unexpected whitespace in {brace_text!r}: remove spaces around ','"
+            )
+    return [s.strip(" \t") or s for s in items]
 
 
 def _brace_end(expr: str) -> int | None:
@@ -201,7 +225,14 @@ def _resolve_arm(arm: str) -> HMKNode:
     Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
     one concrete value; anything else is an abstract group (α).
     """
-    parts = [p.strip(" \t") or p for p in _split_top("..", arm)]
+    parts = _split_top("..", arm)
+    for p in parts:
+        stripped = p.strip(" \t")
+        if stripped and stripped != p:
+            raise CompileError(
+                f"Unexpected whitespace in '{arm}': remove spaces around '..'"
+            )
+    parts = [p.strip(" \t") or p for p in parts]
     svals = [_singleton_value(p) for p in parts]
 
     if len(parts) == 1:

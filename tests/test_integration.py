@@ -128,3 +128,19 @@ def test_separator_empty_captures_all():
 def test_http_token_set():
     result = matches("{http,https}", "https://example.com http://example.org")
     assert result == ["https", "http"]
+
+
+# ── Span ref rendering ────────────────────────────────────────────────────────
+
+
+def test_template_span_ref_full():
+    # {{0..2}} spans from start of group 0 to end of group 2 — identical to {{.}}
+    # here, but exercises the span_ref code path explicitly.
+    result = execute(parser.parse("{a..z}{0..9}{a..z} => {{0..2}}"), "a1b c2d")
+    assert result == ["a1b", "c2d"]
+
+
+def test_template_span_ref_partial():
+    # {{0..1}} covers only the first two groups, excluding the last char.
+    result = execute(parser.parse("{a..z} {a..z} {a..z} => [{{0..1}}]"), "x y z")
+    assert result == ["[x y]"]

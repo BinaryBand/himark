@@ -1,7 +1,7 @@
 # HMK Implementation Audit
 
 Audit of `marky/` implementation against `docs/HMK.md`.
-154 tests passing as of 2026-06-10.
+175 tests passing as of 2026-06-11.
 
 ---
 
