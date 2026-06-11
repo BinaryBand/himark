@@ -31,18 +31,6 @@ def test_literal():
     assert node.content == "hello"
 
 
-def test_named_alpha_dec():
-    node = first_semantic("{dec}")
-    assert node.type == "named_alpha"
-    assert node.metadata["name"] == "dec"
-
-
-def test_named_alpha_hex():
-    node = first_semantic("{hex}")
-    assert node.type == "named_alpha"
-    assert node.metadata["name"] == "hex"
-
-
 def test_char_range():
     node = first_semantic("{a..z}")
     assert node.type == "char_range"
@@ -54,18 +42,18 @@ def test_char_range():
 
 
 def test_upper_bound():
-    node = first_semantic("{{dec}..255}")
+    # phase3 sees the expanded macro text (@dec -> 0..9), not the @ ref.
+    node = first_semantic("{{0..9}..255}")
     assert node.type == "upper_bound"
     assert node.metadata["upper"] == "255"
-    assert node.metadata["alpha"].type == "named_alpha"
-    assert node.metadata["alpha"].metadata["name"] == "dec"
+    assert node.metadata["alpha"].type == "char_range"
 
 
 def test_lower_bound():
-    node = first_semantic("{128..{dec}}")
+    node = first_semantic("{128..{0..9}}")
     assert node.type == "lower_bound"
     assert node.metadata["lower"] == "128"
-    assert node.metadata["alpha"].type == "named_alpha"
+    assert node.metadata["alpha"].type == "char_range"
 
 
 def test_bounded_range():
@@ -124,8 +112,10 @@ def test_singleton_value_helper():
     assert _singleton_value("{hello}[2]") == "hellohello"
     assert _singleton_value("{ {a}[2] }[3]") == "aaaaaa"  # nested singletons
 
+    # A bare name is now literal text — a singleton, not an alphabet.
+    assert _singleton_value("dec") == "dec"
+
     # Non-singletons (α) → None.
-    assert _singleton_value("dec") is None  # named alphabet
     assert _singleton_value("{a..z}") is None  # range
     assert _singleton_value("{a..z}[3]") is None  # range inner
     assert _singleton_value("{a,b}") is None  # union
@@ -143,13 +133,13 @@ def test_singleton_bounded_range_synonym():
 
 def test_singleton_upper_bound():
     # α..τ where τ is a singleton constructor.
-    node = first_semantic("{{dec}..{9}[3]}")
+    node = first_semantic("{{0..9}..{9}[3]}")
     assert node.type == "upper_bound"
     assert node.metadata["upper"] == "999"
 
 
 def test_singleton_lower_bound():
-    node = first_semantic("{{0}[3]..{dec}}")
+    node = first_semantic("{{0}[3]..{0..9}}")
     assert node.type == "lower_bound"
     assert node.metadata["lower"] == "000"
 
@@ -194,13 +184,13 @@ def test_complement():
 
 
 def test_fixed_padding():
-    node = first_semantic("{3: {dec}..255}")
+    node = first_semantic("{3: {@dec}..255}")
     assert node.type == "padded"
     assert node.metadata["width"] == 3
 
 
 def test_variable_padding():
-    node = first_semantic("{: {dec}..255}")
+    node = first_semantic("{: {@dec}..255}")
     assert node.type == "padded"
     assert node.metadata["width"] is None
 

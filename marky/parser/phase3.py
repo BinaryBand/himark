@@ -18,7 +18,6 @@ import re
 from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
 from marky.parser import phase2
-from marky.utils.alphabet import is_named_alpha
 
 _PADDING_RE = re.compile(r"^(\d*)\s*:\s*(.+)$", re.DOTALL)
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
@@ -84,7 +83,7 @@ def _resolve_separator(node: HMKNode) -> None:
     has_ops = len(dot_parts) > 1 or len(comma_parts) > 1 or content.startswith("{")
 
     # τ: bare constant with no arithmetic operators (<<\n>>, << >>, <<abc>>)
-    if not has_ops and not is_named_alpha(content):
+    if not has_ops:
         node.metadata["sep_value"] = content
         return
 
@@ -216,10 +215,12 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> HMKNode:
             node.metadata["exclusions"] = exclusions
         return node
 
-    # All bare — any multi-char token (not a single-char range like a..z)?
+    # All bare — any multi-char token (not a single-char range like a..z, and
+    # not a single escaped char like \! )?
     has_multi = any(
         len(a) > 1
         and not (len(a) == 4 and a[1:3] == "..")  # not a..b form
+        and not (len(a) == 2 and a.startswith("\\"))  # not an escaped char
         and ".." not in a
         for a in bare_arms
     )
@@ -293,8 +294,6 @@ def _singleton_value(expr: str) -> str | None:
             return inner_val
         m = re.fullmatch(r"\[(\d+)\]", rest)
         return inner_val * int(m.group(1)) if m else None
-    if is_named_alpha(expr):
-        return None
     if len(_split_top(",", expr)) > 1 or len(_split_top("..", expr)) > 1:
         return None
     return expr
@@ -331,9 +330,7 @@ def _resolve_arm(arm: str) -> HMKNode:
                 return HMKNode("literal", sval)
             # α — full range (any length, any value in the alphabet)
             return HMKNode("full_alpha", arm, [_resolve_brace(_inner_of(part))])
-        if is_named_alpha(part):
-            return HMKNode("named_alpha", part, metadata={"name": part})
-        return HMKNode("literal", part)
+        return HMKNode("literal", _unescape(part))
 
     if len(parts) == 2:
         a, b = parts
@@ -501,6 +498,25 @@ def _parse_template_expr(content: str) -> HMKNode:
 
 
 # ── Utility ───────────────────────────────────────────────────────────────────
+
+
+_ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
+
+
+def _unescape(s: str) -> str:
+    """Resolve backslash escapes in a literal arm (\\!, \\{, \\n, …)."""
+    if "\\" not in s:
+        return s
+    out: list[str] = []
+    i = 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s):
+            out.append(_ESCAPES.get(s[i + 1], s[i + 1]))
+            i += 2
+        else:
+            out.append(s[i])
+            i += 1
+    return "".join(out)
 
 
 def _split_top(sep: str, text: str) -> list[str]:

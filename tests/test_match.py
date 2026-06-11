@@ -48,30 +48,31 @@ def test_char_range_no_match():
 
 
 def test_named_alpha_dec():
-    result = matches("{dec}", "a1b2c3")
+    result = matches("{@dec}", "a1b2c3")
     assert result == ["1", "2", "3"]
 
 
 def test_named_alpha_hex():
-    result = matches("{hex}", "xyz0af")
+    result = matches("{@hex}", "xyz0af")
     assert result == ["0", "a", "f"]
 
 
 def test_named_alpha_hexi_case_insensitive():
-    # hexi accepts both cases of hex digits.
-    result = matches("{hexi}", "0aF g9C")
-    assert result == ["0", "a", "F", "9", "C"]
+    # hexi = 0..9,a<->A..f<->F — digits match singly; the case-fold letter zip
+    # matches contiguous runs, so "aF" is one unit.
+    result = matches("{@hexi}", "0aF g9C")
+    assert result == ["0", "aF", "9", "C"]
 
 
 def test_named_alpha_hexi_rejects_non_hex():
-    assert matches("{hexi}", "ghz") == []
+    assert matches("{@hexi}", "ghz") == []
 
 
 # ── upper_bound ───────────────────────────────────────────────────────────────
 
 
 def test_upper_bound_dec():
-    result = matches("{{dec}..255}", "192 300 10 999")
+    result = matches("{{@dec}..255}", "192 300 10 999")
     assert "192" in result
     assert "10" in result
     assert "300" not in result
@@ -79,7 +80,7 @@ def test_upper_bound_dec():
 
 
 def test_upper_bound_hex():
-    result = matches("{{hex}..ff}", "0f 100 ff ab")
+    result = matches("{{@hex}..ff}", "0f 100 ff ab")
     assert "0f" in result
     assert "ff" in result
     assert "100" not in result
@@ -87,7 +88,7 @@ def test_upper_bound_hex():
 
 def test_upper_bound_ascii_virtual():
     # ascii is materializable, so it works as a value-range bound by codepoint.
-    result = matches("{{ascii}..A}", "A B")
+    result = matches("{{@ascii}..A}", "A B")
     assert "A" in result  # ord 'A' == 65, within bound
     assert "B" not in result  # ord 'B' == 66, over bound
 
@@ -98,14 +99,14 @@ def test_uni_as_bound_raises():
     from marky.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
-        matches("{{uni}..A}", "xyz")
+        matches("{{@uni}..A}", "xyz")
 
 
 # ── lower_bound ───────────────────────────────────────────────────────────────
 
 
 def test_lower_bound_dec():
-    result = matches("{128..{dec}}", "64 128 255 300")
+    result = matches("{128..{@dec}}", "64 128 255 300")
     assert "128" in result
     assert "255" in result
     assert "64" not in result
@@ -116,7 +117,7 @@ def test_lower_bound_dec():
 
 def test_bounded_range():
     # Decimal values 10–99
-    result = matches("{10..{dec}..99}", "5 10 50 99")
+    result = matches("{10..{@dec}..99}", "5 10 50 99")
     assert "10" in result
     assert "50" in result
     assert "99" in result
@@ -128,7 +129,7 @@ def test_bounded_range():
 
 def test_exclusion_subrange_on_upper_bound():
     # 0–255 excluding 128–191; 130 is excluded, 100 and 200 are kept
-    result = matches("{{dec}..255,!128..191}", "130 100 200")
+    result = matches("{{@dec}..255,!128..191}", "130 100 200")
     assert "100" in result
     assert "200" in result
     assert "130" not in result
@@ -136,7 +137,7 @@ def test_exclusion_subrange_on_upper_bound():
 
 def test_exclusion_single_value():
     # 0–255 excluding exactly 200
-    result = matches("{{dec}..255,!200}", "199 200 201")
+    result = matches("{{@dec}..255,!200}", "199 200 201")
     assert "199" in result
     assert "201" in result
     assert "200" not in result
@@ -153,7 +154,7 @@ def test_exclusion_char_range_stress():
 def test_exclusion_named_alpha_stress():
     # Stress Bug 1 on named_alpha: exclusions should filter matches.
     text = ("0123456789abcdefxyzABC" * 60) + "face"
-    result = matches("{hex,!a..c,!f}", text)
+    result = matches("{@hex,!a..c,!f}", text)
     expected = [
         ch
         for ch in text
@@ -186,8 +187,8 @@ def test_exclusion_full_alpha_stress():
 
 
 def test_fixed_padding_enforces_bound():
-    # {3: {dec}..255} matches exactly 3 digits whose value is ≤ 255
-    result = matches("{3: {dec}..255}", "042 999 256 255")
+    # {3: {@dec}..255} matches exactly 3 digits whose value is ≤ 255
+    result = matches("{3: {@dec}..255}", "042 999 256 255")
     assert "042" in result
     assert "255" in result
     assert "999" not in result
@@ -196,7 +197,7 @@ def test_fixed_padding_enforces_bound():
 
 def test_fixed_padding_rejects_wrong_width():
     # "12" is only 2 chars; with no leading zero it cannot satisfy width 3
-    assert matches("{3: {dec}..255}", "12") == []
+    assert matches("{3: {@dec}..255}", "12") == []
 
 
 # ── string_range ─────────────────────────────────────────────────────────────
@@ -296,7 +297,7 @@ def test_token_repetition():
 
 def test_variable_number_repetition():
     # First unit backs off from greedy "252" to "25" so 25+25 matches.
-    assert matches("{{dec}..255}[2]", "2525") == ["2525"]
+    assert matches("{{@dec}..255}[2]", "2525") == ["2525"]
 
 
 def test_grouped_word_repetition_case_folded():
@@ -381,8 +382,8 @@ def test_zip_range_rejects_non_alpha():
 
 
 def test_variable_padding_matches_values_in_bound():
-    # {:{dec}..255} delegates to the inner upper_bound, accepting any valid width.
-    result = matches("{:{dec}..255}", "0 9 99 255 256 999")
+    # {:{@dec}..255} delegates to the inner upper_bound, accepting any valid width.
+    result = matches("{:{@dec}..255}", "0 9 99 255 256 999")
     assert "0" in result
     assert "9" in result
     assert "99" in result
@@ -409,7 +410,7 @@ def test_complement_char_range():
 
 def test_named_alpha_b32():
     # b32 = 0-9, a-v (RFC 4648 §7). Letters w-z are outside.
-    result = matches("{b32}", "01v wxyz")
+    result = matches("{@b32}", "01v wxyz")
     assert "0" in result
     assert "1" in result
     assert "v" in result
@@ -419,7 +420,7 @@ def test_named_alpha_b32():
 
 def test_named_alpha_b64():
     # b64 = A-Z, a-z, 0-9, +, /
-    result = matches("{b64}", "Az+/ !")
+    result = matches("{@b64}", "Az+/ !")
     assert "A" in result
     assert "z" in result
     assert "+" in result
@@ -430,7 +431,7 @@ def test_named_alpha_b64():
 
 def test_named_alpha_b85():
     # b85 = RFC 1924: 0-9, A-Z, a-z, !#$%&()*+-;<=>?@^_`{|}~
-    result = matches("{b85}", "A! , ")
+    result = matches("{@b85}", "A! , ")
     assert "A" in result
     assert "!" in result
     assert "," not in result

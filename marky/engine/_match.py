@@ -3,10 +3,11 @@
 from marky.engine._types import Match
 from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
-from marky.utils.alphabet import NAMED_ALPHABETS, alpha_value
+from marky.utils.alphabet import alpha_value
 
-_ASCII_ALPHA = "".join(chr(i) for i in range(0x80))
-_HEXI_CHARS = "0123456789abcdefABCDEF"
+# Largest code-point range materialized into a value-arithmetic alphabet. ascii
+# (128) fits; uni (1.1M) does not and raises when used as a range bound.
+_MAX_MATERIALIZE = 0x10000
 
 
 class _State:
@@ -276,8 +277,6 @@ def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
         return pos + 1
     if t == "string_range":
         return _match_string_range(node, text, pos)
-    if t == "named_alpha":
-        return _match_named_alpha(node, text, pos)
     if t == "full_alpha":
         return _match_full_alpha(node, text, pos)
     if t == "upper_bound":
@@ -320,30 +319,6 @@ def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
     return None
 
 
-def _match_named_alpha(node: HMKNode, text: str, pos: int) -> int | None:
-    name = node.metadata["name"]
-    alph = NAMED_ALPHABETS[name]
-    ch = text[pos]
-    if alph is None:
-        # Virtual: ascii, uni, or hexi
-        if name == "ascii":
-            if ord(ch) > 0x7F:
-                return None
-        elif name == "uni":
-            pass  # every char is in uni
-        elif name == "hexi":
-            if ch not in _HEXI_CHARS:
-                return None
-        else:
-            return None
-    elif ch not in alph:
-        return None
-    excl = node.metadata.get("exclusions", [])
-    if excl and _is_char_excluded(ch, excl):
-        return None
-    return pos + 1
-
-
 def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     """Greedy: consume 1+ chars that each match the inner alpha node."""
     inner = node.children[0]
@@ -362,20 +337,12 @@ def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
 def _alpha_str(node: HMKNode) -> str:
     """Extract the alphabet string for range-value comparisons."""
     t = node.type
-    if t == "named_alpha":
-        name = node.metadata["name"]
-        alph = NAMED_ALPHABETS[name]
-        if alph is None:
-            # ascii has a finite, materializable alphabet usable for value
-            # arithmetic. uni (1.1M codepoints) and hexi (case-ambiguous) do not.
-            if name == "ascii":
-                return _ASCII_ALPHA
-            raise CompileError(
-                f"Virtual alphabet {name!r} cannot be used as a range bound"
-            )
-        return alph
     if t == "char_range":
         s, e = node.metadata["start"], node.metadata["end"]
+        if ord(e) - ord(s) + 1 > _MAX_MATERIALIZE:
+            raise CompileError(
+                f"Range {s!r}..{e!r} is too large to use as a value bound"
+            )
         return "".join(chr(c) for c in range(ord(s), ord(e) + 1))
     if t == "union":
         return "".join(_alpha_str(ch) for ch in node.children)
@@ -408,8 +375,6 @@ def _value_bounds(
     if t == "full_alpha":
         alph = _alpha_str(node.children[0])
         return alph, None, None, excl
-    if t == "named_alpha":
-        return _alpha_str(node), None, None, excl
     raise ValueError(f"Node type {t!r} has no value bounds")
 
 
@@ -534,9 +499,6 @@ def _group_members(node: HMKNode) -> list[str]:
     if t == "char_range":
         s, e = node.metadata["start"], node.metadata["end"]
         return [chr(c) for c in range(ord(s), ord(e) + 1)]
-    if t == "named_alpha":
-        alph = NAMED_ALPHABETS[node.metadata["name"]]
-        return list(alph) if alph else []
     if t == "union":
         result = []
         for child in node.children:

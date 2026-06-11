@@ -12,10 +12,10 @@ def matches(pattern, text):
 # ── Bitcoin P2PKH ─────────────────────────────────────────────────────────────
 # Matches a leading '1' then a b58 body bounded to the P2PKH value range.
 
-BTC = "{1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}"
+BTC = "{1}{11111111111111111111111..{@b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}"
 
 # The same pattern written with singleton constructors instead of literal runs.
-BTC_SINGLETON = "{1}{{1}[23]..{b58}..{z}[33]}"
+BTC_SINGLETON = "{1}{{1}[23]..{@b58}..{z}[33]}"
 
 
 def test_btc_singleton_form_is_equivalent():

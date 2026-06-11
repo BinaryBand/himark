@@ -28,10 +28,9 @@ def test_macro_whitespace_set():
     assert phase0.preprocess("{@s}") == "{\n,\r, ,\t}"
 
 
-def test_macro_value_unsafe_fall_back_to_named():
-    # b58 / b85 / ascii / uni keep the engine's named alphabet (the @ is dropped).
-    assert phase0.preprocess("{@b58}") == "{b58}"
-    assert phase0.preprocess("{@ascii}") == "{ascii}"
+def test_macro_b58_skip_ranges():
+    # b58 expands to skip-ranges that bake in the 0/O/I/l omissions.
+    assert phase0.preprocess("{@b58}") == "{1..9,A..H,J..N,P..Z,a..k,m..z}"
 
 
 def test_macro_word_boundary():

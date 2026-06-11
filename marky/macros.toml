@@ -1,0 +1,30 @@
+# Himark macros — the single source of truth for named alphabets.
+#
+# Every entry is a plain text macro: `@name` expands to the Himark source on the
+# right, exactly as if the user had typed it. The engine has no built-in
+# alphabet knowledge; it only sees the ranges/unions/congruences these expand to.
+#
+# A bare name (no `@`) is literal text — `{dec}` matches the string "dec",
+# `{@dec}` matches a decimal digit.
+
+[macros]
+# Positional alphabets (ordered — usable as value bounds, e.g. {{@dec}..255}).
+dec = "0..9"
+hex = "0..9,a..f"
+HEX = "0..9,A..F"
+b32 = "0..9,a..v"
+b58 = "1..9,A..H,J..N,P..Z,a..k,m..z" # base58: omits 0 O I l
+b64 = "A..Z,a..z,0..9,+,/"
+# base85 (RFC 1924). Its '{ } < >' members would collide with Himark syntax, so
+# they are reached by code-point ranges whose endpoints avoid them: ';..@' spans
+# '< = >' and '`..~' spans '{ | } ~'.
+b85 = '\!,#..&,(..+,-,0..9,;..@,A..Z,^.._,`..~'
+
+# Code-point ranges (endpoints written as \\u escapes).
+ascii = "\u0000..\u007f"
+uni = "\u0000..\U0010FFFF"
+
+# Case-fold and whitespace classes (congruence / unions, not value bounds).
+hexi = "0..9,a<->A..f<->F"
+i = "0..9,a<->A..z<->Z"
+s = "\n,\r, ,\t"

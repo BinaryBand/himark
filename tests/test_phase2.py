@@ -31,9 +31,9 @@ def test_brace_group_with_leaf():
 
 
 def test_nested_brace_group():
-    tree = parse("{{dec}..255}")
-    assert children_types("{{dec}..255}") == ["brace_group"]
-    assert tree.children[0].content == "{dec}..255"
+    tree = parse("{{@dec}..255}")
+    assert children_types("{{@dec}..255}") == ["brace_group"]
+    assert tree.children[0].content == "{@dec}..255"
 
 
 def test_brace_group_count():
