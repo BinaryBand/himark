@@ -74,7 +74,14 @@ def find_matches(tree: HMKNode, text: str) -> list[Match]:
 
 
 def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
-    sep = node.content
+    cls = node.metadata.get("sep_class")
+    if cls is not None:
+        # α separator standalone: the span is the full input, constrained to
+        # the class.
+        if _unit_accepts(cls, text):
+            return [Match(text, 0, len(text))]
+        return []
+    sep = node.metadata.get("sep_value", node.content)
     if not sep:
         return [Match(text, 0, len(text))] if text else []
     parts = text.split(sep)
@@ -98,20 +105,27 @@ def _match_sequence(
     while i < len(nodes):
         node = nodes[i]
 
-        # Separator acting as lazy wildcard
+        # Separator: lazy span. α content constrains the span to the class;
+        # τ content splits the span into sub-captures; empty is unconstrained.
         if node.type == "separator":
             remaining = nodes[i + 1 :]
             snap = state.snapshot()
+            cls = node.metadata.get("sep_class")
+            sep_val = node.metadata.get("sep_value")
             if not remaining:
                 wc = text[current:]
-                _record_sep_capture(state, wc, current, len(text))
+                if cls is not None and not _unit_accepts(cls, wc):
+                    return None
+                _record_sep_capture(state, wc, current, len(text), sep_val)
                 return len(text)
             for n in range(len(text) - current + 1):
+                wc = text[current : current + n]
+                if cls is not None and not _unit_accepts(cls, wc):
+                    continue
                 state.restore(snap)
                 end = _match_sequence(remaining, text, current + n, state)
                 if end is not None:
-                    wc = text[current : current + n]
-                    _insert_sep_capture(state, snap, wc, current, current + n)
+                    _insert_sep_capture(state, snap, wc, current, current + n, sep_val)
                     return end
             state.restore(snap)
             return None
@@ -124,17 +138,31 @@ def _match_sequence(
     return current
 
 
-def _record_sep_capture(state: _State, text: str, start: int, end: int):
+def _sep_sub_groups(wc: str, sep_val: str | None) -> list[str]:
+    """τ split semantics: the span's sub-captures are its sep-split segments."""
+    return wc.split(sep_val) if sep_val else [wc]
+
+
+def _record_sep_capture(
+    state: _State, text: str, start: int, end: int, sep_val: str | None = None
+):
     state.captures.append(text)
     state.spans.append((start, end))
-    state.sub_groups.append([text])
+    state.sub_groups.append(_sep_sub_groups(text, sep_val))
 
 
-def _insert_sep_capture(state: _State, snap: tuple, wc: str, start: int, end: int):
+def _insert_sep_capture(
+    state: _State,
+    snap: tuple,
+    wc: str,
+    start: int,
+    end: int,
+    sep_val: str | None = None,
+):
     nc = snap[0]
     state.captures.insert(nc, wc)
     state.spans.insert(snap[1], (start, end))
-    state.sub_groups.insert(snap[2], [wc])
+    state.sub_groups.insert(snap[2], _sep_sub_groups(wc, sep_val))
 
 
 # ---------------------------------------------------------------------------

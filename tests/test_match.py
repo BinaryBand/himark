@@ -457,3 +457,63 @@ def test_separator_bounded_multiple_spans():
     assert len(ms) == 2
     assert ms[0].groups[1] == "one"
     assert ms[1].groups[1] == "two"
+
+
+# ── α-separator: cardinality dispatch ────────────────────────────────────────
+
+
+def test_alpha_separator_upper_bound_admits_members():
+    # {aa}<<{a..z}..zz>>{aa} — separator span must be in upper_bound({a..z}..zz):
+    # any 1- or 2-char lowercase string.
+    trees = parser.parse("{aa}<<{a..z}..zz>>{aa}")
+    ms = find_matches(trees[0], "aaaaa aabaa aazzaa aabcaa")
+    texts = [m.text for m in ms]
+    assert "aaaaa" in texts  # span 'a'  (1-char member)
+    assert "aabaa" in texts  # span 'b'  (1-char member)
+    assert "aazzaa" in texts  # span 'zz' (2-char member, upper bound)
+    assert "aabcaa" in texts  # span 'bc' (2-char member, within bound)
+
+
+def test_alpha_separator_upper_bound_rejects_non_members():
+    # 'zzz' value (17575) > alpha_value('zz') (675): rejected.
+    # 'HELLO' uses non-alphabet chars: rejected.
+    # 'abc' value (28) <= 675: accepted by leading-zero semantics.
+    trees = parser.parse("{aa}<<{a..z}..zz>>{aa}")
+    ms = find_matches(trees[0], "aazzzaa aaHELLOaa aabcaa")
+    texts = [m.text for m in ms]
+    assert "aazzzaa" not in texts  # span 'zzz': value 17575 > bound 675
+    assert "aaHELLOaa" not in texts  # span 'HELLO': non-alphabet chars
+    assert "aabcaa" in texts  # span 'abc': accepted by leading-zero semantics
+
+
+def test_alpha_separator_full_alpha_admits_any_alpha_string():
+    # <<{a..z}>> — span constrained to full lowercase alphabet (any length).
+    trees = parser.parse("{X}<<{a..z}>>{X}")
+    ms = find_matches(trees[0], "XhelloX XaX XaaaaX")
+    texts = [m.text for m in ms]
+    assert "XhelloX" in texts
+    assert "XaX" in texts
+    assert "XaaaaX" in texts
+
+
+def test_alpha_separator_full_alpha_rejects_non_alpha():
+    trees = parser.parse("{X}<<{a..z}>>{X}")
+    ms = find_matches(trees[0], "X123X XHiX")
+    assert ms == []
+
+
+def test_alpha_separator_capture_is_span():
+    # The span captured by <<{a..z}..zz>> is the constrained substring.
+    trees = parser.parse("{aa}<<{a..z}..zz>>{aa}")
+    ms = find_matches(trees[0], "aazzaa")
+    assert len(ms) == 1
+    assert ms[0].groups[1] == "zz"  # group 1 is the separator span
+
+
+def test_transparent_brace_alpha_separator():
+    # {aa<<{a..z}..zz>>aa} — transparent splice; same full-match set as unwrapped.
+    trees_wrapped = parser.parse("{aa<<{a..z}..zz>>aa}")
+    trees_unwrapped = parser.parse("{aa}<<{a..z}..zz>>{aa}")
+    texts_w = [m.text for m in find_matches(trees_wrapped[0], "aaaaa aabaa aazzaa")]
+    texts_u = [m.text for m in find_matches(trees_unwrapped[0], "aaaaa aabaa aazzaa")]
+    assert texts_w == texts_u

@@ -6,12 +6,18 @@ Transforms:
                  union | complement | token_set | group_class | padded
   double_braces → full_match | group_ref | span_ref | count_ref | emoji | latex
   separator    → separator (with parsed count metadata)
+
+A brace group whose content holds a top-level `<<...>>` is not arithmetic — it
+encloses a pattern sub-sequence (e.g. `{**<<>>**}`). Such a brace is transparent:
+its interior is re-tokenized and spliced into the parent sequence, so inner
+constructs capture and number as if the brace were not there.
 """
 
 import re
 
 from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
+from marky.parser import phase2
 from marky.utils.alphabet import is_named_alpha
 
 _PADDING_RE = re.compile(r"^(\d*)\s*:\s*(.+)$", re.DOTALL)
@@ -28,6 +34,18 @@ def parse(node: HMKNode) -> HMKNode:
     new_children = []
     for child in node.children:
         if child.type == "brace_group":
+            if _has_top_level_separator(child.content):
+                # Transparent sub-sequence: splice the re-tokenized interior
+                # into the parent so inner constructs number left-to-right
+                # as if unwrapped.
+                if "count_src" in child.metadata:
+                    raise CompileError(
+                        f"Count modifier is not supported on a sequence brace: "
+                        f"{{{child.content}}}[{child.metadata['count_src']}]"
+                    )
+                sub = parse(phase2.parse(child.content))
+                new_children.extend(sub.children)
+                continue
             semantic = _resolve_brace(child.content)
             wrapper = HMKNode("brace_group", child.content, [semantic])
             if "count_src" in child.metadata:
@@ -38,6 +56,7 @@ def parse(node: HMKNode) -> HMKNode:
         elif child.type == "separator":
             if "count_src" in child.metadata:
                 child.metadata["count"] = _parse_count(child.metadata.pop("count_src"))
+            _resolve_separator(child)
             new_children.append(child)
         else:
             new_children.append(child)
@@ -45,7 +64,69 @@ def parse(node: HMKNode) -> HMKNode:
     return node
 
 
+# ── Separator resolution ──────────────────────────────────────────────────────
+
+
+def _resolve_separator(node: HMKNode) -> None:
+    """Resolve separator content by cardinality.
+
+    τ (a bare constant or singleton constructor) keeps split semantics — the
+    span is split on every occurrence of the constant (`sep_value`). α is an
+    arithmetic class — the span must be a member of it (`sep_class`). Empty
+    content (`<<>>`) stays an unconstrained span.
+    """
+    content = node.content
+    if not content:
+        return
+
+    dot_parts = _split_top("..", content)
+    comma_parts = _split_top(",", content)
+    has_ops = len(dot_parts) > 1 or len(comma_parts) > 1 or content.startswith("{")
+
+    # τ: bare constant with no arithmetic operators (<<\n>>, << >>, <<abc>>)
+    if not has_ops and not is_named_alpha(content):
+        node.metadata["sep_value"] = content
+        return
+
+    # τ: singleton constructor ({a}[3] → 'aaa')
+    sval = _singleton_value(content)
+    if sval is not None:
+        node.metadata["sep_value"] = sval
+        return
+
+    # Operator chars with empty operands are punctuation constants (<<,>>,
+    # <<..>>), not arithmetic.
+    if (len(dot_parts) > 1 and any(not p.strip(" \t") for p in dot_parts)) or (
+        len(comma_parts) > 1 and any(not p.strip(" \t") for p in comma_parts)
+    ):
+        node.metadata["sep_value"] = content
+        return
+
+    # α: the span is constrained to the class.
+    node.metadata["sep_class"] = _resolve_brace(content)
+
+
 # ── Brace resolution ─────────────────────────────────────────────────────────
+
+
+def _has_top_level_separator(content: str) -> bool:
+    """True if `content` holds a `<<` at brace depth 0 — i.e. the brace group
+    encloses a pattern sub-sequence rather than an arithmetic expression."""
+    depth = 0
+    i = 0
+    while i < len(content):
+        ch = content[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        elif depth == 0 and content[i : i + 2] == "<<":
+            return True
+        i += 1
+    return False
 
 
 def _resolve_brace(content: str) -> HMKNode:

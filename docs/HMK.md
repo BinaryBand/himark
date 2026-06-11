@@ -16,18 +16,20 @@ Three constructs: `{...}` matches and captures, `<<...>>` spans and splits, `[..
 
 These compose as `{expr}[count]` and `<<sep>>[count]`.
 
+> **Note:** `{expr}` is implicitly identical to `{expr}[1]`.
+
 ---
 
 ## `{...}` Arithmetic
 
-Expressions inside `{...}` are built from two types:
+Expressions inside `{...}` and `<<...>>` are built from two types:
 
 - **$\alpha$** -- an abstract group: a `{...}` expression representing every value it can produce
 - **$\tau$** -- any expression with cardinality 1: a bare string (`hello`, `a`, `ff`, `\n`), or a `{...}` whose only possible value is a single concrete string
 
 <!-- **$\sigma$** -- either $\alpha$ or $\tau$ -->
 
-`{expr}` is identical to `{expr}[1]` -- and since it can only produce one value, it is $\tau$.
+> **Note:** Since `{expr}[1]` can only produce one value, it is $\tau$.
 
 | Form                         | Meaning                   |
 | ---------------------------- | ------------------------- |
@@ -43,7 +45,7 @@ Expressions inside `{...}` are built from two types:
 
 `,` joins expressions as a union. `{!expr}` is the complement -- any value NOT in the group.
 
-Which row applies is determined by cardinality. A bare string is always $\tau$. A `{...}` sub-expression is $\tau$ if it is a singleton (e.g. `{z}[33]` $\to$ `"z...z"`), $\alpha$ otherwise.
+> Which row applies is determined by cardinality. A bare string is always $\tau$. A `{...}` sub-expression is $\tau$ if it is a singleton (e.g. `{z}[33]` $\to$ `"z...z"`), $\alpha$ otherwise.
 
 Singleton `{...}` expressions used as bounds evaluate to their single concrete value at parse time:
 
@@ -125,6 +127,8 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 {cat..dog}       // 'cat', 'cau', through 'dog'
 ```
 
+> **Note:** Declaring a multi-character range without an explicit $\alpha$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c:fire:t.
+
 ---
 
 ## Grouped-class Alphabets
@@ -142,8 +146,8 @@ Zip ($\alpha_1$..$\alpha_2$) steps through both classes in parallel:
 A grouped-class alphabet matches any string where each position satisfies one of the groups:
 
 ```proto
-{{a,A}..{z,Z}}      // any word, any casing, any length
-{{a,A}..{z,Z}}[2]   // same word twice -- 'Hello' then 'hello' matches
+{{a,A}..{z,Z}}      // any character, any casing
+{{a,A}..{z,Z}}[2]   // same character twice -- H then h matches
 ```
 
 ---
@@ -194,9 +198,11 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 `<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default -- the right boundary resolves to the nearest match.
 
 ```proto
-<<\n>>         // split full input on newlines
-<<>>           // full input as one segment
-{X}<<sep>>{Y}  // span from X to Y, split on sep
+<<\n>>                          // split full input on newlines
+<<>>                            // full input as one segment
+{X}<<sep>>{Y}                   // span from X to Y, split on sep
+{aa<<{a..z}..zz>>aa} => {{.}}   // 'aaaaa', 'aabaa', through 'aazzaa'
+{aa}<<{a..z}..zz>>{aa} => {{1}} // 'a', 'b', through 'zz'
 ```
 
 ---
@@ -267,5 +273,6 @@ Patterns are whitespace-significant: any space written between constructs is a l
 - '$\dots$/...' means arithmetic, '..' means Himark
 - Codeblock: <series> // <note>: <0>, <1>, through <n>
 - Definition: **<key>** -- <definition>
+- Quote: > **Note:** <Note>.
 - <char>, '<string>'
 -->

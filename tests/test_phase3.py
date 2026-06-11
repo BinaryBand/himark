@@ -288,6 +288,73 @@ def test_pure_whitespace_arm_is_literal_space():
     assert node.content == " "
 
 
+# ── Separator content (τ/α cardinality dispatch) ─────────────────────────────
+
+
+def first_separator(pattern):
+    tree = resolve(pattern)
+    return next(c for c in tree.children if c.type == "separator")
+
+
+def test_separator_tau_constant():
+    node = first_separator("<<\n>>")
+    assert node.metadata["sep_value"] == "\n"
+    assert "sep_class" not in node.metadata
+
+
+def test_separator_tau_punctuation_comma():
+    # A lone comma is a punctuation constant, not an empty union.
+    node = first_separator("<<,>>")
+    assert node.metadata["sep_value"] == ","
+
+
+def test_separator_tau_singleton_constructor():
+    node = first_separator("<<{a}[3]>>")
+    assert node.metadata["sep_value"] == "aaa"
+
+
+def test_separator_alpha_bounded_range():
+    node = first_separator("<<a..{a..z}..zz>>")
+    assert node.metadata["sep_class"].type == "bounded_range"
+    assert "sep_value" not in node.metadata
+
+
+def test_separator_alpha_full_alpha():
+    node = first_separator("<<{a..z}>>")
+    assert node.metadata["sep_class"].type == "full_alpha"
+
+
+def test_separator_empty_unconstrained():
+    node = first_separator("<<>>")
+    assert "sep_value" not in node.metadata
+    assert "sep_class" not in node.metadata
+
+
+# ── Sequence braces (transparent sub-sequence) ───────────────────────────────
+
+
+def test_sequence_brace_splices_children():
+    # {**<<>>**} — top-level <<>> flips the interior to sequence context; the
+    # brace is transparent and its children splice into the parent.
+    tree = resolve("{**<<>>**}")
+    types = [c.type for c in tree.children]
+    assert types == ["leaf", "separator", "leaf"]
+    assert tree.children[0].content == "**"
+    assert tree.children[2].content == "**"
+
+
+def test_sequence_brace_inner_groups_resolve():
+    # Inner brace groups inside a sequence brace resolve normally.
+    tree = resolve("{{a..z}<<,>>{0..9}}")
+    types = [c.type for c in tree.children]
+    assert types == ["brace_group", "separator", "brace_group"]
+
+
+def test_sequence_brace_count_raises():
+    with pytest.raises(CompileError):
+        resolve("{**<<>>**}[2]")
+
+
 def test_full_alpha_disambiguation_space_allowed():
     # { {a..z} } — surrounding space is syntactically necessary to prevent
     # {{...}} being parsed as a template ref; it is stripped silently.
