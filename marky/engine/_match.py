@@ -2,7 +2,14 @@
 
 from marky.engine._types import Match
 from marky.models.exceptions import CompileError
-from marky.models.node import HMKNode
+from marky.models.node import (
+    HMKNode,
+    is_bounded_range_node,
+    is_char_range_node,
+    is_lower_bound_node,
+    is_string_range_node,
+    is_upper_bound_node,
+)
 from marky.utils.alphabet import alpha_value
 
 # Largest code-point range materialized into a value-arithmetic alphabet. ascii
@@ -75,14 +82,16 @@ def find_matches(tree: HMKNode, text: str) -> list[Match]:
 
 
 def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
-    cls = node.metadata.get("sep_class")
+    cls_obj = node.metadata.get("sep_class")
+    cls = cls_obj if isinstance(cls_obj, HMKNode) else None
     if cls is not None:
         # α separator standalone: the span is the full input, constrained to
         # the class.
         if _unit_accepts(cls, text):
             return [Match(text, 0, len(text))]
         return []
-    sep = node.metadata.get("sep_value", node.content)
+    sep_obj = node.metadata.get("sep_value")
+    sep = sep_obj if isinstance(sep_obj, str) else node.content
     if not sep:
         return [Match(text, 0, len(text))] if text else []
     parts = text.split(sep)
@@ -111,8 +120,10 @@ def _match_sequence(
         if node.type == "separator":
             remaining = nodes[i + 1 :]
             snap = state.snapshot()
-            cls = node.metadata.get("sep_class")
-            sep_val = node.metadata.get("sep_value")
+            cls_obj = node.metadata.get("sep_class")
+            cls = cls_obj if isinstance(cls_obj, HMKNode) else None
+            sep_obj = node.metadata.get("sep_value")
+            sep_val = sep_obj if isinstance(sep_obj, str) else None
             if not remaining:
                 wc = text[current:]
                 if cls is not None and not _unit_accepts(cls, wc):
@@ -188,11 +199,7 @@ def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int
     if not node.children:
         return None
     semantic = node.children[0]
-    count = node.metadata.get("count", {"min": 1, "max": 1})
-
-    min_reps = count.get("min", 1)
-    max_reps = count.get("max", 1)
-    count_ref = count.get("count_ref")
+    min_reps, max_reps, count_ref = _count_config(node)
 
     # Resolve count_ref ({{#N}} in count position)
     if count_ref is not None:
@@ -242,6 +249,32 @@ def _unit_accepts(semantic: HMKNode, s: str) -> bool:
     return bool(s) and _match_semantic(semantic, s, 0) == len(s)
 
 
+def _count_config(node: HMKNode) -> tuple[int, int | None, int | None]:
+    """Return (min_reps, max_reps, count_ref) from brace-group count metadata."""
+    min_reps: int = 1
+    max_reps: int | None = 1
+    count_ref: int | None = None
+    count_obj = node.metadata.get("count")
+    if isinstance(count_obj, dict):
+        min_obj = count_obj.get("min")
+        max_obj = count_obj.get("max")
+        ref_obj = count_obj.get("count_ref")
+        if isinstance(min_obj, int):
+            min_reps = min_obj
+        if isinstance(max_obj, int) or max_obj is None:
+            max_reps = max_obj
+        if isinstance(ref_obj, int):
+            count_ref = ref_obj
+    return min_reps, max_reps, count_ref
+
+
+def _get_exclusions(node: HMKNode) -> list[str]:
+    excl = node.metadata.get("exclusions")
+    if isinstance(excl, list) and all(isinstance(x, str) for x in excl):
+        return excl
+    return []
+
+
 def _match_equal_block(
     semantic: HMKNode, text: str, pos: int, first_val: str, is_zip: bool
 ) -> int | None:
@@ -267,15 +300,15 @@ def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
     if t == "literal":
         s = node.content
         return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if t == "char_range":
+    if is_char_range_node(node):
         ch = text[pos]
         if not (node.metadata["start"] <= ch <= node.metadata["end"]):
             return None
-        excl = node.metadata.get("exclusions", [])
+        excl = _get_exclusions(node)
         if excl and _is_char_excluded(ch, excl):
             return None
         return pos + 1
-    if t == "string_range":
+    if is_string_range_node(node):
         return _match_string_range(node, text, pos)
     if t == "full_alpha":
         return _match_full_alpha(node, text, pos)
@@ -306,6 +339,8 @@ def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
     When endpoints are equal length, only that length is tried.
     When different, tries lengths from len(end) down to len(start).
     """
+    if not is_string_range_node(node):
+        return None
     start = node.metadata["start"]
     end = node.metadata["end"]
     lo_len = min(len(start), len(end))
@@ -322,7 +357,7 @@ def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
 def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     """Greedy: consume 1+ chars that each match the inner alpha node."""
     inner = node.children[0]
-    excl = node.metadata.get("exclusions", [])
+    excl = _get_exclusions(node)
     end = pos
     while end < len(text):
         if excl and _is_char_excluded(text[end], excl):
@@ -337,7 +372,7 @@ def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
 def _alpha_str(node: HMKNode) -> str:
     """Extract the alphabet string for range-value comparisons."""
     t = node.type
-    if t == "char_range":
+    if is_char_range_node(node):
         s, e = node.metadata["start"], node.metadata["end"]
         if ord(e) - ord(s) + 1 > _MAX_MATERIALIZE:
             raise CompileError(
@@ -360,14 +395,14 @@ def _value_bounds(
     (a single value or a `v1..v2` sub-range) checked numerically at match time.
     """
     t = node.type
-    excl = node.metadata.get("exclusions", [])
-    if t == "upper_bound":
+    excl = _get_exclusions(node)
+    if is_upper_bound_node(node):
         alph = _alpha_str(node.metadata["alpha"])
         return alph, None, alpha_value(node.metadata["upper"], alph), excl
-    if t == "lower_bound":
+    if is_lower_bound_node(node):
         alph = _alpha_str(node.metadata["alpha"])
         return alph, alpha_value(node.metadata["lower"], alph), None, excl
-    if t == "bounded_range":
+    if is_bounded_range_node(node):
         alph = _alpha_str(node.metadata["alpha"])
         lo = alpha_value(node.metadata["lower"], alph)
         hi = alpha_value(node.metadata["upper"], alph)
