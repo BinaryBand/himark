@@ -10,17 +10,16 @@ def matches(pattern, text):
 
 
 # ── Bitcoin P2PKH ─────────────────────────────────────────────────────────────
-# Matches a leading '1' then a b58 body bounded to the P2PKH value range.
+# Matches a leading '1' then a width-bounded b58 body. Length is a width
+# constraint, not a value constraint — '1' is b58's zero symbol, so a value
+# lower bound cannot enforce a minimum length.
 
-BTC = "{1}{11111111111111111111111..{@b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}"
-
-# The same pattern written with singleton constructors instead of literal runs.
-BTC_SINGLETON = "{1}{{1}[23]..{@b58}..{z}[33]}"
+BTC = "{1}{24..33:{@b58}}"
 
 
-def test_btc_singleton_form_is_equivalent():
-    addr = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
-    assert matches(BTC, addr) == matches(BTC_SINGLETON, addr)
+def test_btc_minimum_length_enforced():
+    # A short b58 run after the '1' prefix is not an address.
+    assert matches(BTC, "1abcd") == []
 
 
 def test_btc_genesis_address():

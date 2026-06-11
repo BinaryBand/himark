@@ -341,7 +341,13 @@ def _alpha_str(node: t.SemanticNode) -> str:
             )
         return "".join(chr(c) for c in range(ord(s), ord(e) + 1))
     if isinstance(node, t.UnionNode):
-        return "".join(_alpha_str(ch) for ch in node.options)
+        s = "".join(_alpha_str(ch) for ch in node.options)
+        if len(set(s)) != len(s):
+            raise CompileError(
+                "Alphabet has duplicate symbols — symbol values would be "
+                "ambiguous; use congruence (<->) for case-folding"
+            )
+        return s
     if isinstance(node, t.LiteralNode):
         return node.content
     raise ValueError(f"Cannot extract alphabet from {type(node).__name__}")
@@ -349,26 +355,39 @@ def _alpha_str(node: t.SemanticNode) -> str:
 
 def _value_bounds(
     node: t.SemanticNode,
-) -> tuple[str, int | None, int | None, list[str]]:
-    """Return (alphabet, lo, hi, exclusions) for a value-range node.
+) -> tuple[str, int | None, int | None, list[str], int]:
+    """Return (alphabet, lo, hi, exclusions, min_width) for a value-range node.
 
     lo / hi are None when that side is unbounded. Exclusions are raw strings
     (a single value or a `v1..v2` sub-range) checked numerically at match time.
+    min_width is the written width of the lower endpoint (1 when there is
+    none): values are zero-padded to it, so `{aa..{a..z}..zz}` matches exactly
+    the 2-char lowercase strings.
     """
     if isinstance(node, t.UpperBoundNode):
         alph = _alpha_str(node.alpha)
-        return alph, None, alpha_value(node.upper, alph), node.exclusions
+        return alph, None, alpha_value(node.upper, alph), node.exclusions, 1
     if isinstance(node, t.LowerBoundNode):
         alph = _alpha_str(node.alpha)
-        return alph, alpha_value(node.lower, alph), None, node.exclusions
+        lo = alpha_value(node.lower, alph)
+        return alph, lo, None, node.exclusions, len(node.lower)
     if isinstance(node, t.BoundedRangeNode):
         alph = _alpha_str(node.alpha)
         lo = alpha_value(node.lower, alph)
         hi = alpha_value(node.upper, alph)
-        return alph, lo, hi, node.exclusions
+        return alph, lo, hi, node.exclusions, len(node.lower)
     if isinstance(node, t.FullAlphaNode):
-        return _alpha_str(node.inner), None, None, node.exclusions
+        return _alpha_str(node.inner), None, None, node.exclusions, 1
     raise ValueError(f"{type(node).__name__} has no value bounds")
+
+
+def _canonical_len(value: int, base: int) -> int:
+    """Width of `value` written canonically (no leading zeros) in `base`."""
+    length, ceiling = 1, base
+    while value >= ceiling:
+        ceiling *= base
+        length += 1
+    return length
 
 
 def _is_char_excluded(ch: str, exclusions: list[str]) -> bool:
@@ -396,14 +415,18 @@ def _is_value_excluded(v: int, alph: str, exclusions: list[str]) -> bool:
 
 
 def _match_value_range(node: t.SemanticNode, text: str, pos: int) -> int | None:
-    alph, lo, hi, excl = _value_bounds(node)
+    """Greedy canonical-form match: each value has exactly one representation —
+    no leading zero symbols beyond zero-padding up to the lower endpoint's
+    written width (min_w)."""
+    alph, lo, hi, excl, min_w = _value_bounds(node)
+    zero = alph[0]
     end = pos
     while end < len(text) and text[end] in alph:
         end += 1
-    if end == pos:
-        return None
-    for length in range(end - pos, 0, -1):
+    for length in range(end - pos, min_w - 1, -1):
         candidate = text[pos : pos + length]
+        if length > min_w and candidate[0] == zero:
+            continue
         v = alpha_value(candidate, alph)
         if (lo is not None and v < lo) or (hi is not None and v > hi):
             continue
@@ -600,35 +623,38 @@ def _match_group_class(node: t.GroupClassNode, text: str, pos: int) -> int | Non
 
 
 def _match_padded(node: t.PaddedNode, text: str, pos: int) -> int | None:
+    """Width-window match: widths max_width down to min_width, leading
+    zero-character padding allowed throughout (that is the point of padding).
+    A None max_width ({:expr}) derives from the inner range's maximum value."""
     inner = node.inner
-    width = node.width
+    try:
+        alph, lo, hi, excl, _ = _value_bounds(inner)
+    except ValueError:
+        return _match_padded_per_char(node, text, pos)
 
-    if width is not None:
-        # Fixed width: exactly `width` chars, all in the alphabet, value in bounds.
-        # Leading zero-character padding is allowed (that is the point of padding).
-        candidate = text[pos : pos + width]
-        if len(candidate) != width:
-            return None
-        try:
-            alph, lo, hi, excl = _value_bounds(inner)
-        except ValueError:
-            # Inner is not a value-range node (e.g. a char union): accept each
-            # position individually.
-            if all(
-                _match_semantic(inner, text, pos + i) == pos + i + 1
-                for i in range(width)
-            ):
-                return pos + width
-            return None
-        if not all(c in alph for c in candidate):
-            return None
-        v = alpha_value(candidate, alph)
+    run = pos
+    while run < len(text) and text[run] in alph:
+        run += 1
+    max_w = node.max_width
+    if max_w is None:
+        max_w = _canonical_len(hi, len(alph)) if hi is not None else run - pos
+    for width in range(min(max_w, run - pos), node.min_width - 1, -1):
+        v = alpha_value(text[pos : pos + width], alph)
         if (lo is not None and v < lo) or (hi is not None and v > hi):
-            return None
+            continue
         if _is_value_excluded(v, alph, excl):
-            return None
+            continue
         return pos + width
+    return None
 
-    # Variable width ({: expr}): the inner value range already greedily caps at
-    # len(max) and allows leading zeros, so delegate directly.
-    return _match_semantic(inner, text, pos)
+
+def _match_padded_per_char(node: t.PaddedNode, text: str, pos: int) -> int | None:
+    """Inner is not a value-range node (e.g. a char union): the width window
+    applies to a run of single-char inner matches."""
+    inner = node.inner
+    run = pos
+    while run < len(text) and _match_semantic(inner, text, run) == run + 1:
+        run += 1
+    max_w = node.max_width if node.max_width is not None else run - pos
+    width = min(max_w, run - pos)
+    return pos + width if width >= node.min_width else None

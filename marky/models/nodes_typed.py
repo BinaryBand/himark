@@ -59,7 +59,6 @@ class BraceGroupNode:
 class SeparatorNode:
     type: Literal["separator"] = "separator"
     content: str = ""
-    count: CountSpec | None = None
     count_src: str | None = None
     sep_value: str | None = None
     sep_class: SemanticNode | None = None
@@ -159,9 +158,15 @@ class GroupClassNode:
 
 @dataclass(slots=True, kw_only=True)
 class PaddedNode:
+    """Width-constrained value match: {N:expr}, {N..M:expr}, or {:expr}.
+
+    max_width None means "up to the width of the inner range's maximum value"
+    (the {:expr} form); the engine derives it at match time."""
+
     inner: SemanticNode
     type: Literal["padded"] = "padded"
-    width: int | None = None
+    min_width: int = 1
+    max_width: int | None = None
 
 
 # -----------------------------

@@ -80,8 +80,11 @@ def test_upper_bound_dec():
 
 
 def test_upper_bound_hex():
+    # Canonical form only: '0f' is not the canonical spelling of value 15,
+    # so it matches as '0' then 'f'.
     result = matches("{{@hex}..ff}", "0f 100 ff ab")
-    assert "0f" in result
+    assert "0f" not in result
+    assert "0" in result and "f" in result
     assert "ff" in result
     assert "100" not in result
 
@@ -183,6 +186,35 @@ def test_exclusion_full_alpha_stress():
     assert result == expected
 
 
+# ── Canonical form (spec 0.6.0) ───────────────────────────────────────────────
+
+
+def test_canonical_rejects_leading_zeros():
+    # '007' is not the canonical spelling of 7; it matches as three values.
+    assert matches("{{@d}..255}", "007") == ["0", "0", "7"]
+
+
+def test_lower_endpoint_sets_minimum_width():
+    # {aa..{a..z}..zz} matches exactly the 2-char lowercase strings: values
+    # are zero-padded to the lower endpoint's written width, canonical beyond.
+    result = matches("{aa..{a..z}..zz}", "aa ab zz a aab")
+    assert "aa" in result
+    assert "ab" in result
+    assert "zz" in result
+    assert "a" not in result  # below minimum width
+    assert "aab" not in result  # leading zero beyond minimum width
+
+
+def test_duplicate_symbols_in_value_alphabet_raise():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    # The digits appear twice; symbol values would be ambiguous.
+    with pytest.raises(CompileError):
+        matches("{{@hex,@HEX}..ff}", "ff")
+
+
 # ── Padding ──────────────────────────────────────────────────────────────────
 
 
@@ -198,6 +230,22 @@ def test_fixed_padding_enforces_bound():
 def test_fixed_padding_rejects_wrong_width():
     # "12" is only 2 chars; with no leading zero it cannot satisfy width 3
     assert matches("{3: {@d}..255}", "12") == []
+
+
+def test_width_range_padding():
+    # {2..3:{@d}..255}: widths 2-3, leading zeros allowed, value bounded.
+    result = matches("{2..3:{@d}..255}", "00 042 255")
+    assert "00" in result
+    assert "042" in result
+    assert "255" in result
+    assert matches("{2..3:{@d}..255}", "7") == []  # below minimum width
+
+
+def test_variable_padding_caps_width_at_len_max():
+    # {:{@d}..255} accepts widths 1 through len('255') = 3, never 4.
+    result = matches("{:{@d}..255}", "0042")
+    assert "0042" not in result
+    assert "004" in result  # the 3-wide window is the greedy match
 
 
 # ── string_range ─────────────────────────────────────────────────────────────
@@ -478,13 +526,13 @@ def test_alpha_separator_upper_bound_admits_members():
 def test_alpha_separator_upper_bound_rejects_non_members():
     # 'zzz' value (17575) > alpha_value('zz') (675): rejected.
     # 'HELLO' uses non-alphabet chars: rejected.
-    # 'abc' value (28) <= 675: accepted by leading-zero semantics.
+    # 'bc' is the canonical 2-char member with value 28: accepted.
     trees = parser.parse("{aa}<<{a..z}..zz>>{aa}")
     ms = find_matches(trees[0], "aazzzaa aaHELLOaa aabcaa")
     texts = [m.text for m in ms]
     assert "aazzzaa" not in texts  # span 'zzz': value 17575 > bound 675
     assert "aaHELLOaa" not in texts  # span 'HELLO': non-alphabet chars
-    assert "aabcaa" in texts  # span 'abc': accepted by leading-zero semantics
+    assert "aabcaa" in texts  # span 'bc': canonical member within bound
 
 
 def test_alpha_separator_full_alpha_admits_any_alpha_string():

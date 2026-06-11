@@ -94,7 +94,9 @@ def test_implicit_wrap_end_to_end():
     assert matches("a..z", "h e y 9") == ["h", "e", "y"]
 
 
-def test_b58_value_range_preserved():
-    # @b58 must keep the 58-char alphabet for the P2PKH value bound.
-    result = matches("{{1}[23]..{@b58}..{z}[33]}", "1" + "A" * 24)
-    assert result  # a 25-char b58 string in range matches
+def test_b58_symbol_order_preserved():
+    # @b58 must keep the 58-symbol order for value arithmetic: '1' is value 0,
+    # '9' is value 8, 'A' is value 9 — so {{@b58}..9} admits '9' but not 'A'.
+    result = matches("{{@b58}..9}", "9 A")
+    assert "9" in result
+    assert "A" not in result

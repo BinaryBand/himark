@@ -39,7 +39,7 @@ def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.Semanti
     return node
 
 
-_PADDING_RE = re.compile(r"^(\d*)\s*:\s*(.+)$", re.DOTALL)
+_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
 _GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
 _EMOJI_RE = re.compile(r"^:([^:]+):$")
@@ -74,8 +74,10 @@ def parse(node: t.RootNode) -> t.RootNode:
             new_children.append(_parse_template_expr(child.content))
         elif isinstance(child, t.SeparatorNode):
             if child.count_src is not None:
-                child.count = _parse_count(child.count_src)
-                child.count_src = None
+                raise CompileError(
+                    f"A count on <<...>> is not allowed: "
+                    f"<<{child.content}>>[{child.count_src}]"
+                )
             _resolve_separator(child)
             new_children.append(child)
         else:
@@ -151,14 +153,18 @@ def _has_top_level_separator(content: str) -> bool:
 
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
-    # Padding prefix: {N: expr} or {: expr}
-    has_pad = False
-    pad_width: int | None = None
+    # Padding prefix: {N: expr}, {N..M: expr}, or {: expr}
+    pad: tuple[int, int | None] | None = None
     pm = _PADDING_RE.match(content)
     if pm:
-        has_pad = True
-        pad_str = pm.group(1)
-        pad_width = int(pad_str) if pad_str else None
+        spec = pm.group(1)
+        if not spec:
+            pad = (1, None)  # {:expr} — engine derives max from the inner range
+        elif ".." in spec:
+            lo, hi = spec.split("..", 1)
+            pad = (int(lo), int(hi))
+        else:
+            pad = (int(spec), int(spec))
         content = pm.group(2)
 
     # Complement prefix: {!expr}
@@ -203,8 +209,8 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if is_complement:
         node = t.ComplementNode(inner=node)
 
-    if has_pad:
-        node = t.PaddedNode(inner=node, width=pad_width)
+    if pad is not None:
+        node = t.PaddedNode(inner=node, min_width=pad[0], max_width=pad[1])
 
     return node
 
@@ -214,9 +220,21 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     if len(arms) == 1:
         return _attach_exclusions(_resolve_arm(arms[0]), exclusions)
 
-    # All arms are brace sub-expressions → group_class
+    # All arms are brace sub-expressions → group_class. Members must be
+    # singletons — a range of groups is written with `<->` ranges instead.
     if all(a.startswith("{") for a in arms):
-        groups = [_parse_inner_brace_items(a) for a in arms]
+        groups = []
+        for a in arms:
+            members = []
+            for item in _parse_inner_brace_items(a):
+                sv = _singleton_value(item)
+                if sv is None:
+                    raise CompileError(
+                        f"Group members must be singletons, got: {item!r} "
+                        f"(a range of groups is written a<->A..z<->Z)"
+                    )
+                members.append(sv)
+            groups.append(members)
         return _attach_exclusions(t.GroupClassNode(groups=groups), exclusions)
 
     bare_arms = [a for a in arms if not a.startswith("{")]

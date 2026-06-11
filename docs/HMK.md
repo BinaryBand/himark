@@ -109,7 +109,11 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 
 ### Padding
 
-A plain value range matches only the **canonical** form of each value -- no leading zero characters, so every value corresponds to exactly one string. `{{@d}..255}` matches '7' but not '007'. Padding relaxes the width:
+A plain value range matches only the **canonical** form of each value -- no leading zero characters, so every value corresponds to exactly one string. `{{@d}..255}` matches '7' but not '007'.
+
+A multi-character lower endpoint sets a **minimum width**: values are zero-padded up to it, and canonical beyond it. `{aa..{a..z}..zz}` matches exactly the 2-char lowercase strings -- 'aa' is value 0 padded to width 2. Each value still has exactly one representation.
+
+Padding relaxes the width:
 
 | Form         | Width                              |
 | ------------ | ---------------------------------- |

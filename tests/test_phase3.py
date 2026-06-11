@@ -187,13 +187,22 @@ def test_complement():
 def test_fixed_padding():
     node = first_semantic("{3: {@d}..255}")
     assert node.type == "padded"
-    assert node.width == 3
+    assert node.min_width == 3
+    assert node.max_width == 3
+
+
+def test_width_range_padding():
+    node = first_semantic("{2..3: {@d}..255}")
+    assert node.type == "padded"
+    assert node.min_width == 2
+    assert node.max_width == 3
 
 
 def test_variable_padding():
     node = first_semantic("{: {@d}..255}")
     assert node.type == "padded"
-    assert node.width is None
+    assert node.min_width == 1
+    assert node.max_width is None
 
 
 # ── Count ────────────────────────────────────────────────────────────────────
@@ -365,6 +374,18 @@ def test_sequence_brace_inner_groups_resolve():
 def test_sequence_brace_count_raises():
     with pytest.raises(CompileError):
         resolve("{**<<>>**}[2]")
+
+
+def test_separator_count_raises():
+    # A count on <<...>> is a compile error; the syntax is reserved.
+    with pytest.raises(CompileError):
+        resolve("<<,>>[2]")
+
+
+def test_group_class_non_singleton_member_raises():
+    # Group members must be singletons; ranges of groups use <-> ranges.
+    with pytest.raises(CompileError):
+        resolve("{{a..z},{A..Z}}")
 
 
 def test_full_alpha_disambiguation_space_allowed():
