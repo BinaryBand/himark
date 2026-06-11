@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.4.0-draft  
+**Version:** 0.5.0-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -22,36 +22,27 @@ These compose as `{expr}[count]` and `<<sep>>[count]`.
 
 ## `{...}` Arithmetic
 
-Expressions inside `{...}` and `<<...>>` are built from two types:
+Expressions inside `{...}` and `<<...>>` are built from one type:
 
-- **$\alpha$** -- an abstract group: a `{...}` expression representing every value it can produce
-- **$\tau$** -- any expression with cardinality 1: a bare string (`hello`, `a`, `ff`, `\n`), or a `{...}` whose only possible value is a single concrete string
+- **$\sigma$** -- an ordered alphabet; a bare string is a $\sigma$ with cardinality 1
 
-<!-- **$\sigma$** -- either $\alpha$ or $\tau$ -->
+| Operator | Role                                     |
+| -------- | ---------------------------------------- |
+| `..`     | Range between endpoints                  |
+| `,`      | Union of $\sigma$'s                      |
+| `<->`    | Congruence group                         |
+| `!`      | Complement -- any value NOT in the group |
 
-> **Note:** Since `{expr}[1]` can only produce one value, it is $\tau$.
+**Endpoint projection.** A $\sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
 
-| Form                         | Meaning                   |
-| ---------------------------- | ------------------------- |
-| $\tau$                       | Literal match             |
-| $\tau_1$..$\tau_2$           | Character/string range    |
-| $\alpha$                     | Full range                |
-| $\alpha$..$\tau$             | Upper bound $\tau$        |
-| $\tau$..$\alpha$             | Lower bound $\tau$        |
-| $\tau_1$..$\alpha$..$\tau_2$ | Bounded range in $\alpha$ |
-| $\alpha_1$..$\alpha_2$       | Zip (counts must match)   |
-
-<!-- DECISION: $\sigma$..$\sigma$ -->
-
-`,` joins expressions as a union. `{!expr}` is the complement -- any value NOT in the group.
-
-> Which row applies is determined by cardinality. A bare string is always $\tau$. A `{...}` sub-expression is $\tau$ if it is a singleton (e.g. `{z}[33]` $\to$ `"z...z"`), $\alpha$ otherwise.
-
-Singleton `{...}` expressions used as bounds evaluate to their single concrete value at parse time:
-
-```proto
-{{1}[23]..{b58}..{z}[33]}  // b58 body bounded to the P2PKH value range
-```
+| Written          | Alphabet | Low   | High      |
+| ---------------- | -------- | ----- | --------- |
+| `a..z`           | Unicode  | `a`   | `z`       |
+| `cat..dog`       | Unicode  | `cat` | `dog`     |
+| `{dec}..255`     | dec      | floor | `255`     |
+| `128..{dec}`     | dec      | `128` | unbounded |
+| `aa..{a..z}..zz` | a–z      | `aa`  | `zz`      |
+| `{a..z}` (bare)  | a–z      | floor | unbounded |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
 
@@ -88,7 +79,7 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 
 ## Named Alphabets
 
-Named alphabets expand to their equivalent class and act as $\alpha$ in arithmetic.
+Named alphabets expand to their equivalent class and act as $\sigma$ in arithmetic.
 
 | Name    | Expands to                   |
 | ------- | ---------------------------- |
@@ -113,7 +104,7 @@ Named alphabets expand to their equivalent class and act as $\alpha$ in arithmet
 
 ## String-Token Alphabets
 
-When comma-separated items inside `{...}` are multi-character, the class defines a string-token alphabet -- each item is a discrete token treated as $\tau$.
+When comma-separated items inside `{...}` are multi-character, the class defines a string-token alphabet -- each item is a discrete token (singleton $\sigma$).
 
 ```proto
 {cat,dog}     // 'cat' or 'dog'
@@ -127,7 +118,7 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 {cat..dog}       // 'cat', 'cau', through 'dog'
 ```
 
-> **Note:** Declaring a multi-character range without an explicit $\alpha$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c:fire:t.
+> **Note:** Declaring a multi-character range without an explicit $\sigma$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c:fire:t.
 
 ---
 
@@ -135,19 +126,20 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 
 When `{...}` items are class expressions, the alphabet defines **equivalence groups** -- sets of surface forms mapping to the same abstract position. Each group is one letter regardless of the physical length of its members.
 
-Zip ($\alpha_1$..$\alpha_2$) steps through both classes in parallel:
+`<->` ($\leftrightarrow$) defines a **congruence group** -- a set of surface forms that are interchangeable at one position. `<->` binds tighter than `..`, so groups compose with ranges:
 
 ```proto
-{{a,A}..{z,Z}}       // 26 groups: a<->A, b<->B, through z<->Z
-{{a,A},{b,B},{c,C}}  // 3 groups, enumerated
-{{a,bc},{def,ghi}}   // 2 groups with multi-char tokens
+{a<->A..z<->Z}            // range of 26 congruence pairs: a<->A, b<->B, through z<->Z
+{{a..z}<->{A..Z}}         // congruence of two ranges -- same 26-letter alphabet
+{{a<->A},{b<->B},{c<->C}} // 3 groups, enumerated
+{{a<->bc},{def<->ghi}}    // 2 groups with multi-char tokens
 ```
 
-A grouped-class alphabet matches any string where each position satisfies one of the groups:
+Under `[count]`, repetition-equality is checked against the congruence group -- `a` and `A` count as the same value:
 
 ```proto
-{{a,A}..{z,Z}}      // any character, any casing
-{{a,A}..{z,Z}}[2]   // same character twice -- H then h matches
+{a<->A}[2]          // 'aa', 'aA', 'Aa', 'AA' -- contrast {a,A}[2]: only 'aa' or 'AA'
+{a<->A..z<->Z}[2]   // same letter twice, any casing -- 'He', 'hE', 'HE' all match; 'Hb' does not
 ```
 
 ---
@@ -221,7 +213,7 @@ Chains: `pattern => template => pattern => template`. `{{.}}` in a chained templ
 Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` references and renders output). Two fold behaviors compose:
 
 - At the **top level**, every match of the leading pattern is transformed, yielding one result per match; non-matches are dropped. A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
-- A **deferred `{{.}}`** applies the remaining chain to the current match _in place_ -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
+- A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
 
 ```proto
 {dec}[1..] => <{{.}}> => {dec} => #{{.}}   // '42' -> '<#4>', '<#2>'
