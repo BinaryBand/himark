@@ -245,19 +245,19 @@ def test_union_chars():
 
 def test_group_class_single_char():
     # Each position is one member of a group; any casing, any length.
-    result = matches("{{a,A},{b,B}}", "aBAb zz")
+    result = matches("{{a<->A},{b<->B}}", "aBAb zz")
     assert result == ["aBAb"]
 
 
 def test_group_class_multichar_tokens():
     # Multi-char group members are matched as whole tokens, not loose chars.
-    result = matches("{{a,bc},{def,ghi}}", "bcghi")
+    result = matches("{{a<->bc},{def<->ghi}}", "bcghi")
     assert result == ["bcghi"]
 
 
 def test_group_class_rejects_partial_token():
     # 'b' alone is not a member ('bc' is); a lone 'b' must not start a match.
-    result = matches("{{a,bc},{x,yz}}", "byz")
+    result = matches("{{a<->bc},{x<->yz}}", "byz")
     assert result == ["yz"]  # no-anchor: 'yz' still matches as a sub-token
 
 
@@ -301,12 +301,12 @@ def test_variable_number_repetition():
 
 def test_grouped_word_repetition_case_folded():
     # Spec headline: same word twice, any casing. "Hello" then "HELLO".
-    assert matches("{{a,A}..{z,Z}}[2]", "HelloHELLO") == ["HelloHELLO"]
+    assert matches("{a<->A..z<->Z}[2]", "HelloHELLO") == ["HelloHELLO"]
 
 
 def test_grouped_word_repetition_mixed():
-    # "ab" and "AB" are group-equal (a↔A, b↔B).
-    assert matches("{{a,A}..{z,Z}}[2]", "abAB") == ["abAB"]
+    # "ab" and "AB" are group-equal (a<->A, b<->B).
+    assert matches("{a<->A..z<->Z}[2]", "abAB") == ["abAB"]
 
 
 # ── Separator ─────────────────────────────────────────────────────────────────
@@ -366,15 +366,15 @@ def test_template_full_match():
 
 
 def test_zip_range_matches_letter_sequence():
-    # {{a..z}..{A..Z}} — any sequence of chars drawn from [a-z, A-Z].
-    result = matches("{{a..z}..{A..Z}}", "Hello 123 World")
+    # {{a..z}<->{A..Z}} — congruence of two ranges: any [a-z, A-Z] sequence.
+    result = matches("{{a..z}<->{A..Z}}", "Hello 123 World")
     assert "Hello" in result
     assert "World" in result
     assert "123" not in result
 
 
 def test_zip_range_rejects_non_alpha():
-    assert matches("{{a..z}..{A..Z}}", "123") == []
+    assert matches("{{a..z}<->{A..Z}}", "123") == []
 
 
 # ── variable-width padding ────────────────────────────────────────────────────

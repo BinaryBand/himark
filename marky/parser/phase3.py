@@ -241,12 +241,12 @@ def _parse_inner_brace_items(brace_text: str) -> list[str]:
     """Return the top-level comma-separated items inside a {…} expression."""
     if not (brace_text.startswith("{") and brace_text.endswith("}")):
         raise CompileError(f"Expected brace expression, got: {brace_text!r}")
-    items = _split_top(",", brace_text[1:-1])
+    items = _split_top("<->", brace_text[1:-1])
     for item in items:
         stripped = item.strip(" \t")
         if stripped and stripped != item:
             raise CompileError(
-                f"Unexpected whitespace in {brace_text!r}: remove spaces around ','"
+                f"Unexpected whitespace in {brace_text!r}: remove spaces around '<->'"
             )
     return [s.strip(" \t") or s for s in items]
 
@@ -314,6 +314,13 @@ def _resolve_arm(arm: str) -> HMKNode:
                 f"Unexpected whitespace in '{arm}': remove spaces around '..'"
             )
     parts = [p.strip(" \t") or p for p in parts]
+
+    # `<->` (congruence) binds tighter than `..`. If any `..`-part holds a
+    # top-level `<->`, the arm is a congruence group or a range of them.
+    cong = [_split_top("<->", p) for p in parts]
+    if any(len(c) > 1 for c in cong):
+        return _resolve_congruence(parts, cong)
+
     svals = [_singleton_value(p) for p in parts]
 
     if len(parts) == 1:
@@ -373,6 +380,62 @@ def _resolve_arm(arm: str) -> HMKNode:
         )
 
     raise CompileError(f"Too many '..' separators in: {arm!r}")
+
+
+# ── Congruence (`<->`) resolution ─────────────────────────────────────────────
+
+
+def _congruence_members(members: list[str]) -> list[str]:
+    """Resolve each `<->` member to its singleton value."""
+    vals = []
+    for m in members:
+        sv = _singleton_value(m)
+        if sv is None:
+            raise CompileError(f"Congruence member must be a singleton or class: {m!r}")
+        vals.append(sv)
+    return vals
+
+
+def _congruence_union(members: list[str]) -> HMKNode:
+    """Build a union node (or lone literal) from singleton `<->` members."""
+    children = [HMKNode("literal", v) for v in _congruence_members(members)]
+    if len(children) == 1:
+        return children[0]
+    return HMKNode("union", "<->".join(members), children)
+
+
+def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> HMKNode:
+    """Resolve a `<->` congruence arm.
+
+    One part:  `a<->A`            → a single congruence group
+               `{a..z}<->{A..Z}`  → a zip of two classes
+    Two parts: `a<->A..z<->Z`     → a range of congruence pairs (zip)
+    """
+    if len(parts) == 1:
+        members = cong[0]
+        # α<->α — congruence of two classes (zip).
+        if len(members) == 2 and all(m.startswith("{") for m in members):
+            left = _resolve_brace(_inner_of(members[0]))
+            right = _resolve_brace(_inner_of(members[1]))
+            return HMKNode(
+                "zip_range", parts[0], metadata={"left": left, "right": right}
+            )
+        # Singleton members — one enumerated congruence group.
+        return HMKNode(
+            "group_class", parts[0], metadata={"groups": [_congruence_members(members)]}
+        )
+
+    if len(parts) == 2:
+        # Range of congruence pairs steps both columns in parallel (zip).
+        left = _congruence_union(cong[0])
+        right = _congruence_union(cong[1])
+        return HMKNode(
+            "zip_range", "..".join(parts), metadata={"left": left, "right": right}
+        )
+
+    raise CompileError(
+        f"Congruence range supports at most two endpoints, got: {parts!r}"
+    )
 
 
 # ── Count parsing ─────────────────────────────────────────────────────────────

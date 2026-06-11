@@ -77,10 +77,31 @@ def test_bounded_range():
 
 
 def test_zip_range():
-    node = first_semantic("{{a..z}..{A..Z}}")
+    node = first_semantic("{{a..z}<->{A..Z}}")
     assert node.type == "zip_range"
     assert node.metadata["left"].type == "char_range"
     assert node.metadata["right"].type == "char_range"
+
+
+def test_congruence_single_pair():
+    # {a<->A} — one enumerated congruence group.
+    node = first_semantic("{a<->A}")
+    assert node.type == "group_class"
+    assert node.metadata["groups"] == [["a", "A"]]
+
+
+def test_congruence_range_of_pairs():
+    # {a<->A..z<->Z} — range of congruence pairs steps both columns (zip).
+    node = first_semantic("{a<->A..z<->Z}")
+    assert node.type == "zip_range"
+    assert node.metadata["left"].type == "union"
+    assert node.metadata["right"].type == "union"
+
+
+def test_congruence_enumerated_groups():
+    node = first_semantic("{{a<->A},{b<->B}}")
+    assert node.type == "group_class"
+    assert node.metadata["groups"] == [["a", "A"], ["b", "B"]]
 
 
 def test_full_alpha():
@@ -156,7 +177,7 @@ def test_token_set():
 
 
 def test_group_class():
-    node = first_semantic("{{a,A},{b,B}}")
+    node = first_semantic("{{a<->A},{b<->B}}")
     assert node.type == "group_class"
     assert node.metadata["groups"] == [["a", "A"], ["b", "B"]]
 

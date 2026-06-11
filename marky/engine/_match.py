@@ -198,7 +198,7 @@ def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int
         n = state.count_refs.get(count_ref, 0)
         min_reps = max_reps = n
 
-    is_zip = semantic.type == "zip_range"
+    is_zip = semantic.type in ("zip_range", "group_class")
 
     def record(end: int, subs: list[str]) -> int:
         idx = len(state.captures)
@@ -244,8 +244,11 @@ def _unit_accepts(semantic: HMKNode, s: str) -> bool:
 def _match_equal_block(
     semantic: HMKNode, text: str, pos: int, first_val: str, is_zip: bool
 ) -> int | None:
-    """Match one more repetition that must equal `first_val` (group-equal if zip)."""
+    """Match one more repetition that must equal `first_val` (congruence-aware
+    for zip_range / group_class, literal otherwise)."""
     if is_zip:
+        if semantic.type == "group_class":
+            return _match_group_equal(semantic, text, pos, first_val)
         return _match_zip_equal(semantic, text, pos, first_val)
     n = len(first_val)
     return pos + n if text[pos : pos + n] == first_val else None
@@ -579,6 +582,33 @@ def _match_zip_equal(node: HMKNode, text: str, pos: int, first_val: str) -> int 
         if char_to_group.get(ch) != expected_grp:
             return None
     return pos + len(first_val)
+
+
+def _match_group_equal(
+    node: HMKNode, text: str, pos: int, first_val: str
+) -> int | None:
+    """Match a group_class repetition that must be group-equivalent to first_val.
+
+    Single-char members map each char to its group index; the repetition is equal
+    when it has the same group sequence (so `a<->A` makes 'a' and 'A' equal). If
+    any member is multi-char, fall back to literal equality.
+    """
+    groups = node.metadata["groups"]
+    char_to_group: dict[str, int] = {}
+    for idx, grp in enumerate(groups):
+        for m in grp:
+            if len(m) != 1:
+                n = len(first_val)
+                return pos + n if text[pos : pos + n] == first_val else None
+            char_to_group[m] = idx
+    n = len(first_val)
+    candidate = text[pos : pos + n]
+    if len(candidate) != n:
+        return None
+    for a, b in zip(first_val, candidate):
+        if a not in char_to_group or char_to_group.get(b) != char_to_group[a]:
+            return None
+    return pos + n
 
 
 def _match_union(node: HMKNode, text: str, pos: int) -> int | None:
