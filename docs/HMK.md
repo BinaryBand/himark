@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.5.0-draft  
+**Version:** 0.5.1-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -20,7 +20,33 @@ These compose as `{expr}[count]` and `<<sep>>[count]`.
 
 ---
 
-## `{...}` Arithmetic
+## Shortcuts
+
+Himark is designed to be strictly logically consistent at the cost of brevity. To combat over-verbosity, it uses text-based, pre-processing shortcuts.
+
+### Implicit Containers
+
+Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement is not wrapped at root, we can assume it's implicitly `{}` wrapped before tokenization.
+
+### Macros
+
+| Name     | Expands to                   |
+| -------- | ---------------------------- |
+| `@dec`   | `0..9`                       |
+| `@hex`   | `0..9,a..f`                  |
+| `@hexi`  | `0..9,a<->A..f<->F`          |
+| `@HEX`   | `0..9,A..F`                  |
+| `@b32`   | `0..9,a..v` (RFC 4648 $\S7$) |
+| `@b58`   | `1..9,A..Z,a..z,!I,!O,!l`    |
+| `@b64`   | `A..Z,a..z,0..9,+,/`         |
+| `@b85`   | RFC 1924 Base85              |
+| `@ascii` | U+0000-U+007F                |
+| `@uni`   | U+0000-U+10FFFF              |
+| `@s`     | `\n\r \t`                    |
+
+---
+
+## Arithmetic
 
 Expressions inside `{...}` and `<<...>>` are built from one type:
 
@@ -35,24 +61,31 @@ Expressions inside `{...}` and `<<...>>` are built from one type:
 
 **Endpoint projection.** A $\sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
 
-| Written          | Alphabet | Low   | High      |
-| ---------------- | -------- | ----- | --------- |
-| `a..z`           | Unicode  | `a`   | `z`       |
-| `cat..dog`       | Unicode  | `cat` | `dog`     |
-| `{dec}..255`     | dec      | floor | `255`     |
-| `128..{dec}`     | dec      | `128` | unbounded |
-| `aa..{a..z}..zz` | a–z      | `aa`  | `zz`      |
-| `{a..z}` (bare)  | a–z      | floor | unbounded |
+| Written             | Alphabet  | Low         | High      |
+| ------------------- | --------- | ----------- | --------- |
+| `{a}`               | Unicode   | `a`         | `a`       |
+| `{abc}`             | Unicode   | `abc`       | `abc`     |
+| `{a..z}`            | a$\dots$z | `a`         | `z`       |
+| `{m..{a..z}..}`     | a$\dots$z | `m`         | unbounded |
+| `{cat..dog}`        | Unicode   | `cat`       | `dog`     |
+| `{{@dec}..255}`     | dec       | `0` (floor) | `255`     |
+| `{128..{@dec}}`     | dec       | `128`       | unbounded |
+| `{aa..{@a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
 
-**Valid** -- `{a}[3]` $\to$ `"aaa"`
+**Valid** -- `{a}[3]` $\to$ `aaa`
 **Invalid** -- `{a..z}[3]` (inner has cardinality 26)
 **Invalid** -- `{a}[2..4]` (count is a range).
 
 ```proto
-{a..z,A..Z,0..9}    // alphanumeric
-{a..z,!d..f}        // lowercase, excluding d, e, through f
+{a..z,A..Z,0..9}  // alphanumeric
+{a..z,!d..f}      // lowercase, excluding d, e, through f
+{{@dec}..255}     // decimal: 0, 1, through '255'
+{{@hex}..ff}      // hex: 0, 1, through 'ff'
+{m..{a..z}}       // lowercase: m, n, through z
+{m..{a..z}..}     // lowercase: m, n, and upward
+{m..{a..z}..zz}   // lowercase: m, n, through 'zz'
 ```
 
 ### Value Exclusion
@@ -61,8 +94,8 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 
 ```proto
 {aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
-{aa..{a..z}..zz,!ee..ff}   // same, excluding 'ee', 'ef', through 'ff'
-{{dec}..255,!128..191}     // decimal 0, 1, through '255', excluding '128', '129', through '191'
+{aa..{a..z}..zz,!ee..ff}   // 2-char lowercase, excluding 'ee', 'ef', 'fe`, and 'ff'
+{{@dec}..255,!128..191}     // decimal 0, 1, through '255', excluding '128', '129', through '191'
 ```
 
 ### Padding
@@ -70,34 +103,9 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 `{N:expr}` fixes the match width to exactly `N` characters, padding with the alphabet's zero character. `{:expr}` accepts any width from 1 up to `len(max)`, allowing leading zeros.
 
 ```proto
-{2:{dec}..99}    // '00', '01', through '99'
-{3:{dec}..255}   // '000', '001', through '255'
-{:{dec}..255}    // '0', '00', through '255'
-```
-
----
-
-## Named Alphabets
-
-Named alphabets expand to their equivalent class and act as $\sigma$ in arithmetic.
-
-| Name    | Expands to                   |
-| ------- | ---------------------------- |
-| `dec`   | `0..9`                       |
-| `hex`   | `0..9,a..f`                  |
-| `HEX`   | `0..9,A..F`                  |
-| `b32`   | `0..9,a..v` (RFC 4648 $\S7$) |
-| `b58`   | `1..9,A..Z,a..z,!I,!O,!l`    |
-| `b64`   | `A..Z,a..z,0..9,+,/`         |
-| `b85`   | RFC 1924 Base85              |
-| `ascii` | U+0000-U+007F                |
-| `uni`   | U+0000-U+10FFFF              |
-
-```proto
-{{dec}..255}     // decimal: 0, 1, through '255'
-{{hex}..ff}      // hex: 0, 1, through 'ff'
-{m..{a..z}}      // lowercase: m, n, upward
-{m..{a..z}..zz}  // lowercase: m, n, through 'zz'
+{2:{@dec}..99}    // '00', '01', through '99'
+{3:{@dec}..255}   // '000', '001', through '255'
+{:{@dec}..255}    // '0', '00', through '255'
 ```
 
 ---
@@ -118,7 +126,7 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 {cat..dog}       // 'cat', 'cau', through 'dog'
 ```
 
-> **Note:** Declaring a multi-character range without an explicit $\sigma$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c:fire:t.
+> **Note:** Declaring a multi-character range without an explicit $\sigma$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c$\lambda$t.
 
 ---
 
@@ -139,7 +147,7 @@ Under `[count]`, repetition-equality is checked against the congruence group -- 
 
 ```proto
 {a<->A}[2]          // 'aa', 'aA', 'Aa', 'AA' -- contrast {a,A}[2]: only 'aa' or 'AA'
-{a<->A..z<->Z}[2]   // same letter twice, any casing -- 'He', 'hE', 'HE' all match; 'Hb' does not
+{a<->A..z<->Z}[2]   // same letter twice, any casing -- 'hh', 'hH', 'Hh', 'HH'; 'He' does not
 ```
 
 ---
@@ -216,7 +224,7 @@ Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` 
 - A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
 
 ```proto
-{dec}[1..] => <{{.}}> => {dec} => #{{.}}   // '42' -> '<#4>', '<#2>'
+{@dec}[1..] => <{{.}}> => {@dec} => #{{.}}   // '42' -> '<#4>', '<#2>'
 ```
 
 ---
@@ -230,7 +238,7 @@ Patterns are whitespace-significant: any space written between constructs is a l
 #### Headers
 
 ```proto
-<<\n>> => {#}[1..6]<<>> => <h{{#0}}>{{1}}</h{{#0}}>
+<<\n>> => {#}[1..6]{@s}[1..]<<>>{@s}[..] => <h{{#0}}>{{1}}</h{{#0}}>
 ```
 
 #### Decorators
@@ -244,9 +252,9 @@ Patterns are whitespace-significant: any space written between constructs is a l
 ### Crypto Wallet Addresses
 
 ```proto
-{1}{11111111111111111111111..{b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
-{{1}[23]..{b58}..{z}[33]}  // any valid Bitcoin address (not accounting for checksum)
-{0x}{40: {0..9,a..f,A..F}} // any valid Ethereum address (not accounting for checksum)
+{1}{11111111111111111111111..{@b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{{1}[23]..{@b58}..{z}[33]}  // any valid Bitcoin address (not accounting for checksum)
+{0x}{40:{@hexi}} // any valid Ethereum address
 ```
 
 > The above do not account for checksum verifications.
@@ -254,7 +262,7 @@ Patterns are whitespace-significant: any space written between constructs is a l
 **IPv4:**
 
 ```proto
-{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}{.}{{dec}..255}
+{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}
 ```
 
 <!--
