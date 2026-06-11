@@ -6,9 +6,12 @@ from marky.models.node import (
     HMKNode,
     is_bounded_range_node,
     is_char_range_node,
+    is_group_class_node,
     is_lower_bound_node,
     is_string_range_node,
+    is_token_set_node,
     is_upper_bound_node,
+    is_zip_range_node,
 )
 from marky.utils.alphabet import alpha_value
 
@@ -256,22 +259,20 @@ def _count_config(node: HMKNode) -> tuple[int, int | None, int | None]:
     count_ref: int | None = None
     count_obj = node.metadata.get("count")
     if isinstance(count_obj, dict):
-        min_obj = count_obj.get("min")
-        max_obj = count_obj.get("max")
-        ref_obj = count_obj.get("count_ref")
-        if isinstance(min_obj, int):
-            min_reps = min_obj
-        if isinstance(max_obj, int) or max_obj is None:
-            max_reps = max_obj
-        if isinstance(ref_obj, int):
-            count_ref = ref_obj
+        for k, v in count_obj.items():
+            if k == "min" and isinstance(v, int):
+                min_reps = v
+            elif k == "max" and (isinstance(v, int) or v is None):
+                max_reps = v
+            elif k == "count_ref" and isinstance(v, int):
+                count_ref = v
     return min_reps, max_reps, count_ref
 
 
 def _get_exclusions(node: HMKNode) -> list[str]:
     excl = node.metadata.get("exclusions")
-    if isinstance(excl, list) and all(isinstance(x, str) for x in excl):
-        return excl
+    if isinstance(excl, list):
+        return [x for x in excl if isinstance(x, str)]
     return []
 
 
@@ -479,6 +480,8 @@ def _match_bounded_range(node: HMKNode, text: str, pos: int) -> int | None:
 
 def _build_zip_groups(node: HMKNode) -> list[list[str]]:
     """Expand zip_range into a list of groups (one list of equivalent chars each)."""
+    if not is_zip_range_node(node):
+        return []
     left_node = node.metadata["left"]
     right_node = node.metadata["right"]
 
@@ -531,7 +534,7 @@ def _group_members(node: HMKNode) -> list[str]:
     t = node.type
     if t == "literal":
         return [node.content]
-    if t == "char_range":
+    if is_char_range_node(node):
         s, e = node.metadata["start"], node.metadata["end"]
         return [chr(c) for c in range(ord(s), ord(e) + 1)]
     if t == "union":
@@ -590,6 +593,8 @@ def _match_group_equal(
     when it has the same group sequence (so `a<->A` makes 'a' and 'A' equal). If
     any member is multi-char, fall back to literal equality.
     """
+    if not is_group_class_node(node):
+        return None
     groups = node.metadata["groups"]
     char_to_group: dict[str, int] = {}
     for idx, grp in enumerate(groups):
@@ -609,7 +614,7 @@ def _match_group_equal(
 
 
 def _match_union(node: HMKNode, text: str, pos: int) -> int | None:
-    excl = node.metadata.get("exclusions", [])
+    excl = _get_exclusions(node)
     for arm in node.children:
         end = _match_semantic(arm, text, pos)
         if end is not None:
@@ -644,8 +649,10 @@ def _match_complement(node: HMKNode, text: str, pos: int) -> int | None:
 
 
 def _match_token_set(node: HMKNode, text: str, pos: int) -> int | None:
+    if not is_token_set_node(node):
+        return None
     tokens = sorted(node.metadata["tokens"], key=len, reverse=True)
-    excl = node.metadata.get("exclusions", [])
+    excl = _get_exclusions(node)
     for token in tokens:
         if text[pos : pos + len(token)] == token and token not in excl:
             return pos + len(token)
@@ -660,6 +667,8 @@ def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
     Tokens are tried longest-first so multi-char members win over any shorter
     member that is a prefix of them.
     """
+    if not is_group_class_node(node):
+        return None
     groups = node.metadata["groups"]
     tokens = sorted(
         (item for grp in groups for item in grp if item),
@@ -679,7 +688,8 @@ def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
 
 def _match_padded(node: HMKNode, text: str, pos: int) -> int | None:
     inner = node.children[0]
-    width = node.metadata.get("width")
+    width_obj = node.metadata.get("width")
+    width = width_obj if isinstance(width_obj, int) else None
 
     if width is not None:
         # Fixed width: exactly `width` chars, all in the alphabet, value in bounds.

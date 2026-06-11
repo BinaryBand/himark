@@ -1,7 +1,14 @@
 from collections.abc import Callable
 
 from marky.engine._types import Match
-from marky.models.node import HMKNode
+from marky.models.node import (
+    HMKNode,
+    is_count_ref_node,
+    is_emoji_node,
+    is_group_ref_node,
+    is_latex_node,
+    is_span_ref_node,
+)
 from marky.utils.resolver import RESOLVERS as _RESOLVERS
 
 _TEMPLATE_NODE_TYPES = frozenset(
@@ -21,6 +28,8 @@ def _render_full_match(expr: HMKNode, match: Match) -> str:
 
 
 def _render_group_ref(expr: HMKNode, match: Match) -> str:
+    if not is_group_ref_node(expr):
+        return ""
     path = expr.metadata["index"]
     g_idx = path[0]  # 0-based
     if len(path) == 1:
@@ -31,6 +40,8 @@ def _render_group_ref(expr: HMKNode, match: Match) -> str:
 
 
 def _render_span_ref(expr: HMKNode, match: Match) -> str:
+    if not is_span_ref_node(expr):
+        return ""
     s_idx = expr.metadata["start"][0]  # 0-based
     e_idx = expr.metadata["end"][0]
     if s_idx < len(match.group_spans) and e_idx < len(match.group_spans):
@@ -41,19 +52,25 @@ def _render_span_ref(expr: HMKNode, match: Match) -> str:
 
 
 def _render_count_ref(expr: HMKNode, match: Match) -> str:
+    if not is_count_ref_node(expr):
+        return ""
     return str(match.count_refs.get(expr.metadata["group"], 0))
 
 
 def _render_emoji(expr: HMKNode, _match: Match) -> str:
+    if not is_emoji_node(expr):
+        return ""
+    code = expr.metadata["code"]
     r = _RESOLVERS.get("emoji")
-    return (
-        r.resolve(expr.metadata[r.metadata_key]) if r else f":{expr.metadata['code']}:"
-    )
+    return r.resolve(code) if r else f":{code}:"
 
 
 def _render_latex(expr: HMKNode, _match: Match) -> str:
+    if not is_latex_node(expr):
+        return ""
+    expr_str = expr.metadata["expr"]
     r = _RESOLVERS.get("latex")
-    return r.resolve(expr.metadata[r.metadata_key]) if r else expr.metadata["expr"]
+    return r.resolve(expr_str) if r else expr_str
 
 
 _EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {

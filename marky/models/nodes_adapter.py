@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-
-from marky.models.node import HMKNode
 from marky.models import nodes_typed as t
-
+from marky.models.node import HMKNode
 
 SemanticClasses = (
     t.LiteralNode,

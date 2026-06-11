@@ -47,14 +47,16 @@ def parse(node: HMKNode) -> HMKNode:
                 continue
             semantic = _resolve_brace(child.content)
             wrapper = HMKNode("brace_group", child.content, [semantic])
-            if "count_src" in child.metadata:
-                wrapper.metadata["count"] = _parse_count(child.metadata["count_src"])
+            src = child.metadata.get("count_src")
+            if isinstance(src, str):
+                wrapper.metadata["count"] = _parse_count(src)
             new_children.append(wrapper)
         elif child.type == "double_braces":
             new_children.append(_parse_template_expr(child.content))
         elif child.type == "separator":
-            if "count_src" in child.metadata:
-                child.metadata["count"] = _parse_count(child.metadata.pop("count_src"))
+            src = child.metadata.pop("count_src", None)
+            if isinstance(src, str):
+                child.metadata["count"] = _parse_count(src)
             _resolve_separator(child)
             new_children.append(child)
         else:

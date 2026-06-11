@@ -1,5 +1,5 @@
-from marky.models.node import HMKNode
 from marky.models import nodes_typed as t
+from marky.models.node import HMKNode
 from marky.models.nodes_adapter import from_legacy, to_legacy
 
 
