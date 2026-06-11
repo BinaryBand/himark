@@ -5,11 +5,11 @@
 # alphabet knowledge; it only sees the ranges/unions/congruences these expand to.
 #
 # A bare name (no `@`) is literal text — `{dec}` matches the string "dec",
-# `{@dec}` matches a decimal digit.
+# `{@d}` matches a decimal digit.
 
 [macros]
-# Positional alphabets (ordered — usable as value bounds, e.g. {{@dec}..255}).
-dec = "0..9"
+# Positional alphabets (ordered — usable as value bounds, e.g. {{@d}..255}).
+d = "0..9"
 hex = "0..9,a..f"
 HEX = "0..9,A..F"
 b32 = "0..9,a..v"

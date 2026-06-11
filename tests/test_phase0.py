@@ -13,7 +13,7 @@ def matches(pattern, text):
 
 
 def test_macro_simple_range():
-    assert phase0.preprocess("{@dec}") == "{0..9}"
+    assert phase0.preprocess("{@d}") == "{0..9}"
     assert phase0.preprocess("{@hex}") == "{0..9,a..f}"
     assert phase0.preprocess("{@HEX}") == "{0..9,A..F}"
 
@@ -46,7 +46,7 @@ def test_implicit_wrap_bare_expression():
 
 
 def test_implicit_wrap_after_macro_expansion():
-    assert phase0.preprocess("@dec") == "{0..9}"
+    assert phase0.preprocess("@d") == "{0..9}"
 
 
 def test_no_wrap_when_already_braced():
@@ -65,11 +65,11 @@ def test_no_wrap_template_step():
 
 
 def test_macro_dec_matches_digits():
-    assert matches("{@dec}", "a1b2c3") == ["1", "2", "3"]
+    assert matches("{@d}", "a1b2c3") == ["1", "2", "3"]
 
 
 def test_macro_dec_value_bound():
-    result = matches("{{@dec}..255}", "192 300 10")
+    result = matches("{{@d}..255}", "192 300 10")
     assert "192" in result and "10" in result
     assert "300" not in result
 

@@ -3,7 +3,7 @@
 Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
   Macros        a text macro (`@i`, `@s`, `@hexi` — see [macros] in macros.toml)
-                expands to its HMK source. Alphabet references (`@dec`, `@b58`,
+                expands to its HMK source. Alphabet references (`@d`, `@b58`,
                 …) are left intact for phase 3 to resolve into alphabet nodes.
 
   Implicit wrap a step with no top-level construct (`{…}` or `<<…>>`) is wrapped

@@ -12,7 +12,7 @@ def matches(pattern, text):
 
 # ── IPv4 ──────────────────────────────────────────────────────────────────────
 
-IPV4 = "{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}"
+IPV4 = "{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}"
 
 
 def test_ipv4_valid():
@@ -83,15 +83,15 @@ def test_template_full_match():
 
 def test_chain_deferred_full_match():
     # P => T => P => T. {{.}} in the first template is deferred: it resolves to
-    # the result of applying the remaining chain (`{@dec} => #{{.}}`) to the match.
-    result = execute(parser.parse("{@dec}[1..] => <{{.}}> => {@dec} => #{{.}}"), "42")
+    # the result of applying the remaining chain (`{@d} => #{{.}}`) to the match.
+    result = execute(parser.parse("{@d}[1..] => <{{.}}> => {@d} => #{{.}}"), "42")
     assert result == ["<#4>", "<#2>"]
 
 
 def test_chain_deferred_preserves_surrounding_text():
     # The deferred chain transforms in place — non-matched characters survive.
     result = execute(
-        parser.parse("{x}<<>>{x} => [{{.}}] => {@dec} => #{{.}}"), "x a4b2 x"
+        parser.parse("{x}<<>>{x} => [{{.}}] => {@d} => #{{.}}"), "x a4b2 x"
     )
     assert result == ["[x a#4b#2 x]"]
 

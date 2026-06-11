@@ -43,7 +43,7 @@ def test_char_range():
 
 
 def test_upper_bound():
-    # phase3 sees the expanded macro text (@dec -> 0..9), not the @ ref.
+    # phase3 sees the expanded macro text (@d -> 0..9), not the @ ref.
     node = first_semantic("{{0..9}..255}")
     assert node.type == "upper_bound"
     assert node.upper == "255"
@@ -185,13 +185,13 @@ def test_complement():
 
 
 def test_fixed_padding():
-    node = first_semantic("{3: {@dec}..255}")
+    node = first_semantic("{3: {@d}..255}")
     assert node.type == "padded"
     assert node.width == 3
 
 
 def test_variable_padding():
-    node = first_semantic("{: {@dec}..255}")
+    node = first_semantic("{: {@d}..255}")
     assert node.type == "padded"
     assert node.width is None
 

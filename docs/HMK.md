@@ -14,7 +14,7 @@ Three constructs: `{...}` matches and captures, `<<...>>` spans and splits, `[..
 | `<<sep>>` | Span, split, and capture  |
 | `[count]` | Repetition modifier       |
 
-These compose as `{expr}[count]` and `<<sep>>[count]`.
+These compose as `{expr}[count]` and `<<sep>>`.
 
 > **Note:** `{expr}` is implicitly identical to `{expr}[1]`.
 
@@ -28,21 +28,29 @@ Himark is designed to be strictly logically consistent at the cost of brevity. T
 
 Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement is not wrapped at root, we can assume it's implicitly `{}` wrapped before tokenization.
 
+**E.g.:** {0..9}..5 $\to$ {{0..9}..5}
+
 ### Macros
 
 | Name     | Expands to                   |
 | -------- | ---------------------------- |
-| `@dec`   | `0..9`                       |
+| `@d`     | `0..9`                       |
 | `@hex`   | `0..9,a..f`                  |
 | `@hexi`  | `0..9,a<->A..f<->F`          |
 | `@HEX`   | `0..9,A..F`                  |
 | `@b32`   | `0..9,a..v` (RFC 4648 $\S7$) |
+| `@B32`   | `0..9,A..V`                  |
+| `@b32i`  | `0..9,a<->A..v<->V`          |
 | `@b58`   | `1..9,A..Z,a..z,!I,!O,!l`    |
 | `@b64`   | `A..Z,a..z,0..9,+,/`         |
 | `@b85`   | RFC 1924 Base85              |
 | `@ascii` | U+0000-U+007F                |
 | `@uni`   | U+0000-U+10FFFF              |
 | `@s`     | `\n\r \t`                    |
+| `@w`     | `0..9,a..z,A..Z,_`           |
+| `@wi`    | `0..9,a<->A..z<->Z,_`        |
+
+**E.g.:** {@d} $\to$ {0..9}
 
 ---
 
@@ -68,8 +76,8 @@ Expressions inside `{...}` and `<<...>>` are built from one type:
 | `{a..z}`            | a$\dots$z | `a`         | `z`       |
 | `{m..{a..z}..}`     | a$\dots$z | `m`         | unbounded |
 | `{cat..dog}`        | Unicode   | `cat`       | `dog`     |
-| `{{@dec}..255}`     | dec       | `0` (floor) | `255`     |
-| `{128..{@dec}}`     | dec       | `128`       | unbounded |
+| `{{@d}..255}`       | dec       | `0` (floor) | `255`     |
+| `{128..{@d}}`       | dec       | `128`       | unbounded |
 | `{aa..{@a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
@@ -81,7 +89,7 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 ```proto
 {a..z,A..Z,0..9}  // alphanumeric
 {a..z,!d..f}      // lowercase, excluding d, e, through f
-{{@dec}..255}     // decimal: 0, 1, through '255'
+{{@d}..255}     // decimal: 0, 1, through '255'
 {{@hex}..ff}      // hex: 0, 1, through 'ff'
 {m..{a..z}}       // lowercase: m, n, through z
 {m..{a..z}..}     // lowercase: m, n, and upward
@@ -95,7 +103,7 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 ```proto
 {aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
 {aa..{a..z}..zz,!ee..ff}   // 2-char lowercase, excluding 'ee', 'ef', 'fe`, and 'ff'
-{{@dec}..255,!128..191}     // decimal 0, 1, through '255', excluding '128', '129', through '191'
+{{@d}..255,!128..191}     // decimal 0, 1, through '255', excluding '128', '129', through '191'
 ```
 
 ### Padding
@@ -103,9 +111,9 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 `{N:expr}` fixes the match width to exactly `N` characters, padding with the alphabet's zero character. `{:expr}` accepts any width from 1 up to `len(max)`, allowing leading zeros.
 
 ```proto
-{2:{@dec}..99}    // '00', '01', through '99'
-{3:{@dec}..255}   // '000', '001', through '255'
-{:{@dec}..255}    // '0', '00', through '255'
+{2:{@d}..99}    // '00', '01', through '99'
+{3:{@d}..255}   // '000', '001', through '255'
+{:{@d}..255}    // '0', '00', through '255'
 ```
 
 ---
@@ -224,7 +232,7 @@ Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` 
 - A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
 
 ```proto
-{@dec}[1..] => <{{.}}> => {@dec} => #{{.}}   // '42' -> '<#4>', '<#2>'
+{@d}[1..] => <{{.}}> => {@d} => #{{.}}   // '42' -> '<#4>', '<#2>'
 ```
 
 ---
@@ -252,9 +260,8 @@ Patterns are whitespace-significant: any space written between constructs is a l
 ### Crypto Wallet Addresses
 
 ```proto
-{1}{11111111111111111111111..{@b58}..zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
-{{1}[23]..{@b58}..{z}[33]}  // any valid Bitcoin address (not accounting for checksum)
-{0x}{40:{@hexi}} // any valid Ethereum address
+{{1}[23]..{@b58}..{z}[33]}  // any valid Bitcoin address
+{0x}{40:{@hex,@HEX}}        // any valid Ethereum address
 ```
 
 > The above do not account for checksum verifications.
@@ -262,7 +269,7 @@ Patterns are whitespace-significant: any space written between constructs is a l
 **IPv4:**
 
 ```proto
-{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}{.}{{@dec}..255}
+{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}
 ```
 
 <!--
@@ -274,5 +281,6 @@ Patterns are whitespace-significant: any space written between constructs is a l
 - Codeblock: <series> // <note>: <0>, <1>, through <n>
 - Definition: **<key>** -- <definition>
 - Quote: > **Note:** <Note>.
+- Quote: > **E.g.:** <Example>
 - <char>, '<string>'
 -->

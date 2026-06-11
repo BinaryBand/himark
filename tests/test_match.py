@@ -48,7 +48,7 @@ def test_char_range_no_match():
 
 
 def test_named_alpha_dec():
-    result = matches("{@dec}", "a1b2c3")
+    result = matches("{@d}", "a1b2c3")
     assert result == ["1", "2", "3"]
 
 
@@ -72,7 +72,7 @@ def test_named_alpha_hexi_rejects_non_hex():
 
 
 def test_upper_bound_dec():
-    result = matches("{{@dec}..255}", "192 300 10 999")
+    result = matches("{{@d}..255}", "192 300 10 999")
     assert "192" in result
     assert "10" in result
     assert "300" not in result
@@ -106,7 +106,7 @@ def test_uni_as_bound_raises():
 
 
 def test_lower_bound_dec():
-    result = matches("{128..{@dec}}", "64 128 255 300")
+    result = matches("{128..{@d}}", "64 128 255 300")
     assert "128" in result
     assert "255" in result
     assert "64" not in result
@@ -117,7 +117,7 @@ def test_lower_bound_dec():
 
 def test_bounded_range():
     # Decimal values 10–99
-    result = matches("{10..{@dec}..99}", "5 10 50 99")
+    result = matches("{10..{@d}..99}", "5 10 50 99")
     assert "10" in result
     assert "50" in result
     assert "99" in result
@@ -129,7 +129,7 @@ def test_bounded_range():
 
 def test_exclusion_subrange_on_upper_bound():
     # 0–255 excluding 128–191; 130 is excluded, 100 and 200 are kept
-    result = matches("{{@dec}..255,!128..191}", "130 100 200")
+    result = matches("{{@d}..255,!128..191}", "130 100 200")
     assert "100" in result
     assert "200" in result
     assert "130" not in result
@@ -137,7 +137,7 @@ def test_exclusion_subrange_on_upper_bound():
 
 def test_exclusion_single_value():
     # 0–255 excluding exactly 200
-    result = matches("{{@dec}..255,!200}", "199 200 201")
+    result = matches("{{@d}..255,!200}", "199 200 201")
     assert "199" in result
     assert "201" in result
     assert "200" not in result
@@ -187,8 +187,8 @@ def test_exclusion_full_alpha_stress():
 
 
 def test_fixed_padding_enforces_bound():
-    # {3: {@dec}..255} matches exactly 3 digits whose value is ≤ 255
-    result = matches("{3: {@dec}..255}", "042 999 256 255")
+    # {3: {@d}..255} matches exactly 3 digits whose value is ≤ 255
+    result = matches("{3: {@d}..255}", "042 999 256 255")
     assert "042" in result
     assert "255" in result
     assert "999" not in result
@@ -197,7 +197,7 @@ def test_fixed_padding_enforces_bound():
 
 def test_fixed_padding_rejects_wrong_width():
     # "12" is only 2 chars; with no leading zero it cannot satisfy width 3
-    assert matches("{3: {@dec}..255}", "12") == []
+    assert matches("{3: {@d}..255}", "12") == []
 
 
 # ── string_range ─────────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ def test_token_repetition():
 
 def test_variable_number_repetition():
     # First unit backs off from greedy "252" to "25" so 25+25 matches.
-    assert matches("{{@dec}..255}[2]", "2525") == ["2525"]
+    assert matches("{{@d}..255}[2]", "2525") == ["2525"]
 
 
 def test_grouped_word_repetition_case_folded():
@@ -382,8 +382,8 @@ def test_zip_range_rejects_non_alpha():
 
 
 def test_variable_padding_matches_values_in_bound():
-    # {:{@dec}..255} delegates to the inner upper_bound, accepting any valid width.
-    result = matches("{:{@dec}..255}", "0 9 99 255 256 999")
+    # {:{@d}..255} delegates to the inner upper_bound, accepting any valid width.
+    result = matches("{:{@d}..255}", "0 9 99 255 256 999")
     assert "0" in result
     assert "9" in result
     assert "99" in result

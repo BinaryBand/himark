@@ -5,12 +5,12 @@ from marky.utils.alphabet import alpha_value
 
 
 def test_macros_present():
-    for name in ("dec", "hex", "HEX", "b32", "b58", "b64", "b85", "ascii", "uni"):
+    for name in ("d", "hex", "HEX", "b32", "b58", "b64", "b85", "ascii", "uni"):
         assert name in MACROS
 
 
 def test_dec_expands_to_range():
-    assert MACROS["dec"] == "0..9"
+    assert MACROS["d"] == "0..9"
 
 
 def test_b58_omits_ambiguous_via_ranges():
