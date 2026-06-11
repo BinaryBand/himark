@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.5.4-draft  
+**Version:** 0.6.0-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -74,13 +74,15 @@ Expressions inside `{...}` and `<<...>>` are built from one type:
 | `{a}`              | Unicode   | `a`         | `a`       |
 | `{abc}`            | Unicode   | `abc`       | `abc`     |
 | `{a..z}`           | a$\dots$z | `a`         | `z`       |
-| `{m..{a..z}..}`    | a$\dots$z | `m`         | unbounded |
+| `{m..{a..z}}`      | a$\dots$z | `m`         | unbounded |
 | `{cat..dog}`       | Unicode   | `cat`       | `dog`     |
 | `{{@d}..255}`      | dec       | `0` (floor) | `255`     |
 | `{128..{@d}}`      | dec       | `128`       | unbounded |
 | `{aa..{a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
+
+> **Note:** An alphabet used as a `..` endpoint must have distinct symbols. `{{@hex,@HEX}..ff}` is an error -- the digits appear twice, so symbol values are ambiguous. Case-folded value ranges use congruence instead (`@hexi`).
 
 **Valid** -- `{a}[3]` $\to$ `aaa`
 **Invalid** -- `{a..z}[3]` (inner has cardinality 26)
@@ -91,8 +93,7 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 {a..z,!d..f}      // lowercase, excluding d, e, through f
 {{@d}..255}     // decimal: 0, 1, through '255'
 {{@hex}..ff}      // hex: 0, 1, through 'ff'
-{m..{a..z}}       // lowercase: m, n, through z
-{m..{a..z}..}     // lowercase: m, n, and upward
+{m..{a..z}}       // lowercase: m, n, and upward
 {m..{a..z}..zz}   // lowercase: m, n, through 'zz'
 ```
 
@@ -108,12 +109,19 @@ A `{...}` is singleton when its inner expression has cardinality 1 **and** its c
 
 ### Padding
 
-`{N:expr}` fixes the match width to exactly `N` characters, padding with the alphabet's zero character. `{:expr}` accepts any width from 1 up to `len(max)`, allowing leading zeros.
+A plain value range matches only the **canonical** form of each value -- no leading zero characters, so every value corresponds to exactly one string. `{{@d}..255}` matches '7' but not '007'. Padding relaxes the width:
+
+| Form         | Width                              |
+| ------------ | ---------------------------------- |
+| `{N:expr}`   | Exactly `N`, zero-character padded |
+| `{N..M:expr}`| `N` through `M`                    |
+| `{:expr}`    | 1 through `len(max)`               |
 
 ```proto
-{2:{@d}..99}    // '00', '01', through '99'
-{3:{@d}..255}   // '000', '001', through '255'
-{:{@d}..255}    // '0', '00', through '255'
+{2:{@d}..99}     // '00', '01', through '99'
+{3:{@d}..255}    // '000', '001', through '255'
+{2..3:{@d}..255} // '00', '01', through '255'
+{:{@d}..255}     // '0', '00', through '255'
 ```
 
 ---
@@ -151,6 +159,8 @@ When `{...}` items are class expressions, the alphabet defines **equivalence gro
 {{a<->bc},{def<->ghi}}    // 2 groups with multi-char tokens
 ```
 
+> **Note:** Group members must be singletons. A range of groups is written with `<->` ranges (`a<->A..z<->Z`), not with classes as members -- `{{a..z},{A..Z}}` is an error.
+
 Under `[count]`, repetition-equality is checked against the congruence group -- `a` and `A` count as the same value:
 
 ```proto
@@ -162,7 +172,9 @@ Under `[count]`, repetition-equality is checked against the congruence group -- 
 
 ## Repetition
 
-`[count]` repeats the preceding `{...}` or `<<...>>`. Every repetition must match the same value as the first.
+`[count]` repeats the preceding `{...}`. Every repetition must match the same value as the first.
+
+> **Note:** A count on `<<...>>` is a compile error; the syntax is reserved.
 
 | Form   | Meaning      |
 | ------ | ------------ |
@@ -260,8 +272,8 @@ Patterns are whitespace-significant: any space written between constructs is a l
 ### Crypto Wallet Addresses
 
 ```proto
-{{1}[23]..{@b58}..{z}[33]}  // any valid Bitcoin address
-{0x}{40:{@hex,@HEX}}        // any valid Ethereum address
+{1}{24..33:{@b58}}    // any valid Bitcoin address (P2PKH)
+{0x}{40:{@hex,@HEX}}  // any valid Ethereum address
 ```
 
 > The above do not account for checksum verifications.
