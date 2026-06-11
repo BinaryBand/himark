@@ -15,9 +15,32 @@ constructs capture and number as if the brace were not there.
 
 import re
 
+from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.models.node import HMKNode
+from marky.models.nodes_adapter import to_legacy
 from marky.parser import phase2
+
+# Semantic node kinds that carry an `exclusions` field.
+_EXCLUDABLE = (
+    t.CharRangeNode,
+    t.NamedAlphaNode,
+    t.FullAlphaNode,
+    t.UpperBoundNode,
+    t.LowerBoundNode,
+    t.BoundedRangeNode,
+    t.UnionNode,
+    t.TokenSetNode,
+    t.GroupClassNode,
+)
+
+
+def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.SemanticNode:
+    """Set `exclusions` on a node that supports them; ignore for those that don't."""
+    if exclusions and isinstance(node, _EXCLUDABLE):
+        node.exclusions = exclusions
+    return node
+
 
 _PADDING_RE = re.compile(r"^(\d*)\s*:\s*(.+)$", re.DOTALL)
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
@@ -45,14 +68,14 @@ def parse(node: HMKNode) -> HMKNode:
                 sub = parse(phase2.parse(child.content))
                 new_children.extend(sub.children)
                 continue
-            semantic = _resolve_brace(child.content)
+            semantic = to_legacy(_resolve_brace(child.content))
             wrapper = HMKNode("brace_group", child.content, [semantic])
             src = child.metadata.get("count_src")
             if isinstance(src, str):
                 wrapper.metadata["count"] = _parse_count(src)
             new_children.append(wrapper)
         elif child.type == "double_braces":
-            new_children.append(_parse_template_expr(child.content))
+            new_children.append(to_legacy(_parse_template_expr(child.content)))
         elif child.type == "separator":
             src = child.metadata.pop("count_src", None)
             if isinstance(src, str):
@@ -104,7 +127,7 @@ def _resolve_separator(node: HMKNode) -> None:
         return
 
     # α: the span is constrained to the class.
-    node.metadata["sep_class"] = _resolve_brace(content)
+    node.metadata["sep_class"] = to_legacy(_resolve_brace(content))
 
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
@@ -130,7 +153,7 @@ def _has_top_level_separator(content: str) -> bool:
     return False
 
 
-def _resolve_brace(content: str) -> HMKNode:
+def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
     # Padding prefix: {N: expr} or {: expr}
     has_pad = False
@@ -182,40 +205,31 @@ def _resolve_brace(content: str) -> HMKNode:
     node = _classify_arms(include_arms, exclusions)
 
     if is_complement:
-        node = HMKNode("complement", content, [node])
+        node = t.ComplementNode(inner=node)
 
     if has_pad:
-        node = HMKNode("padded", content, [node], {"width": pad_width})
+        node = t.PaddedNode(inner=node, width=pad_width)
 
     return node
 
 
-def _classify_arms(arms: list[str], exclusions: list[str]) -> HMKNode:
+def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     """Build the appropriate node type for a list of union arms."""
     if len(arms) == 1:
-        node = _resolve_arm(arms[0])
-        if exclusions:
-            node.metadata["exclusions"] = exclusions
-        return node
+        return _attach_exclusions(_resolve_arm(arms[0]), exclusions)
 
     # All arms are brace sub-expressions → group_class
     if all(a.startswith("{") for a in arms):
         groups = [_parse_inner_brace_items(a) for a in arms]
-        node = HMKNode("group_class", ",".join(arms), metadata={"groups": groups})
-        if exclusions:
-            node.metadata["exclusions"] = exclusions
-        return node
+        return _attach_exclusions(t.GroupClassNode(groups=groups), exclusions)
 
     bare_arms = [a for a in arms if not a.startswith("{")]
     brace_arms = [a for a in arms if a.startswith("{")]
 
     # Mixed brace + bare → union
     if brace_arms:
-        children = [_resolve_arm(a) for a in arms]
-        node = HMKNode("union", ",".join(arms), children)
-        if exclusions:
-            node.metadata["exclusions"] = exclusions
-        return node
+        options = [_resolve_arm(a) for a in arms]
+        return _attach_exclusions(t.UnionNode(options=options), exclusions)
 
     # All bare — any multi-char token (not a single-char range like a..z, and
     # not a single escaped char like \! )?
@@ -227,17 +241,11 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> HMKNode:
         for a in bare_arms
     )
     if has_multi:
-        node = HMKNode("token_set", ",".join(arms), metadata={"tokens": bare_arms})
-        if exclusions:
-            node.metadata["exclusions"] = exclusions
-        return node
+        return _attach_exclusions(t.TokenSetNode(tokens=bare_arms), exclusions)
 
     # Single-char or single-char ranges → union
-    children = [_resolve_arm(a) for a in arms]
-    node = HMKNode("union", ",".join(arms), children)
-    if exclusions:
-        node.metadata["exclusions"] = exclusions
-    return node
+    options = [_resolve_arm(a) for a in arms]
+    return _attach_exclusions(t.UnionNode(options=options), exclusions)
 
 
 def _parse_inner_brace_items(brace_text: str) -> list[str]:
@@ -301,7 +309,7 @@ def _singleton_value(expr: str) -> str | None:
     return expr
 
 
-def _resolve_arm(arm: str) -> HMKNode:
+def _resolve_arm(arm: str) -> t.SemanticNode:
     """Resolve one arm (no top-level commas) into a typed node.
 
     Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
@@ -329,10 +337,10 @@ def _resolve_arm(arm: str) -> HMKNode:
         if part.startswith("{"):
             if sval is not None:
                 # Singleton {…} → literal match of its single value
-                return HMKNode("literal", sval)
+                return t.LiteralNode(content=sval)
             # α — full range (any length, any value in the alphabet)
-            return HMKNode("full_alpha", arm, [_resolve_brace(_inner_of(part))])
-        return HMKNode("literal", _unescape(part))
+            return t.FullAlphaNode(inner=_resolve_brace(_inner_of(part)))
+        return t.LiteralNode(content=_unescape(part))
 
     if len(parts) == 2:
         a, b = parts
@@ -341,27 +349,21 @@ def _resolve_arm(arm: str) -> HMKNode:
         if av is not None and bv is not None:
             # τ..τ — character range (single-char) or string range (multi-char)
             if len(av) == 1 and len(bv) == 1:
-                return HMKNode("char_range", arm, metadata={"start": av, "end": bv})
-            return HMKNode("string_range", arm, metadata={"start": av, "end": bv})
+                return t.CharRangeNode(start=av, end=bv)
+            return t.StringRangeNode(start=av, end=bv)
 
         if av is None and bv is not None:
             # α..τ — upper bound
-            alpha_node = _resolve_brace(_inner_of(a))
-            return HMKNode(
-                "upper_bound", arm, metadata={"alpha": alpha_node, "upper": bv}
-            )
+            return t.UpperBoundNode(alpha=_resolve_brace(_inner_of(a)), upper=bv)
 
         if av is not None and bv is None:
             # τ..α — lower bound
-            alpha_node = _resolve_brace(_inner_of(b))
-            return HMKNode(
-                "lower_bound", arm, metadata={"lower": av, "alpha": alpha_node}
-            )
+            return t.LowerBoundNode(lower=av, alpha=_resolve_brace(_inner_of(b)))
 
         # α..α — zip range
-        left = _resolve_brace(_inner_of(a))
-        right = _resolve_brace(_inner_of(b))
-        return HMKNode("zip_range", arm, metadata={"left": left, "right": right})
+        return t.ZipRangeNode(
+            left=_resolve_brace(_inner_of(a)), right=_resolve_brace(_inner_of(b))
+        )
 
     if len(parts) == 3:
         a, b, c = parts
@@ -371,11 +373,8 @@ def _resolve_arm(arm: str) -> HMKNode:
             raise CompileError(
                 f"Bounded range must be τ..α..τ (e.g. aa..{{dec}}..zz), got: {arm!r}"
             )
-        alpha_node = _resolve_brace(_inner_of(b))
-        return HMKNode(
-            "bounded_range",
-            arm,
-            metadata={"lower": av, "alpha": alpha_node, "upper": cv},
+        return t.BoundedRangeNode(
+            lower=av, alpha=_resolve_brace(_inner_of(b)), upper=cv
         )
 
     raise CompileError(f"Too many '..' separators in: {arm!r}")
@@ -395,15 +394,17 @@ def _congruence_members(members: list[str]) -> list[str]:
     return vals
 
 
-def _congruence_union(members: list[str]) -> HMKNode:
+def _congruence_union(members: list[str]) -> t.SemanticNode:
     """Build a union node (or lone literal) from singleton `<->` members."""
-    children = [HMKNode("literal", v) for v in _congruence_members(members)]
+    children: list[t.SemanticNode] = [
+        t.LiteralNode(content=v) for v in _congruence_members(members)
+    ]
     if len(children) == 1:
         return children[0]
-    return HMKNode("union", "<->".join(members), children)
+    return t.UnionNode(options=children)
 
 
-def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> HMKNode:
+def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNode:
     """Resolve a `<->` congruence arm.
 
     One part:  `a<->A`            → a single congruence group
@@ -414,22 +415,17 @@ def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> HMKNode:
         members = cong[0]
         # α<->α — congruence of two classes (zip).
         if len(members) == 2 and all(m.startswith("{") for m in members):
-            left = _resolve_brace(_inner_of(members[0]))
-            right = _resolve_brace(_inner_of(members[1]))
-            return HMKNode(
-                "zip_range", parts[0], metadata={"left": left, "right": right}
+            return t.ZipRangeNode(
+                left=_resolve_brace(_inner_of(members[0])),
+                right=_resolve_brace(_inner_of(members[1])),
             )
         # Singleton members — one enumerated congruence group.
-        return HMKNode(
-            "group_class", parts[0], metadata={"groups": [_congruence_members(members)]}
-        )
+        return t.GroupClassNode(groups=[_congruence_members(members)])
 
     if len(parts) == 2:
         # Range of congruence pairs steps both columns in parallel (zip).
-        left = _congruence_union(cong[0])
-        right = _congruence_union(cong[1])
-        return HMKNode(
-            "zip_range", "..".join(parts), metadata={"left": left, "right": right}
+        return t.ZipRangeNode(
+            left=_congruence_union(cong[0]), right=_congruence_union(cong[1])
         )
 
     raise CompileError(
@@ -463,38 +459,34 @@ def _parse_capture_path(dotted: str) -> list[int]:
     return [int(p) for p in dotted.split(".")]
 
 
-def _parse_template_expr(content: str) -> HMKNode:
+def _parse_template_expr(content: str) -> t.TemplateNode:
     expr = content.strip()
 
     if expr == ".":
-        return HMKNode("full_match", expr)
+        return t.FullMatchNode()
 
     m = _COUNT_REF_EXPR_RE.match(expr)
     if m:
-        return HMKNode("count_ref", expr, metadata={"group": int(m.group(1))})
+        return t.CountRefNode(group=int(m.group(1)))
 
     m = _SPAN_RE.match(expr)
     if m:
-        return HMKNode(
-            "span_ref",
-            expr,
-            metadata={
-                "start": _parse_capture_path(m.group(1)),
-                "end": _parse_capture_path(m.group(2)),
-            },
+        return t.SpanRefNode(
+            start=_parse_capture_path(m.group(1)),
+            end=_parse_capture_path(m.group(2)),
         )
 
     m = _GROUP_RE.match(expr)
     if m:
-        return HMKNode("group_ref", expr, metadata={"index": _parse_capture_path(expr)})
+        return t.GroupRefNode(index=_parse_capture_path(expr))
 
     m = _EMOJI_RE.match(expr)
     if m:
-        return HMKNode("emoji", expr, metadata={"code": m.group(1)})
+        return t.EmojiNode(code=m.group(1))
 
     m = _LATEX_RE.match(expr)
     if m:
-        return HMKNode("latex", expr, metadata={"expr": m.group(1)})
+        return t.LatexNode(expr=m.group(1))
 
     raise CompileError(f"Unknown template expression: {{{{{content}}}}}")
 
