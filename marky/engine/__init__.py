@@ -18,17 +18,17 @@ from marky.engine._match import find_matches as _find_matches
 from marky.engine._render import is_template as _is_template
 from marky.engine._render import render as _render
 from marky.engine._types import Match
-from marky.models.node import HMKNode
+from marky.models import nodes_typed as t
 
 __all__ = ["execute", "find", "Match"]
 
 
-def find(steps: list[HMKNode], target: str) -> list[tuple[int, int]]:
+def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
     """Return (start, end) positions of all matches of steps[0] in target."""
     return [(m.start, m.end) for m in _find_matches(steps[0], target)]
 
 
-def execute(steps: list[HMKNode], target: str) -> list[str]:
+def execute(steps: list[t.RootNode], target: str) -> list[str]:
     """Execute an ordered list of HMK step trees against target.
 
     steps[0]   — pattern applied to target
@@ -37,7 +37,7 @@ def execute(steps: list[HMKNode], target: str) -> list[str]:
     return _run(steps, target)
 
 
-def _run(steps: list[HMKNode], text: str) -> list[str]:
+def _run(steps: list[t.RootNode], text: str) -> list[str]:
     """Top-level extract: find matches of steps[0], transform each, flatten."""
     matches = _find_matches(steps[0], text)
     rest = steps[1:]
@@ -64,7 +64,7 @@ def _run(steps: list[HMKNode], text: str) -> list[str]:
     return out
 
 
-def _transform(steps: list[HMKNode], text: str) -> str:
+def _transform(steps: list[t.RootNode], text: str) -> str:
     """In-place transform: replace each match of steps[0] with the rendered
     remainder, leaving non-matched text untouched. Used for deferred `{{.}}`."""
     if not steps:
@@ -85,7 +85,7 @@ def _transform(steps: list[HMKNode], text: str) -> str:
     return "".join(out)
 
 
-def _render_match(rest: list[HMKNode], m: Match) -> str:
+def _render_match(rest: list[t.RootNode], m: Match) -> str:
     """Render the chain remainder for a single match, in place."""
     if not rest:
         return m.text

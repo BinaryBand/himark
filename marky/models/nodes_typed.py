@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, TypeGuard
 
 # -----------------------------
 # Shared value objects
@@ -242,3 +242,25 @@ Node: TypeAlias = (
     | SemanticNode
     | TemplateNode
 )
+
+SemanticClasses = (
+    LiteralNode,
+    CharRangeNode,
+    NamedAlphaNode,
+    StringRangeNode,
+    FullAlphaNode,
+    UpperBoundNode,
+    LowerBoundNode,
+    BoundedRangeNode,
+    ZipRangeNode,
+    UnionNode,
+    ComplementNode,
+    TokenSetNode,
+    GroupClassNode,
+    PaddedNode,
+)
+
+
+def is_semantic(node: Node) -> TypeGuard[SemanticNode]:
+    """Runtime check + narrowing for the semantic-node union."""
+    return isinstance(node, SemanticClasses)

@@ -17,8 +17,6 @@ import re
 
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
-from marky.models.node import HMKNode
-from marky.models.nodes_adapter import to_legacy
 from marky.parser import phase2
 
 # Semantic node kinds that carry an `exclusions` field.
@@ -51,35 +49,34 @@ _COUNT_REF_EXPR_RE = re.compile(r"^#(\d+)$")
 _COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
 
 
-def parse(node: HMKNode) -> HMKNode:
+def parse(node: t.RootNode) -> t.RootNode:
     """Walk the phase2 tree and resolve all construct nodes in place."""
-    new_children = []
+    new_children: list[t.Node] = []
     for child in node.children:
-        if child.type == "brace_group":
+        if isinstance(child, t.BraceGroupNode):
             if _has_top_level_separator(child.content):
                 # Transparent sub-sequence: splice the re-tokenized interior
                 # into the parent so inner constructs number left-to-right
                 # as if unwrapped.
-                if "count_src" in child.metadata:
+                if child.count_src is not None:
                     raise CompileError(
                         f"Count modifier is not supported on a sequence brace: "
-                        f"{{{child.content}}}[{child.metadata['count_src']}]"
+                        f"{{{child.content}}}[{child.count_src}]"
                     )
                 sub = parse(phase2.parse(child.content))
                 new_children.extend(sub.children)
                 continue
-            semantic = to_legacy(_resolve_brace(child.content))
-            wrapper = HMKNode("brace_group", child.content, [semantic])
-            src = child.metadata.get("count_src")
-            if isinstance(src, str):
-                wrapper.metadata["count"] = _parse_count(src)
-            new_children.append(wrapper)
-        elif child.type == "double_braces":
-            new_children.append(to_legacy(_parse_template_expr(child.content)))
-        elif child.type == "separator":
-            src = child.metadata.pop("count_src", None)
-            if isinstance(src, str):
-                child.metadata["count"] = _parse_count(src)
+            child.semantic = _resolve_brace(child.content)
+            if child.count_src is not None:
+                child.count = _parse_count(child.count_src)
+                child.count_src = None
+            new_children.append(child)
+        elif isinstance(child, t.DoubleBracesNode):
+            new_children.append(_parse_template_expr(child.content))
+        elif isinstance(child, t.SeparatorNode):
+            if child.count_src is not None:
+                child.count = _parse_count(child.count_src)
+                child.count_src = None
             _resolve_separator(child)
             new_children.append(child)
         else:
@@ -91,7 +88,7 @@ def parse(node: HMKNode) -> HMKNode:
 # ── Separator resolution ──────────────────────────────────────────────────────
 
 
-def _resolve_separator(node: HMKNode) -> None:
+def _resolve_separator(node: t.SeparatorNode) -> None:
     """Resolve separator content by cardinality.
 
     τ (a bare constant or singleton constructor) keeps split semantics — the
@@ -109,13 +106,13 @@ def _resolve_separator(node: HMKNode) -> None:
 
     # τ: bare constant with no arithmetic operators (<<\n>>, << >>, <<abc>>)
     if not has_ops:
-        node.metadata["sep_value"] = content
+        node.sep_value = content
         return
 
     # τ: singleton constructor ({a}[3] → 'aaa')
     sval = _singleton_value(content)
     if sval is not None:
-        node.metadata["sep_value"] = sval
+        node.sep_value = sval
         return
 
     # Operator chars with empty operands are punctuation constants (<<,>>,
@@ -123,11 +120,11 @@ def _resolve_separator(node: HMKNode) -> None:
     if (len(dot_parts) > 1 and any(not p.strip(" \t") for p in dot_parts)) or (
         len(comma_parts) > 1 and any(not p.strip(" \t") for p in comma_parts)
     ):
-        node.metadata["sep_value"] = content
+        node.sep_value = content
         return
 
     # α: the span is constrained to the class.
-    node.metadata["sep_class"] = to_legacy(_resolve_brace(content))
+    node.sep_class = _resolve_brace(content)
 
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
@@ -436,19 +433,19 @@ def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNo
 # ── Count parsing ─────────────────────────────────────────────────────────────
 
 
-def _parse_count(src: str) -> dict:
-    """Parse a count modifier string into a count descriptor dict."""
+def _parse_count(src: str) -> t.CountSpec:
+    """Parse a count modifier string into a count descriptor."""
     src = src.strip()
     m = _COUNT_SRC_REF_RE.match(src)
     if m:
-        return {"count_ref": int(m.group(1))}
+        return t.CountRef(index=int(m.group(1)))
     m = re.match(r"^(\d*)\.\.(\d*)$", src)
     if m:
         lo, hi = m.group(1), m.group(2)
-        return {"min": int(lo) if lo else 0, "max": int(hi) if hi else None}
+        return t.CountRange(min=int(lo) if lo else 0, max=int(hi) if hi else None)
     if re.match(r"^\d+$", src):
         n = int(src)
-        return {"min": n, "max": n}
+        return t.CountRange(min=n, max=n)
     raise CompileError(f"Invalid count expression: [{src}]")
 
 

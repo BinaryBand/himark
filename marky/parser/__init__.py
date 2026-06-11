@@ -1,8 +1,8 @@
-from marky.models.node import HMKNode
+from marky.models import nodes_typed as t
 from marky.parser import phase0, phase1, phase2, phase3
 
 
-def parse(text: str) -> list[HMKNode]:
+def parse(text: str) -> list[t.RootNode]:
     """Run all phases and return one tree per => step.
 
     Single-step pattern  => [pattern_tree]

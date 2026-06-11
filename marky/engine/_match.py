@@ -1,23 +1,20 @@
 """HMK match engine — walks the phase3 AST against a text string."""
 
 from marky.engine._types import Match
+from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
-from marky.models.node import (
-    HMKNode,
-    is_bounded_range_node,
-    is_char_range_node,
-    is_group_class_node,
-    is_lower_bound_node,
-    is_string_range_node,
-    is_token_set_node,
-    is_upper_bound_node,
-    is_zip_range_node,
-)
 from marky.utils.alphabet import alpha_value
 
 # Largest code-point range materialized into a value-arithmetic alphabet. ascii
 # (128) fits; uni (1.1M) does not and raises when used as a range bound.
 _MAX_MATERIALIZE = 0x10000
+
+
+def _req(node: t.SemanticNode | None) -> t.SemanticNode:
+    """Unwrap an operand field that the parser always populates."""
+    if node is None:
+        raise ValueError("missing semantic operand")
+    return node
 
 
 class _State:
@@ -51,13 +48,9 @@ class _State:
 # ---------------------------------------------------------------------------
 
 
-def find_matches(tree: HMKNode, text: str) -> list[Match]:
+def find_matches(tree: t.RootNode, text: str) -> list[Match]:
     # Standalone separator: entire pattern is <<sep>> or <<>>
-    if (
-        tree.type == "root"
-        and len(tree.children) == 1
-        and tree.children[0].type == "separator"
-    ):
+    if len(tree.children) == 1 and isinstance(tree.children[0], t.SeparatorNode):
         return _split_by_separator(tree.children[0], text)
 
     matches: list[Match] = []
@@ -84,17 +77,14 @@ def find_matches(tree: HMKNode, text: str) -> list[Match]:
     return matches
 
 
-def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
-    cls_obj = node.metadata.get("sep_class")
-    cls = cls_obj if isinstance(cls_obj, HMKNode) else None
-    if cls is not None:
+def _split_by_separator(node: t.SeparatorNode, text: str) -> list[Match]:
+    if node.sep_class is not None:
         # α separator standalone: the span is the full input, constrained to
         # the class.
-        if _unit_accepts(cls, text):
+        if _unit_accepts(node.sep_class, text):
             return [Match(text, 0, len(text))]
         return []
-    sep_obj = node.metadata.get("sep_value")
-    sep = sep_obj if isinstance(sep_obj, str) else node.content
+    sep = node.sep_value if node.sep_value is not None else node.content
     if not sep:
         return [Match(text, 0, len(text))] if text else []
     parts = text.split(sep)
@@ -111,7 +101,7 @@ def _split_by_separator(node: HMKNode, text: str) -> list[Match]:
 
 
 def _match_sequence(
-    nodes: list[HMKNode], text: str, pos: int, state: _State
+    nodes: list[t.Node], text: str, pos: int, state: _State
 ) -> int | None:
     current = pos
     i = 0
@@ -120,13 +110,11 @@ def _match_sequence(
 
         # Separator: lazy span. α content constrains the span to the class;
         # τ content splits the span into sub-captures; empty is unconstrained.
-        if node.type == "separator":
+        if isinstance(node, t.SeparatorNode):
             remaining = nodes[i + 1 :]
             snap = state.snapshot()
-            cls_obj = node.metadata.get("sep_class")
-            cls = cls_obj if isinstance(cls_obj, HMKNode) else None
-            sep_obj = node.metadata.get("sep_value")
-            sep_val = sep_obj if isinstance(sep_obj, str) else None
+            cls = node.sep_class
+            sep_val = node.sep_value
             if not remaining:
                 wc = text[current:]
                 if cls is not None and not _unit_accepts(cls, wc):
@@ -185,23 +173,36 @@ def _insert_sep_capture(
 # ---------------------------------------------------------------------------
 
 
-def _match_node(node: HMKNode, text: str, pos: int, state: _State) -> int | None:
-    t = node.type
-    if t == "root":
+def _match_node(node: t.Node, text: str, pos: int, state: _State) -> int | None:
+    if isinstance(node, t.RootNode):
         return _match_sequence(node.children, text, pos, state)
-    if t == "brace_group":
+    if isinstance(node, t.BraceGroupNode):
         return _match_brace_group(node, text, pos, state)
-    if t == "leaf":
+    if isinstance(node, t.LeafNode):
         s = node.content
         return pos + len(s) if text[pos : pos + len(s)] == s else None
     # Semantic nodes used inside brace_group — shouldn't appear naked in sequence
-    return _match_semantic(node, text, pos)
+    if t.is_semantic(node):
+        return _match_semantic(node, text, pos)
+    return None
 
 
-def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int | None:
-    if not node.children:
+def _count_config(node: t.BraceGroupNode) -> tuple[int, int | None, int | None]:
+    """Return (min_reps, max_reps, count_ref) from a brace-group count."""
+    count = node.count
+    if isinstance(count, t.CountRange):
+        return count.min, count.max, None
+    if isinstance(count, t.CountRef):
+        return 1, 1, count.index
+    return 1, 1, None
+
+
+def _match_brace_group(
+    node: t.BraceGroupNode, text: str, pos: int, state: _State
+) -> int | None:
+    if node.semantic is None:
         return None
-    semantic = node.children[0]
+    semantic = node.semantic
     min_reps, max_reps, count_ref = _count_config(node)
 
     # Resolve count_ref ({{#N}} in count position)
@@ -209,7 +210,7 @@ def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int
         n = state.count_refs.get(count_ref, 0)
         min_reps = max_reps = n
 
-    is_zip = semantic.type in ("zip_range", "group_class")
+    is_zip = isinstance(semantic, (t.ZipRangeNode, t.GroupClassNode))
 
     def record(end: int, subs: list[str]) -> int:
         idx = len(state.captures)
@@ -247,43 +248,19 @@ def _match_brace_group(node: HMKNode, text: str, pos: int, state: _State) -> int
     return record(pos, []) if min_reps == 0 else None
 
 
-def _unit_accepts(semantic: HMKNode, s: str) -> bool:
+def _unit_accepts(semantic: t.SemanticNode, s: str) -> bool:
     """True if `semantic` matches the exact string `s` as a single unit."""
     return bool(s) and _match_semantic(semantic, s, 0) == len(s)
 
 
-def _count_config(node: HMKNode) -> tuple[int, int | None, int | None]:
-    """Return (min_reps, max_reps, count_ref) from brace-group count metadata."""
-    min_reps: int = 1
-    max_reps: int | None = 1
-    count_ref: int | None = None
-    count_obj = node.metadata.get("count")
-    if isinstance(count_obj, dict):
-        for k, v in count_obj.items():
-            if k == "min" and isinstance(v, int):
-                min_reps = v
-            elif k == "max" and (isinstance(v, int) or v is None):
-                max_reps = v
-            elif k == "count_ref" and isinstance(v, int):
-                count_ref = v
-    return min_reps, max_reps, count_ref
-
-
-def _get_exclusions(node: HMKNode) -> list[str]:
-    excl = node.metadata.get("exclusions")
-    if isinstance(excl, list):
-        return [x for x in excl if isinstance(x, str)]
-    return []
-
-
 def _match_equal_block(
-    semantic: HMKNode, text: str, pos: int, first_val: str, is_zip: bool
+    semantic: t.SemanticNode, text: str, pos: int, first_val: str, is_zip: bool
 ) -> int | None:
     """Match one more repetition that must equal `first_val` (congruence-aware
     for zip_range / group_class, literal otherwise)."""
-    if is_zip:
-        if semantic.type == "group_class":
-            return _match_group_equal(semantic, text, pos, first_val)
+    if isinstance(semantic, t.GroupClassNode):
+        return _match_group_equal(semantic, text, pos, first_val)
+    if isinstance(semantic, t.ZipRangeNode):
         return _match_zip_equal(semantic, text, pos, first_val)
     n = len(first_val)
     return pos + n if text[pos : pos + n] == first_val else None
@@ -294,56 +271,47 @@ def _match_equal_block(
 # ---------------------------------------------------------------------------
 
 
-def _match_semantic(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_semantic(node: t.SemanticNode, text: str, pos: int) -> int | None:
     if pos >= len(text):
         return None
-    t = node.type
-    if t == "literal":
+    if isinstance(node, t.LiteralNode):
         s = node.content
         return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if is_char_range_node(node):
+    if isinstance(node, t.CharRangeNode):
         ch = text[pos]
-        if not (node.metadata["start"] <= ch <= node.metadata["end"]):
+        if not (node.start <= ch <= node.end):
             return None
-        excl = _get_exclusions(node)
-        if excl and _is_char_excluded(ch, excl):
+        if node.exclusions and _is_char_excluded(ch, node.exclusions):
             return None
         return pos + 1
-    if is_string_range_node(node):
+    if isinstance(node, t.StringRangeNode):
         return _match_string_range(node, text, pos)
-    if t == "full_alpha":
+    if isinstance(node, t.FullAlphaNode):
         return _match_full_alpha(node, text, pos)
-    if t == "upper_bound":
-        return _match_upper_bound(node, text, pos)
-    if t == "lower_bound":
-        return _match_lower_bound(node, text, pos)
-    if t == "bounded_range":
-        return _match_bounded_range(node, text, pos)
-    if t == "zip_range":
+    if isinstance(node, (t.UpperBoundNode, t.LowerBoundNode, t.BoundedRangeNode)):
+        return _match_value_range(node, text, pos)
+    if isinstance(node, t.ZipRangeNode):
         return _match_zip_range(node, text, pos)
-    if t == "union":
+    if isinstance(node, t.UnionNode):
         return _match_union(node, text, pos)
-    if t == "complement":
+    if isinstance(node, t.ComplementNode):
         return _match_complement(node, text, pos)
-    if t == "token_set":
+    if isinstance(node, t.TokenSetNode):
         return _match_token_set(node, text, pos)
-    if t == "group_class":
+    if isinstance(node, t.GroupClassNode):
         return _match_group_class(node, text, pos)
-    if t == "padded":
+    if isinstance(node, t.PaddedNode):
         return _match_padded(node, text, pos)
     return None
 
 
-def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_string_range(node: t.StringRangeNode, text: str, pos: int) -> int | None:
     """Greedy lex-range match for multi-char τ..τ endpoints.
 
     When endpoints are equal length, only that length is tried.
     When different, tries lengths from len(end) down to len(start).
     """
-    if not is_string_range_node(node):
-        return None
-    start = node.metadata["start"]
-    end = node.metadata["end"]
+    start, end = node.start, node.end
     lo_len = min(len(start), len(end))
     hi_len = max(len(start), len(end))
     for length in range(hi_len, lo_len - 1, -1):
@@ -355,10 +323,10 @@ def _match_string_range(node: HMKNode, text: str, pos: int) -> int | None:
     return None
 
 
-def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_full_alpha(node: t.FullAlphaNode, text: str, pos: int) -> int | None:
     """Greedy: consume 1+ chars that each match the inner alpha node."""
-    inner = node.children[0]
-    excl = _get_exclusions(node)
+    inner = _req(node.inner)
+    excl = node.exclusions
     end = pos
     while end < len(text):
         if excl and _is_char_excluded(text[end], excl):
@@ -370,48 +338,44 @@ def _match_full_alpha(node: HMKNode, text: str, pos: int) -> int | None:
     return end if end > pos else None
 
 
-def _alpha_str(node: HMKNode) -> str:
+def _alpha_str(node: t.SemanticNode) -> str:
     """Extract the alphabet string for range-value comparisons."""
-    t = node.type
-    if is_char_range_node(node):
-        s, e = node.metadata["start"], node.metadata["end"]
+    if isinstance(node, t.CharRangeNode):
+        s, e = node.start, node.end
         if ord(e) - ord(s) + 1 > _MAX_MATERIALIZE:
             raise CompileError(
                 f"Range {s!r}..{e!r} is too large to use as a value bound"
             )
         return "".join(chr(c) for c in range(ord(s), ord(e) + 1))
-    if t == "union":
-        return "".join(_alpha_str(ch) for ch in node.children)
-    if t == "literal":
+    if isinstance(node, t.UnionNode):
+        return "".join(_alpha_str(ch) for ch in node.options)
+    if isinstance(node, t.LiteralNode):
         return node.content
-    raise ValueError(f"Cannot extract alphabet from node type {t!r}")
+    raise ValueError(f"Cannot extract alphabet from {type(node).__name__}")
 
 
 def _value_bounds(
-    node: HMKNode,
+    node: t.SemanticNode,
 ) -> tuple[str, int | None, int | None, list[str]]:
     """Return (alphabet, lo, hi, exclusions) for a value-range node.
 
     lo / hi are None when that side is unbounded. Exclusions are raw strings
     (a single value or a `v1..v2` sub-range) checked numerically at match time.
     """
-    t = node.type
-    excl = _get_exclusions(node)
-    if is_upper_bound_node(node):
-        alph = _alpha_str(node.metadata["alpha"])
-        return alph, None, alpha_value(node.metadata["upper"], alph), excl
-    if is_lower_bound_node(node):
-        alph = _alpha_str(node.metadata["alpha"])
-        return alph, alpha_value(node.metadata["lower"], alph), None, excl
-    if is_bounded_range_node(node):
-        alph = _alpha_str(node.metadata["alpha"])
-        lo = alpha_value(node.metadata["lower"], alph)
-        hi = alpha_value(node.metadata["upper"], alph)
-        return alph, lo, hi, excl
-    if t == "full_alpha":
-        alph = _alpha_str(node.children[0])
-        return alph, None, None, excl
-    raise ValueError(f"Node type {t!r} has no value bounds")
+    if isinstance(node, t.UpperBoundNode):
+        alph = _alpha_str(_req(node.alpha))
+        return alph, None, alpha_value(node.upper, alph), node.exclusions
+    if isinstance(node, t.LowerBoundNode):
+        alph = _alpha_str(_req(node.alpha))
+        return alph, alpha_value(node.lower, alph), None, node.exclusions
+    if isinstance(node, t.BoundedRangeNode):
+        alph = _alpha_str(_req(node.alpha))
+        lo = alpha_value(node.lower, alph)
+        hi = alpha_value(node.upper, alph)
+        return alph, lo, hi, node.exclusions
+    if isinstance(node, t.FullAlphaNode):
+        return _alpha_str(_req(node.inner)), None, None, node.exclusions
+    raise ValueError(f"{type(node).__name__} has no value bounds")
 
 
 def _is_char_excluded(ch: str, exclusions: list[str]) -> bool:
@@ -438,15 +402,8 @@ def _is_value_excluded(v: int, alph: str, exclusions: list[str]) -> bool:
     return False
 
 
-def _match_alpha_value_range(
-    alph: str,
-    lo: int | None,
-    hi: int | None,
-    exclusions: list[str],
-    text: str,
-    pos: int,
-) -> int | None:
-    """Greedily consume alphabet chars at pos; return longest end where lo ≤ val ≤ hi."""
+def _match_value_range(node: t.SemanticNode, text: str, pos: int) -> int | None:
+    alph, lo, hi, excl = _value_bounds(node)
     end = pos
     while end < len(text) and text[end] in alph:
         end += 1
@@ -457,55 +414,31 @@ def _match_alpha_value_range(
         v = alpha_value(candidate, alph)
         if (lo is not None and v < lo) or (hi is not None and v > hi):
             continue
-        if _is_value_excluded(v, alph, exclusions):
+        if _is_value_excluded(v, alph, excl):
             continue
         return pos + length
     return None
 
 
-def _match_upper_bound(node: HMKNode, text: str, pos: int) -> int | None:
-    alph, lo, hi, excl = _value_bounds(node)
-    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
-
-
-def _match_lower_bound(node: HMKNode, text: str, pos: int) -> int | None:
-    alph, lo, hi, excl = _value_bounds(node)
-    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
-
-
-def _match_bounded_range(node: HMKNode, text: str, pos: int) -> int | None:
-    alph, lo, hi, excl = _value_bounds(node)
-    return _match_alpha_value_range(alph, lo, hi, excl, text, pos)
-
-
-def _build_zip_groups(node: HMKNode) -> list[list[str]]:
+def _build_zip_groups(node: t.ZipRangeNode) -> list[list[str]]:
     """Expand zip_range into a list of groups (one list of equivalent chars each)."""
-    if not is_zip_range_node(node):
-        return []
-    left_node = node.metadata["left"]
-    right_node = node.metadata["right"]
-
     try:
-        left_alph = _alpha_str(left_node)
-        right_alph = _alpha_str(right_node)
+        left_alph = _alpha_str(_req(node.left))
+        right_alph = _alpha_str(_req(node.right))
     except (ValueError, CompileError):
         return []
 
     if len(left_alph) != len(right_alph):
-        # Zip requires equal-length alphabets
-        return []
+        return []  # Zip requires equal-length alphabets
 
-    groups: list[list[str]] = []
-    # Each position i in left corresponds to position i in right
-    # But left and right are multi-member groups (e.g., {a,A} and {z,Z})
-    # The sub-members must be expanded in parallel
-    left_members = _group_members(left_node)
-    right_members = _group_members(right_node)
-
+    # Each position i in left corresponds to position i in right, but left and
+    # right are multi-member groups (e.g. {a,A} and {z,Z}) expanded in parallel.
+    left_members = _group_members(_req(node.left))
+    right_members = _group_members(_req(node.right))
     if len(left_members) != len(right_members):
         return []
 
-    # Each member is a single-char string; build ranges between left[j] and right[j]
+    # Each member is a single-char string; build ranges between left[j], right[j].
     member_ranges = []
     for lm, rm in zip(left_members, right_members):
         if len(lm) != 1 or len(rm) != 1:
@@ -518,34 +451,29 @@ def _build_zip_groups(node: HMKNode) -> list[list[str]]:
     if not member_ranges:
         return []
 
-    # All ranges must have the same length
+    # All ranges must have the same length.
     range_len = member_ranges[0][1] - member_ranges[0][0] + 1
     if any((hi - lo + 1) != range_len for lo, hi in member_ranges):
         return []
 
-    for i in range(range_len):
-        groups.append([chr(lo + i) for lo, _ in member_ranges])
-
-    return groups
+    return [[chr(lo + i) for lo, _ in member_ranges] for i in range(range_len)]
 
 
-def _group_members(node: HMKNode) -> list[str]:
+def _group_members(node: t.SemanticNode) -> list[str]:
     """Extract the individual character members from a simple alpha node."""
-    t = node.type
-    if t == "literal":
+    if isinstance(node, t.LiteralNode):
         return [node.content]
-    if is_char_range_node(node):
-        s, e = node.metadata["start"], node.metadata["end"]
-        return [chr(c) for c in range(ord(s), ord(e) + 1)]
-    if t == "union":
+    if isinstance(node, t.CharRangeNode):
+        return [chr(c) for c in range(ord(node.start), ord(node.end) + 1)]
+    if isinstance(node, t.UnionNode):
         result = []
-        for child in node.children:
+        for child in node.options:
             result.extend(_group_members(child))
         return result
     return []
 
 
-def _match_zip_range(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_zip_range(node: t.ZipRangeNode, text: str, pos: int) -> int | None:
     groups = _build_zip_groups(node)
     if not groups:
         return None
@@ -556,7 +484,9 @@ def _match_zip_range(node: HMKNode, text: str, pos: int) -> int | None:
     return end if end > pos else None
 
 
-def _match_zip_equal(node: HMKNode, text: str, pos: int, first_val: str) -> int | None:
+def _match_zip_equal(
+    node: t.ZipRangeNode, text: str, pos: int, first_val: str
+) -> int | None:
     """Match a zip_range repetition that must be group-equivalent to first_val."""
     groups = _build_zip_groups(node)
     if not groups or len(first_val) == 0:
@@ -567,14 +497,13 @@ def _match_zip_equal(node: HMKNode, text: str, pos: int, first_val: str) -> int 
         for ch in grp:
             char_to_group[ch] = idx
 
-    # Normalize first_val to group index sequence
+    # Normalize first_val to a group-index sequence.
     first_groups = []
     for ch in first_val:
         if ch not in char_to_group:
             return None
         first_groups.append(char_to_group[ch])
 
-    # Check that text[pos:pos+len(first_val)] has the same group sequence
     candidate = text[pos : pos + len(first_val)]
     if len(candidate) != len(first_val):
         return None
@@ -585,7 +514,7 @@ def _match_zip_equal(node: HMKNode, text: str, pos: int, first_val: str) -> int 
 
 
 def _match_group_equal(
-    node: HMKNode, text: str, pos: int, first_val: str
+    node: t.GroupClassNode, text: str, pos: int, first_val: str
 ) -> int | None:
     """Match a group_class repetition that must be group-equivalent to first_val.
 
@@ -593,11 +522,8 @@ def _match_group_equal(
     when it has the same group sequence (so `a<->A` makes 'a' and 'A' equal). If
     any member is multi-char, fall back to literal equality.
     """
-    if not is_group_class_node(node):
-        return None
-    groups = node.metadata["groups"]
     char_to_group: dict[str, int] = {}
-    for idx, grp in enumerate(groups):
+    for idx, grp in enumerate(node.groups):
         for m in grp:
             if len(m) != 1:
                 n = len(first_val)
@@ -613,9 +539,9 @@ def _match_group_equal(
     return pos + n
 
 
-def _match_union(node: HMKNode, text: str, pos: int) -> int | None:
-    excl = _get_exclusions(node)
-    for arm in node.children:
+def _match_union(node: t.UnionNode, text: str, pos: int) -> int | None:
+    excl = node.exclusions
+    for arm in node.options:
         end = _match_semantic(arm, text, pos)
         if end is not None:
             val = text[pos:end]
@@ -628,8 +554,7 @@ def _is_excluded(val: str, exclusions: list[str]) -> bool:
     """Return True if val matches any exclusion (single value or range)."""
     for excl in exclusions:
         if ".." in excl:
-            parts = excl.split("..", 1)
-            lo, hi = parts[0], parts[1]
+            lo, hi = excl.split("..", 1)
             if lo <= val <= hi:
                 return True
         elif val == excl:
@@ -637,9 +562,9 @@ def _is_excluded(val: str, exclusions: list[str]) -> bool:
     return False
 
 
-def _match_complement(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_complement(node: t.ComplementNode, text: str, pos: int) -> int | None:
     """Greedily consume chars NOT matching the inner node."""
-    inner = node.children[0]
+    inner = _req(node.inner)
     end = pos
     while end < len(text):
         if _match_semantic(inner, text, end) is not None:
@@ -648,18 +573,16 @@ def _match_complement(node: HMKNode, text: str, pos: int) -> int | None:
     return end if end > pos else None
 
 
-def _match_token_set(node: HMKNode, text: str, pos: int) -> int | None:
-    if not is_token_set_node(node):
-        return None
-    tokens = sorted(node.metadata["tokens"], key=len, reverse=True)
-    excl = _get_exclusions(node)
+def _match_token_set(node: t.TokenSetNode, text: str, pos: int) -> int | None:
+    tokens = sorted(node.tokens, key=len, reverse=True)
+    excl = node.exclusions
     for token in tokens:
         if text[pos : pos + len(token)] == token and token not in excl:
             return pos + len(token)
     return None
 
 
-def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
+def _match_group_class(node: t.GroupClassNode, text: str, pos: int) -> int | None:
     """Match a sequence of group members (tokens), each possibly multi-char.
 
     Every consumed position must be a whole token belonging to one of the
@@ -667,11 +590,8 @@ def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
     Tokens are tried longest-first so multi-char members win over any shorter
     member that is a prefix of them.
     """
-    if not is_group_class_node(node):
-        return None
-    groups = node.metadata["groups"]
     tokens = sorted(
-        (item for grp in groups for item in grp if item),
+        (item for grp in node.groups for item in grp if item),
         key=len,
         reverse=True,
     )
@@ -686,10 +606,9 @@ def _match_group_class(node: HMKNode, text: str, pos: int) -> int | None:
     return end if end > pos else None
 
 
-def _match_padded(node: HMKNode, text: str, pos: int) -> int | None:
-    inner = node.children[0]
-    width_obj = node.metadata.get("width")
-    width = width_obj if isinstance(width_obj, int) else None
+def _match_padded(node: t.PaddedNode, text: str, pos: int) -> int | None:
+    inner = _req(node.inner)
+    width = node.width
 
     if width is not None:
         # Fixed width: exactly `width` chars, all in the alphabet, value in bounds.

@@ -1,14 +1,7 @@
 from collections.abc import Callable
 
 from marky.engine._types import Match
-from marky.models.node import (
-    HMKNode,
-    is_count_ref_node,
-    is_emoji_node,
-    is_group_ref_node,
-    is_latex_node,
-    is_span_ref_node,
-)
+from marky.models import nodes_typed as t
 from marky.utils.resolver import RESOLVERS as _RESOLVERS
 
 _TEMPLATE_NODE_TYPES = frozenset(
@@ -23,14 +16,14 @@ _TEMPLATE_NODE_TYPES = frozenset(
 )
 
 
-def _render_full_match(expr: HMKNode, match: Match) -> str:
+def _render_full_match(expr: t.Node, match: Match) -> str:
     return match.text
 
 
-def _render_group_ref(expr: HMKNode, match: Match) -> str:
-    if not is_group_ref_node(expr):
+def _render_group_ref(expr: t.Node, match: Match) -> str:
+    if not isinstance(expr, t.GroupRefNode):
         return ""
-    path = expr.metadata["index"]
+    path = expr.index
     g_idx = path[0]  # 0-based
     if len(path) == 1:
         return match.groups[g_idx] if g_idx < len(match.groups) else ""
@@ -39,11 +32,11 @@ def _render_group_ref(expr: HMKNode, match: Match) -> str:
     return subs[s_idx] if s_idx < len(subs) else ""
 
 
-def _render_span_ref(expr: HMKNode, match: Match) -> str:
-    if not is_span_ref_node(expr):
+def _render_span_ref(expr: t.Node, match: Match) -> str:
+    if not isinstance(expr, t.SpanRefNode):
         return ""
-    s_idx = expr.metadata["start"][0]  # 0-based
-    e_idx = expr.metadata["end"][0]
+    s_idx = expr.start[0]  # 0-based
+    e_idx = expr.end[0]
     if s_idx < len(match.group_spans) and e_idx < len(match.group_spans):
         s = match.group_spans[s_idx][0]
         e = match.group_spans[e_idx][1]
@@ -51,29 +44,29 @@ def _render_span_ref(expr: HMKNode, match: Match) -> str:
     return ""
 
 
-def _render_count_ref(expr: HMKNode, match: Match) -> str:
-    if not is_count_ref_node(expr):
+def _render_count_ref(expr: t.Node, match: Match) -> str:
+    if not isinstance(expr, t.CountRefNode):
         return ""
-    return str(match.count_refs.get(expr.metadata["group"], 0))
+    return str(match.count_refs.get(expr.group, 0))
 
 
-def _render_emoji(expr: HMKNode, _match: Match) -> str:
-    if not is_emoji_node(expr):
+def _render_emoji(expr: t.Node, _match: Match) -> str:
+    if not isinstance(expr, t.EmojiNode):
         return ""
-    code = expr.metadata["code"]
+    code = expr.code
     r = _RESOLVERS.get("emoji")
     return r.resolve(code) if r else f":{code}:"
 
 
-def _render_latex(expr: HMKNode, _match: Match) -> str:
-    if not is_latex_node(expr):
+def _render_latex(expr: t.Node, _match: Match) -> str:
+    if not isinstance(expr, t.LatexNode):
         return ""
-    expr_str = expr.metadata["expr"]
+    expr_str = expr.expr
     r = _RESOLVERS.get("latex")
     return r.resolve(expr_str) if r else expr_str
 
 
-_EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {
+_EXPR_RENDERERS: dict[str, Callable[[t.Node, Match], str]] = {
     "full_match": _render_full_match,
     "group_ref": _render_group_ref,
     "span_ref": _render_span_ref,
@@ -83,7 +76,7 @@ _EXPR_RENDERERS: dict[str, Callable[[HMKNode, Match], str]] = {
 }
 
 
-def is_template(tree: HMKNode) -> bool:
+def is_template(tree: t.RootNode) -> bool:
     """True if `tree` is a template step (renders output) rather than a matcher.
 
     A step is a template when it contains any template-expression node
@@ -94,7 +87,7 @@ def is_template(tree: HMKNode) -> bool:
 
 
 def render(
-    template_tree: HMKNode,
+    template_tree: t.RootNode,
     match: Match,
     full_match_override: str | None = None,
 ) -> str:
@@ -106,9 +99,9 @@ def render(
     """
     parts = []
     for node in template_tree.children:
-        if node.type == "leaf":
+        if isinstance(node, t.LeafNode):
             parts.append(node.content)
-        elif node.type == "full_match" and full_match_override is not None:
+        elif isinstance(node, t.FullMatchNode) and full_match_override is not None:
             parts.append(full_match_override)
         elif node.type in _TEMPLATE_NODE_TYPES:
             renderer = _EXPR_RENDERERS.get(node.type)

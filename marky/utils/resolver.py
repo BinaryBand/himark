@@ -12,7 +12,7 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class SymbolResolver(Protocol):
-    node_type: str  # matches HMKNode.type, e.g. "emoji", "latex"
+    node_type: str  # matches node.type, e.g. "emoji", "latex"
     metadata_key: str  # key in node.metadata holding the resolver input
 
     def resolve(self, content: str, /) -> str:

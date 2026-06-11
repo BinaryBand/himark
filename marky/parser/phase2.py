@@ -1,4 +1,4 @@
-"""Phase 2: Tokenize an HMK pattern string into an HMKNode tree.
+"""Phase 2: Tokenize an HMK pattern string into a typed node tree.
 
 Constructs recognized:
   {expr}[count]   — brace_group with optional count modifier
@@ -9,8 +9,8 @@ Constructs recognized:
 
 import re
 
+from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
-from marky.models.node import HMKNode
 
 # Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no braces
 # inside (so {{a..z}..{A..Z}} stays a brace group, not a template ref).
@@ -41,15 +41,15 @@ def _scan_chevrons(text: str, pos: int) -> int:
     return end + 2
 
 
-def parse(text: str) -> HMKNode:
-    """Tokenize HMK pattern text into an HMKNode tree."""
-    nodes: list[HMKNode] = []
+def parse(text: str) -> t.RootNode:
+    """Tokenize HMK pattern text into a typed node tree."""
+    nodes: list[t.Node] = []
     pos = 0
     leaf_buf: list[str] = []
 
     def flush_leaf():
         if leaf_buf:
-            nodes.append(HMKNode("leaf", "".join(leaf_buf)))
+            nodes.append(t.LeafNode(content="".join(leaf_buf)))
             leaf_buf.clear()
 
     while pos < len(text):
@@ -70,7 +70,7 @@ def parse(text: str) -> HMKNode:
             }
             if esc in mapping:
                 flush_leaf()
-                nodes.append(HMKNode("leaf", mapping[esc]))
+                nodes.append(t.LeafNode(content=mapping[esc]))
                 pos += 2
                 continue
             # unrecognized escape — treat \ as literal
@@ -83,7 +83,7 @@ def parse(text: str) -> HMKNode:
             m = _TEMPLATE_REF.match(text, pos)
             if m:
                 flush_leaf()
-                nodes.append(HMKNode("double_braces", m.group(1)))
+                nodes.append(t.DoubleBracesNode(content=m.group(1)))
                 pos = m.end()
                 continue
 
@@ -91,32 +91,30 @@ def parse(text: str) -> HMKNode:
         if ch == "{":
             flush_leaf()
             end = _scan_braces(text, pos)
-            inner = text[pos + 1 : end - 1]
-            node = HMKNode("brace_group", inner)
+            brace = t.BraceGroupNode(content=text[pos + 1 : end - 1])
             pos = end
             cm = _COUNT_SRC.match(text, pos)
             if cm:
-                node.metadata["count_src"] = cm.group(1)
+                brace.count_src = cm.group(1)
                 pos = cm.end()
-            nodes.append(node)
+            nodes.append(brace)
             continue
 
         # Separator <<sep>>[count?]
         if text[pos : pos + 2] == "<<":
             flush_leaf()
             end = _scan_chevrons(text, pos + 2)
-            sep = text[pos + 2 : end - 2]
-            node = HMKNode("separator", sep)
+            sep = t.SeparatorNode(content=text[pos + 2 : end - 2])
             pos = end
             cm = _COUNT_SRC.match(text, pos)
             if cm:
-                node.metadata["count_src"] = cm.group(1)
+                sep.count_src = cm.group(1)
                 pos = cm.end()
-            nodes.append(node)
+            nodes.append(sep)
             continue
 
         leaf_buf.append(ch)
         pos += 1
 
     flush_leaf()
-    return HMKNode("root", text, nodes or [HMKNode("leaf", text)])
+    return t.RootNode(content=text, children=nodes or [t.LeafNode(content=text)])

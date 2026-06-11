@@ -2,6 +2,7 @@
 
 import pytest
 
+from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser import phase2, phase3
 
@@ -19,7 +20,7 @@ def first_brace(pattern):
 
 def first_semantic(pattern):
     """Return the semantic child of the first brace_group."""
-    return first_brace(pattern).children[0]
+    return first_brace(pattern).semantic
 
 
 # ── τ forms ──────────────────────────────────────────────────────────────────
@@ -34,8 +35,8 @@ def test_literal():
 def test_char_range():
     node = first_semantic("{a..z}")
     assert node.type == "char_range"
-    assert node.metadata["start"] == "a"
-    assert node.metadata["end"] == "z"
+    assert node.start == "a"
+    assert node.end == "z"
 
 
 # ── α forms ──────────────────────────────────────────────────────────────────
@@ -45,58 +46,58 @@ def test_upper_bound():
     # phase3 sees the expanded macro text (@dec -> 0..9), not the @ ref.
     node = first_semantic("{{0..9}..255}")
     assert node.type == "upper_bound"
-    assert node.metadata["upper"] == "255"
-    assert node.metadata["alpha"].type == "char_range"
+    assert node.upper == "255"
+    assert node.alpha.type == "char_range"
 
 
 def test_lower_bound():
     node = first_semantic("{128..{0..9}}")
     assert node.type == "lower_bound"
-    assert node.metadata["lower"] == "128"
-    assert node.metadata["alpha"].type == "char_range"
+    assert node.lower == "128"
+    assert node.alpha.type == "char_range"
 
 
 def test_bounded_range():
     node = first_semantic("{aa..{a..z}..zz}")
     assert node.type == "bounded_range"
-    assert node.metadata["lower"] == "aa"
-    assert node.metadata["upper"] == "zz"
-    assert node.metadata["alpha"].type == "char_range"
+    assert node.lower == "aa"
+    assert node.upper == "zz"
+    assert node.alpha.type == "char_range"
 
 
 def test_zip_range():
     node = first_semantic("{{a..z}<->{A..Z}}")
     assert node.type == "zip_range"
-    assert node.metadata["left"].type == "char_range"
-    assert node.metadata["right"].type == "char_range"
+    assert node.left.type == "char_range"
+    assert node.right.type == "char_range"
 
 
 def test_congruence_single_pair():
     # {a<->A} — one enumerated congruence group.
     node = first_semantic("{a<->A}")
     assert node.type == "group_class"
-    assert node.metadata["groups"] == [["a", "A"]]
+    assert node.groups == [["a", "A"]]
 
 
 def test_congruence_range_of_pairs():
     # {a<->A..z<->Z} — range of congruence pairs steps both columns (zip).
     node = first_semantic("{a<->A..z<->Z}")
     assert node.type == "zip_range"
-    assert node.metadata["left"].type == "union"
-    assert node.metadata["right"].type == "union"
+    assert node.left.type == "union"
+    assert node.right.type == "union"
 
 
 def test_congruence_enumerated_groups():
     node = first_semantic("{{a<->A},{b<->B}}")
     assert node.type == "group_class"
-    assert node.metadata["groups"] == [["a", "A"], ["b", "B"]]
+    assert node.groups == [["a", "A"], ["b", "B"]]
 
 
 def test_full_alpha():
     # {α} full range. Written with a space to avoid the {{...}} template-ref form.
     node = first_semantic("{ {a..z} }")
     assert node.type == "full_alpha"
-    assert node.children[0].type == "char_range"
+    assert node.inner.type == "char_range"
 
 
 # ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
@@ -126,22 +127,22 @@ def test_singleton_bounded_range_synonym():
     # {z}[3] is a singleton τ, equivalent to writing the literal 'zzz'.
     node = first_semantic("{{1}[3]..{a..z}..{z}[3]}")
     assert node.type == "bounded_range"
-    assert node.metadata["lower"] == "111"
-    assert node.metadata["upper"] == "zzz"
-    assert node.metadata["alpha"].type == "char_range"
+    assert node.lower == "111"
+    assert node.upper == "zzz"
+    assert node.alpha.type == "char_range"
 
 
 def test_singleton_upper_bound():
     # α..τ where τ is a singleton constructor.
     node = first_semantic("{{0..9}..{9}[3]}")
     assert node.type == "upper_bound"
-    assert node.metadata["upper"] == "999"
+    assert node.upper == "999"
 
 
 def test_singleton_lower_bound():
     node = first_semantic("{{0}[3]..{0..9}}")
     assert node.type == "lower_bound"
-    assert node.metadata["lower"] == "000"
+    assert node.lower == "000"
 
 
 def test_singleton_single_part_is_literal():
@@ -157,19 +158,19 @@ def test_singleton_single_part_is_literal():
 def test_union_chars():
     node = first_semantic("{a,b,c}")
     assert node.type == "union"
-    assert len(node.children) == 3
+    assert len(node.options) == 3
 
 
 def test_token_set():
     node = first_semantic("{cat,dog}")
     assert node.type == "token_set"
-    assert node.metadata["tokens"] == ["cat", "dog"]
+    assert node.tokens == ["cat", "dog"]
 
 
 def test_group_class():
     node = first_semantic("{{a<->A},{b<->B}}")
     assert node.type == "group_class"
-    assert node.metadata["groups"] == [["a", "A"], ["b", "B"]]
+    assert node.groups == [["a", "A"], ["b", "B"]]
 
 
 # ── Complement ───────────────────────────────────────────────────────────────
@@ -186,13 +187,13 @@ def test_complement():
 def test_fixed_padding():
     node = first_semantic("{3: {@dec}..255}")
     assert node.type == "padded"
-    assert node.metadata["width"] == 3
+    assert node.width == 3
 
 
 def test_variable_padding():
     node = first_semantic("{: {@dec}..255}")
     assert node.type == "padded"
-    assert node.metadata["width"] is None
+    assert node.width is None
 
 
 # ── Count ────────────────────────────────────────────────────────────────────
@@ -200,22 +201,22 @@ def test_variable_padding():
 
 def test_count_exact():
     bg = first_brace("{a..z}[3]")
-    assert bg.metadata["count"] == {"min": 3, "max": 3}
+    assert bg.count == t.CountRange(min=3, max=3)
 
 
 def test_count_range():
     bg = first_brace("{a..z}[2..5]")
-    assert bg.metadata["count"] == {"min": 2, "max": 5}
+    assert bg.count == t.CountRange(min=2, max=5)
 
 
 def test_count_open_ended():
     bg = first_brace("{a..z}[1..]")
-    assert bg.metadata["count"] == {"min": 1, "max": None}
+    assert bg.count == t.CountRange(min=1, max=None)
 
 
 def test_count_zero_or_more():
     bg = first_brace("{a..z}[..]")
-    assert bg.metadata["count"] == {"min": 0, "max": None}
+    assert bg.count == t.CountRange(min=0, max=None)
 
 
 # ── Template expressions ──────────────────────────────────────────────────────
@@ -231,7 +232,7 @@ def test_template_group_ref():
     tree = resolve("{{0}}")
     node = tree.children[0]
     assert node.type == "group_ref"
-    assert node.metadata["index"] == [0]
+    assert node.index == [0]
 
 
 def test_template_span_ref():
@@ -244,7 +245,7 @@ def test_template_count_ref():
     tree = resolve("{{#0}}")
     node = tree.children[0]
     assert node.type == "count_ref"
-    assert node.metadata["group"] == 0
+    assert node.group == 0
 
 
 # ── Error cases ───────────────────────────────────────────────────────────────
@@ -253,8 +254,8 @@ def test_template_count_ref():
 def test_char_range_multi_char_produces_string_range():
     node = first_semantic("{cat..dog}")
     assert node.type == "string_range"
-    assert node.metadata["start"] == "cat"
-    assert node.metadata["end"] == "dog"
+    assert node.start == "cat"
+    assert node.end == "dog"
 
 
 def test_invalid_count_raises():
@@ -309,36 +310,36 @@ def first_separator(pattern):
 
 def test_separator_tau_constant():
     node = first_separator("<<\n>>")
-    assert node.metadata["sep_value"] == "\n"
-    assert "sep_class" not in node.metadata
+    assert node.sep_value == "\n"
+    assert node.sep_class is None
 
 
 def test_separator_tau_punctuation_comma():
     # A lone comma is a punctuation constant, not an empty union.
     node = first_separator("<<,>>")
-    assert node.metadata["sep_value"] == ","
+    assert node.sep_value == ","
 
 
 def test_separator_tau_singleton_constructor():
     node = first_separator("<<{a}[3]>>")
-    assert node.metadata["sep_value"] == "aaa"
+    assert node.sep_value == "aaa"
 
 
 def test_separator_alpha_bounded_range():
     node = first_separator("<<a..{a..z}..zz>>")
-    assert node.metadata["sep_class"].type == "bounded_range"
-    assert "sep_value" not in node.metadata
+    assert node.sep_class.type == "bounded_range"
+    assert node.sep_value is None
 
 
 def test_separator_alpha_full_alpha():
     node = first_separator("<<{a..z}>>")
-    assert node.metadata["sep_class"].type == "full_alpha"
+    assert node.sep_class.type == "full_alpha"
 
 
 def test_separator_empty_unconstrained():
     node = first_separator("<<>>")
-    assert "sep_value" not in node.metadata
-    assert "sep_class" not in node.metadata
+    assert node.sep_value is None
+    assert node.sep_class is None
 
 
 # ── Sequence braces (transparent sub-sequence) ───────────────────────────────
@@ -371,4 +372,4 @@ def test_full_alpha_disambiguation_space_allowed():
     # {{...}} being parsed as a template ref; it is stripped silently.
     node = first_semantic("{ {a..z} }")
     assert node.type == "full_alpha"
-    assert node.children[0].type == "char_range"
+    assert node.inner.type == "char_range"

@@ -2,92 +2,107 @@
 
 import pytest
 
+from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser.phase2 import parse
+
+_HAS_CONTENT = (t.LeafNode, t.BraceGroupNode, t.SeparatorNode, t.DoubleBracesNode)
 
 
 def children_types(pattern):
     return [c.type for c in parse(pattern).children]
 
 
+def content_at(tree: t.RootNode, i: int) -> str:
+    node = tree.children[i]
+    assert isinstance(node, _HAS_CONTENT)
+    return node.content
+
+
+def count_src_at(tree: t.RootNode, i: int) -> str | None:
+    node = tree.children[i]
+    assert isinstance(node, (t.BraceGroupNode, t.SeparatorNode))
+    return node.count_src
+
+
 def test_leaf_only():
     tree = parse("hello world")
     assert len(tree.children) == 1
     assert tree.children[0].type == "leaf"
-    assert tree.children[0].content == "hello world"
+    assert content_at(tree, 0) == "hello world"
 
 
 def test_brace_group_basic():
     tree = parse("{a..z}")
     assert children_types("{a..z}") == ["brace_group"]
-    assert tree.children[0].content == "a..z"
+    assert content_at(tree, 0) == "a..z"
 
 
 def test_brace_group_with_leaf():
     tree = parse("foo{bar}baz")
     types = [c.type for c in tree.children]
     assert types == ["leaf", "brace_group", "leaf"]
-    assert tree.children[1].content == "bar"
+    assert content_at(tree, 1) == "bar"
 
 
 def test_nested_brace_group():
     tree = parse("{{@dec}..255}")
     assert children_types("{{@dec}..255}") == ["brace_group"]
-    assert tree.children[0].content == "{@dec}..255"
+    assert content_at(tree, 0) == "{@dec}..255"
 
 
 def test_brace_group_count():
     tree = parse("{a..z}[3]")
     node = tree.children[0]
     assert node.type == "brace_group"
-    assert node.metadata["count_src"] == "3"
+    assert node.count_src == "3"
 
 
 def test_brace_group_count_range():
     tree = parse("{a..z}[2..5]")
-    assert tree.children[0].metadata["count_src"] == "2..5"
+    assert count_src_at(tree, 0) == "2..5"
 
 
 def test_brace_group_count_open():
     tree = parse("{a..z}[..]")
-    assert tree.children[0].metadata["count_src"] == ".."
+    assert count_src_at(tree, 0) == ".."
 
 
 def test_separator_basic():
     tree = parse("<<\\n>>")
     assert children_types("<<\\n>>") == ["separator"]
     # Escape is not processed here; sep content is raw
-    assert tree.children[0].content == "\\n"
+    assert content_at(tree, 0) == "\\n"
 
 
 def test_separator_with_count():
     tree = parse("<<,>>[2]")
     node = tree.children[0]
     assert node.type == "separator"
-    assert node.metadata["count_src"] == "2"
+    assert node.count_src == "2"
 
 
 def test_template_ref_double_brace():
     tree = parse("{{0}}")
     assert children_types("{{0}}") == ["double_braces"]
-    assert tree.children[0].content == "0"
+    assert content_at(tree, 0) == "0"
 
 
 def test_template_ref_full_match():
     tree = parse("{{.}}")
-    assert tree.children[0].content == "."
+    assert content_at(tree, 0) == "."
 
 
 def test_escape_newline():
     tree = parse(r"\n")
     assert tree.children[0].type == "leaf"
-    assert tree.children[0].content == "\n"
+    assert content_at(tree, 0) == "\n"
 
 
 def test_escape_brace():
     tree = parse(r"\{hello\}")
     # All leaf content
-    contents = [c.content for c in tree.children if c.type == "leaf"]
+    contents = [c.content for c in tree.children if isinstance(c, t.LeafNode)]
     assert "{" in contents
     assert "}" in contents
 
