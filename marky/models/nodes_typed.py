@@ -85,13 +85,6 @@ class CharRangeNode:
 
 
 @dataclass(slots=True)
-class NamedAlphaNode:
-    type: Literal["named_alpha"] = "named_alpha"
-    name: str = ""
-    exclusions: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class StringRangeNode:
     type: Literal["string_range"] = "string_range"
     start: str = ""
@@ -215,7 +208,6 @@ class LatexNode:
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
-    | NamedAlphaNode
     | StringRangeNode
     | FullAlphaNode
     | UpperBoundNode
@@ -246,7 +238,6 @@ Node: TypeAlias = (
 SemanticClasses = (
     LiteralNode,
     CharRangeNode,
-    NamedAlphaNode,
     StringRangeNode,
     FullAlphaNode,
     UpperBoundNode,

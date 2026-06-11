@@ -20,7 +20,7 @@ def test_macro_simple_range():
 
 def test_macro_congruence():
     assert phase0.preprocess("{@hexi}") == "{0..9,a<->A..f<->F}"
-    assert phase0.preprocess("{@i}") == "{0..9,a<->A..z<->Z}"
+    assert phase0.preprocess("{@wi}") == "{0..9,a<->A..z<->Z,_}"
 
 
 def test_macro_whitespace_set():
@@ -74,12 +74,13 @@ def test_macro_dec_value_bound():
     assert "300" not in result
 
 
-def test_macro_i_case_insensitive_alnum():
-    # @i is a union of digits and case-fold letters; a union does not merge arms
-    # into one alphabet, so letter-runs and digit-runs match separately.
-    assert matches("{@i}", "Ab9") == ["Ab", "9"]
-    assert matches("{@i}", "xyz") == ["xyz"]  # case-fold letters as one run
-    assert matches("{@i}", "!.?") == []
+def test_macro_wi_case_insensitive_word():
+    # @wi is a union of digits, case-fold letters, and '_'; a union does not
+    # merge arms into one alphabet, so letter-runs and digit-runs match separately.
+    assert matches("{@wi}", "Ab9") == ["Ab", "9"]
+    assert matches("{@wi}", "xyz") == ["xyz"]  # case-fold letters as one run
+    assert matches("{@wi}", "a_b") == ["a", "_", "b"]
+    assert matches("{@wi}", "!.?") == []
 
 
 def test_macro_s_matches_whitespace():

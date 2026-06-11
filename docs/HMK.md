@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.5.1-draft  
+**Version:** 0.5.4-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -32,23 +32,23 @@ Every capture query is a finitely-bound alphabet, and every alphabet declaration
 
 ### Macros
 
-| Name     | Expands to                   |
-| -------- | ---------------------------- |
-| `@d`     | `0..9`                       |
-| `@hex`   | `0..9,a..f`                  |
-| `@hexi`  | `0..9,a<->A..f<->F`          |
-| `@HEX`   | `0..9,A..F`                  |
-| `@b32`   | `0..9,a..v` (RFC 4648 $\S7$) |
-| `@B32`   | `0..9,A..V`                  |
-| `@b32i`  | `0..9,a<->A..v<->V`          |
-| `@b58`   | `1..9,A..Z,a..z,!I,!O,!l`    |
-| `@b64`   | `A..Z,a..z,0..9,+,/`         |
-| `@b85`   | RFC 1924 Base85              |
-| `@ascii` | U+0000-U+007F                |
-| `@uni`   | U+0000-U+10FFFF              |
-| `@s`     | `\n\r \t`                    |
-| `@w`     | `0..9,a..z,A..Z,_`           |
-| `@wi`    | `0..9,a<->A..z<->Z,_`        |
+| Name     | Expands to                                        |
+| -------- | ------------------------------------------------- |
+| `@d`     | `0..9`                                            |
+| `@hex`   | `0..9,a..f`                                       |
+| `@hexi`  | `0..9,a<->A..f<->F`                               |
+| `@HEX`   | `0..9,A..F`                                       |
+| `@b32`   | `0..9,a..v` (RFC 4648 $\S7$)                      |
+| `@B32`   | `0..9,A..V`                                       |
+| `@b32i`  | `0..9,a<->A..v<->V`                               |
+| `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z` (omits `0 O I l`) |
+| `@b64`   | `A..Z,a..z,0..9,+,/`                              |
+| `@b85`   | RFC 1924 Base85                                   |
+| `@ascii` | U+0000-U+007F                                     |
+| `@uni`   | U+0000-U+10FFFF                                   |
+| `@s`     | `\n,\r, ,\t`                                      |
+| `@w`     | `0..9,a..z,A..Z,_`                                |
+| `@wi`    | `0..9,a<->A..z<->Z,_`                             |
 
 **E.g.:** {@d} $\to$ {0..9}
 
@@ -69,16 +69,16 @@ Expressions inside `{...}` and `<<...>>` are built from one type:
 
 **Endpoint projection.** A $\sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
 
-| Written             | Alphabet  | Low         | High      |
-| ------------------- | --------- | ----------- | --------- |
-| `{a}`               | Unicode   | `a`         | `a`       |
-| `{abc}`             | Unicode   | `abc`       | `abc`     |
-| `{a..z}`            | a$\dots$z | `a`         | `z`       |
-| `{m..{a..z}..}`     | a$\dots$z | `m`         | unbounded |
-| `{cat..dog}`        | Unicode   | `cat`       | `dog`     |
-| `{{@d}..255}`       | dec       | `0` (floor) | `255`     |
-| `{128..{@d}}`       | dec       | `128`       | unbounded |
-| `{aa..{@a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
+| Written            | Alphabet  | Low         | High      |
+| ------------------ | --------- | ----------- | --------- |
+| `{a}`              | Unicode   | `a`         | `a`       |
+| `{abc}`            | Unicode   | `abc`       | `abc`     |
+| `{a..z}`           | a$\dots$z | `a`         | `z`       |
+| `{m..{a..z}..}`    | a$\dots$z | `m`         | unbounded |
+| `{cat..dog}`       | Unicode   | `cat`       | `dog`     |
+| `{{@d}..255}`      | dec       | `0` (floor) | `255`     |
+| `{128..{@d}}`      | dec       | `128`       | unbounded |
+| `{aa..{a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
 
@@ -246,7 +246,7 @@ Patterns are whitespace-significant: any space written between constructs is a l
 #### Headers
 
 ```proto
-<<\n>> => {#}[1..6]{@s}[1..]<<>>{@s}[..] => <h{{#0}}>{{1}}</h{{#0}}>
+<<\n>> => {#}[1..6]{@s}[1..]<<>> => <h{{#0}}>{{2}}</h{{#0}}>
 ```
 
 #### Decorators

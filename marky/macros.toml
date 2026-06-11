@@ -13,6 +13,8 @@ d = "0..9"
 hex = "0..9,a..f"
 HEX = "0..9,A..F"
 b32 = "0..9,a..v"
+B32 = "0..9,A..V"
+w = "0..9,a..z,A..Z,_"
 b58 = "1..9,A..H,J..N,P..Z,a..k,m..z" # base58: omits 0 O I l
 b64 = "A..Z,a..z,0..9,+,/"
 # base85 (RFC 1924). Its '{ } < >' members would collide with Himark syntax, so
@@ -26,5 +28,6 @@ uni = "\u0000..\U0010FFFF"
 
 # Case-fold and whitespace classes (congruence / unions, not value bounds).
 hexi = "0..9,a<->A..f<->F"
-i = "0..9,a<->A..z<->Z"
+b32i = "0..9,a<->A..v<->V"
+wi = "0..9,a<->A..z<->Z,_"
 s = "\n,\r, ,\t"

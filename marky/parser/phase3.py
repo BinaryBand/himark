@@ -1,7 +1,7 @@
 """Phase 3: Semantic resolution — convert phase2 nodes into typed HMK AST nodes.
 
 Transforms:
-  brace_group  → literal | char_range | named_alpha | full_alpha |
+  brace_group  → literal | char_range | full_alpha |
                  upper_bound | lower_bound | bounded_range | zip_range |
                  union | complement | token_set | group_class | padded
   double_braces → full_match | group_ref | span_ref | count_ref | emoji | latex
@@ -22,7 +22,6 @@ from marky.parser import phase2
 # Semantic node kinds that carry an `exclusions` field.
 _EXCLUDABLE = (
     t.CharRangeNode,
-    t.NamedAlphaNode,
     t.FullAlphaNode,
     t.UpperBoundNode,
     t.LowerBoundNode,
