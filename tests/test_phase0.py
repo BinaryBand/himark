@@ -1,0 +1,100 @@
+"""Tests for parser/phase0.py — macro expansion and implicit root wrapping."""
+
+from marky import parser
+from marky.engine._match import find_matches
+from marky.parser import phase0
+
+
+def matches(pattern, text):
+    return [m.text for m in find_matches(parser.parse(pattern)[0], text)]
+
+
+# ── Macro expansion (text level) ──────────────────────────────────────────────
+
+
+def test_macro_simple_range():
+    assert phase0.preprocess("{@dec}") == "{0..9}"
+    assert phase0.preprocess("{@hex}") == "{0..9,a..f}"
+    assert phase0.preprocess("{@HEX}") == "{0..9,A..F}"
+
+
+def test_macro_congruence():
+    assert phase0.preprocess("{@hexi}") == "{0..9,a<->A..f<->F}"
+    assert phase0.preprocess("{@i}") == "{0..9,a<->A..z<->Z}"
+
+
+def test_macro_whitespace_set():
+    # @s expands to a comma-union of real control chars, not backslash escapes.
+    assert phase0.preprocess("{@s}") == "{\n,\r, ,\t}"
+
+
+def test_macro_value_unsafe_fall_back_to_named():
+    # b58 / b85 / ascii / uni keep the engine's named alphabet (the @ is dropped).
+    assert phase0.preprocess("{@b58}") == "{b58}"
+    assert phase0.preprocess("{@ascii}") == "{ascii}"
+
+
+def test_macro_word_boundary():
+    # @ before a non-macro word is left untouched.
+    assert phase0.preprocess("{x@bar}") == "{x@bar}"
+
+
+# ── Implicit wrapping ─────────────────────────────────────────────────────────
+
+
+def test_implicit_wrap_bare_expression():
+    assert phase0.preprocess("a..z") == "{a..z}"
+
+
+def test_implicit_wrap_after_macro_expansion():
+    assert phase0.preprocess("@dec") == "{0..9}"
+
+
+def test_no_wrap_when_already_braced():
+    assert phase0.preprocess("{x}.{y}") == "{x}.{y}"
+
+
+def test_no_wrap_separator_step():
+    assert phase0.preprocess("<<\n>>") == "<<\n>>"
+
+
+def test_no_wrap_template_step():
+    assert phase0.preprocess("<h{{#0}}>{{1}}</h>") == "<h{{#0}}>{{1}}</h>"
+
+
+# ── End-to-end through the full pipeline ──────────────────────────────────────
+
+
+def test_macro_dec_matches_digits():
+    assert matches("{@dec}", "a1b2c3") == ["1", "2", "3"]
+
+
+def test_macro_dec_value_bound():
+    result = matches("{{@dec}..255}", "192 300 10")
+    assert "192" in result and "10" in result
+    assert "300" not in result
+
+
+def test_macro_i_case_insensitive_alnum():
+    # @i is a union of digits and case-fold letters; a union does not merge arms
+    # into one alphabet, so letter-runs and digit-runs match separately.
+    assert matches("{@i}", "Ab9") == ["Ab", "9"]
+    assert matches("{@i}", "xyz") == ["xyz"]  # case-fold letters as one run
+    assert matches("{@i}", "!.?") == []
+
+
+def test_macro_s_matches_whitespace():
+    result = matches("{@s}[1..]", "a   b\tc")
+    assert "   " in result
+    assert "\t" in result
+
+
+def test_implicit_wrap_end_to_end():
+    # Bare `a..z` is wrapped and read as a char range, not literal text.
+    assert matches("a..z", "h e y 9") == ["h", "e", "y"]
+
+
+def test_b58_value_range_preserved():
+    # @b58 must keep the 58-char alphabet for the P2PKH value bound.
+    result = matches("{{1}[23]..{@b58}..{z}[33]}", "1" + "A" * 24)
+    assert result  # a 25-char b58 string in range matches

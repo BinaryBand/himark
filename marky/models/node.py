@@ -4,7 +4,7 @@ class HMKNode:
         self.content = content
         self.children = children or []
         self.metadata = metadata or {}
-
+ 
     def __repr__(self):
         if self.children:
             children_str = ", ".join(repr(c) for c in self.children)
