@@ -114,13 +114,6 @@ class BoundedRangeNode:
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True, kw_only=True)
-class ZipRangeNode:
-    left: SemanticNode
-    right: SemanticNode
-    type: Literal["zip_range"] = "zip_range"
-
-
 @dataclass(slots=True)
 class UnionNode:
     type: Literal["union"] = "union"
@@ -197,7 +190,6 @@ SemanticNode: TypeAlias = (
     | UpperBoundNode
     | LowerBoundNode
     | BoundedRangeNode
-    | ZipRangeNode
     | UnionNode
     | ComplementNode
     | TokenSetNode
@@ -219,7 +211,6 @@ SemanticClasses = (
     UpperBoundNode,
     LowerBoundNode,
     BoundedRangeNode,
-    ZipRangeNode,
     UnionNode,
     ComplementNode,
     TokenSetNode,

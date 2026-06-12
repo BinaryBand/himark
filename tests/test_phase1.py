@@ -19,8 +19,12 @@ def test_macro_simple_range():
 
 
 def test_macro_congruence():
-    assert phase1.preprocess("{@hexi}") == "{0..9,a<->A..f<->F}"
-    assert phase1.preprocess("{@wi}") == "{0..9,a<->A..z<->Z,_}"
+    # Case-fold classes expand to enumerated congruence groups (the zip sugar
+    # was dropped); the letters are wrapped in their own brace to stay one
+    # group-class arm, distinct from the singly-matched digit arm.
+    assert phase1.preprocess("{@hexi}") == (
+        "{0..9,{{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F}}}"
+    )
 
 
 def test_macro_whitespace_set():

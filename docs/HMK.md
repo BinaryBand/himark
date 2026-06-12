@@ -36,11 +36,11 @@ Every capture query is a finitely-bound alphabet, and every alphabet declaration
 | -------- | ------------------------------------------------- |
 | `@d`     | `0..9`                                            |
 | `@hex`   | `0..9,a..f`                                       |
-| `@hexi`  | `0..9,a<->A..f<->F`                               |
+| `@hexi`  | `0..9,{{a<->A},..,{f<->F}}`                       |
 | `@HEX`   | `0..9,A..F`                                       |
 | `@b32`   | `0..9,a..v` (RFC 4648 $\S7$)                      |
 | `@B32`   | `0..9,A..V`                                       |
-| `@b32i`  | `0..9,a<->A..v<->V`                               |
+| `@b32i`  | `0..9,{{a<->A},..,{v<->V}}`                       |
 | `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z` (omits `0 O I l`) |
 | `@b64`   | `A..Z,a..z,0..9,+,/`                              |
 | `@b85`   | RFC 1924 Base85                                   |
@@ -48,7 +48,7 @@ Every capture query is a finitely-bound alphabet, and every alphabet declaration
 | `@uni`   | U+0000-U+10FFFF                                   |
 | `@s`     | `\n,\r, ,\t`                                      |
 | `@w`     | `0..9,a..z,A..Z,_`                                |
-| `@wi`    | `0..9,a<->A..z<->Z,_`                             |
+| `@wi`    | `0..9,{{a<->A},..,{z<->Z}},_`                     |
 
 **E.g.:** {@d} $\to$ {0..9}
 

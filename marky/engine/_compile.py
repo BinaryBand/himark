@@ -302,10 +302,10 @@ class _TokenSet(_Base):
 
 
 class _Group(_Base):
-    """Equivalence-group class (zip ranges and grouped classes are identical at
-    match time). Members of a group are interchangeable; repetition-equality is
-    checked against the group sequence, so 'a' and 'bc' count as the same unit
-    when grouped, and 'a'/'A' fold together for case-insensitive repetition."""
+    """Equivalence-group class — the single congruence primitive. Members of a
+    group are interchangeable; repetition-equality is checked against the group
+    sequence, so 'a' and 'bc' count as the same unit when grouped, and 'a'/'A'
+    fold together for case-insensitive repetition."""
 
     __slots__ = ("members",)
 
@@ -408,40 +408,6 @@ class _PerCharPadded(_Base):
         return pos + width if width >= self.min_width else None
 
 
-# ── Zip-group construction ────────────────────────────────────────────────────
-
-
-def _group_members(node: t.SemanticNode) -> list[str]:
-    if isinstance(node, t.LiteralNode):
-        return [node.content]
-    if isinstance(node, t.CharRangeNode):
-        return [chr(c) for c in range(ord(node.start), ord(node.end) + 1)]
-    if isinstance(node, t.UnionNode):
-        out: list[str] = []
-        for child in node.options:
-            out.extend(_group_members(child))
-        return out
-    return []
-
-
-def _zip_groups(node: t.ZipRangeNode) -> list[list[str]]:
-    """Expand a zip range into parallel equivalence groups, or [] if ill-formed."""
-    left = _group_members(node.left)
-    right = _group_members(node.right)
-    if not left or len(left) != len(right):
-        return []
-    spans = []
-    for lm, rm in zip(left, right):
-        if len(lm) != 1 or len(rm) != 1:
-            return []
-        lo, hi = sorted((ord(lm), ord(rm)))
-        spans.append((lo, hi))
-    width = spans[0][1] - spans[0][0] + 1
-    if any((hi - lo + 1) != width for lo, hi in spans):
-        return []
-    return [[chr(lo + i) for lo, _ in spans] for i in range(width)]
-
-
 # ── Padding lowering ──────────────────────────────────────────────────────────
 
 
@@ -458,15 +424,6 @@ def _lower_value_range(node: t.SemanticNode) -> Matcher:
     return _ValueRange(view)
 
 
-def _lower_zip(node: t.ZipRangeNode) -> Matcher:
-    groups = _zip_groups(node)
-    if not groups:
-        raise CompileError(
-            "Zip range sides must have equal cardinality and single-character members"
-        )
-    return _Group(groups)
-
-
 # ── Lowering registry ─────────────────────────────────────────────────────────
 
 _LOWERINGS: dict[type, Callable[..., Matcher]] = {
@@ -477,7 +434,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.UpperBoundNode: _lower_value_range,
     t.LowerBoundNode: _lower_value_range,
     t.BoundedRangeNode: _lower_value_range,
-    t.ZipRangeNode: _lower_zip,
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _Union,
     t.ComplementNode: _Complement,

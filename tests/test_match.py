@@ -16,6 +16,14 @@ def match_one(pattern, text):
     return result[0]
 
 
+# The 26-letter case-fold class, written as enumerated congruence groups. (The
+# `{a<->A..z<->Z}` / `{{a..z}<->{A..Z}}` range sugar was dropped; this is what it
+# compiled to — a single group-class.)
+CASE_FOLD = (
+    "{" + ",".join(f"{{{c}<->{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz") + "}"
+)
+
+
 # ── Literal ──────────────────────────────────────────────────────────────────
 
 
@@ -58,8 +66,8 @@ def test_named_alpha_hex():
 
 
 def test_named_alpha_hexi_case_insensitive():
-    # hexi = 0..9,a<->A..f<->F — digits match singly; the case-fold letter zip
-    # matches contiguous runs, so "aF" is one unit.
+    # hexi = 0..9 plus a case-fold group-class for a..f — digits match singly;
+    # the case-fold letters match as a contiguous run, so "aF" is one unit.
     result = matches("{@hexi}", "0aF g9C")
     assert result == ["0", "aF", "9", "C"]
 
@@ -350,12 +358,12 @@ def test_variable_number_repetition():
 
 def test_grouped_word_repetition_case_folded():
     # Spec headline: same word twice, any casing. "Hello" then "HELLO".
-    assert matches("{a<->A..z<->Z}[2]", "HelloHELLO") == ["HelloHELLO"]
+    assert matches(CASE_FOLD + "[2]", "HelloHELLO") == ["HelloHELLO"]
 
 
 def test_grouped_word_repetition_mixed():
     # "ab" and "AB" are group-equal (a<->A, b<->B).
-    assert matches("{a<->A..z<->Z}[2]", "abAB") == ["abAB"]
+    assert matches(CASE_FOLD + "[2]", "abAB") == ["abAB"]
 
 
 def test_multichar_group_repetition():
@@ -422,19 +430,31 @@ def test_template_full_match():
     assert result == ["<b>hello</b>"]
 
 
-# ── zip_range ─────────────────────────────────────────────────────────────────
+# ── enumerated case-fold class (replaces the dropped zip-range sugar) ─────────
 
 
-def test_zip_range_matches_letter_sequence():
-    # {{a..z}<->{A..Z}} — congruence of two ranges: any [a-z, A-Z] sequence.
-    result = matches("{{a..z}<->{A..Z}}", "Hello 123 World")
+def test_case_fold_class_matches_letter_sequence():
+    # The enumerated 26-pair class matches any [a-z, A-Z] run, case-insensitively.
+    result = matches(CASE_FOLD, "Hello 123 World")
     assert "Hello" in result
     assert "World" in result
     assert "123" not in result
 
 
-def test_zip_range_rejects_non_alpha():
-    assert matches("{{a..z}<->{A..Z}}", "123") == []
+def test_case_fold_class_rejects_non_alpha():
+    assert matches(CASE_FOLD, "123") == []
+
+
+def test_dropped_zip_syntax_raises():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    # Both zip spellings were removed in favor of enumerated groups.
+    with pytest.raises(CompileError):
+        matches("{{a..z}<->{A..Z}}", "x")  # class <-> class
+    with pytest.raises(CompileError):
+        matches("{a<->A..z<->Z}", "x")  # range of pairs
 
 
 # ── variable-width padding ────────────────────────────────────────────────────

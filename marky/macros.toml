@@ -27,7 +27,10 @@ ascii = "\u0000..\u007f"
 uni = "\u0000..\U0010FFFF"
 
 # Case-fold and whitespace classes (congruence / unions, not value bounds).
-hexi = "0..9,a<->A..f<->F"
-b32i = "0..9,a<->A..v<->V"
-wi = "0..9,a<->A..z<->Z,_"
+# The case-fold letters are enumerated congruence groups wrapped in their own
+# brace, so each stays one group-class arm (a..f matched case-insensitively as a
+# contiguous run); digits remain a separate, singly-matched union arm.
+hexi = "0..9,{{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F}}"
+b32i = "0..9,{{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F},{g<->G},{h<->H},{i<->I},{j<->J},{k<->K},{l<->L},{m<->M},{n<->N},{o<->O},{p<->P},{q<->Q},{r<->R},{s<->S},{t<->T},{u<->U},{v<->V}}"
+wi = "0..9,{{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F},{g<->G},{h<->H},{i<->I},{j<->J},{k<->K},{l<->L},{m<->M},{n<->N},{o<->O},{p<->P},{q<->Q},{r<->R},{s<->S},{t<->T},{u<->U},{v<->V},{w<->W},{x<->X},{y<->Y},{z<->Z}},_"
 s = "\n,\r, ,\t"

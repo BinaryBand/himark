@@ -65,11 +65,10 @@ def test_bounded_range():
     assert node.alpha.type == "char_range"
 
 
-def test_zip_range():
-    node = first_semantic("{{a..z}<->{A..Z}}")
-    assert node.type == "zip_range"
-    assert node.left.type == "char_range"
-    assert node.right.type == "char_range"
+def test_class_to_class_range_rejected():
+    # {{a..z}<->{A..Z}} — congruence of two classes was dropped; enumerate instead.
+    with pytest.raises(CompileError):
+        resolve("{{a..z}<->{A..Z}}")
 
 
 def test_congruence_single_pair():
@@ -79,12 +78,10 @@ def test_congruence_single_pair():
     assert node.groups == [["a", "A"]]
 
 
-def test_congruence_range_of_pairs():
-    # {a<->A..z<->Z} — range of congruence pairs steps both columns (zip).
-    node = first_semantic("{a<->A..z<->Z}")
-    assert node.type == "zip_range"
-    assert node.left.type == "union"
-    assert node.right.type == "union"
+def test_congruence_range_of_pairs_rejected():
+    # {a<->A..z<->Z} — the range-of-pairs sugar was dropped; enumerate instead.
+    with pytest.raises(CompileError):
+        resolve("{a<->A..z<->Z}")
 
 
 def test_congruence_enumerated_groups():

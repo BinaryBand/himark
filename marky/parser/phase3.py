@@ -2,7 +2,7 @@
 
 Transforms:
   brace_group  → literal | char_range | full_alpha |
-                 upper_bound | lower_bound | bounded_range | zip_range |
+                 upper_bound | lower_bound | bounded_range |
                  union | complement | token_set | group_class | padded
   double_braces → template node (see parser/templates.py)
   separator    → separator (resolved to sep_value or sep_class)
@@ -236,7 +236,7 @@ def _group_members(brace_text: str) -> list[str]:
         if sv is None:
             raise CompileError(
                 f"Group members must be singletons, got: {item!r} "
-                f"(a range of groups is written a<->A..z<->Z)"
+                f"(enumerate groups: {{a<->A}},{{b<->B}},…)"
             )
         members.append(sv)
     return members
@@ -283,8 +283,8 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     """
     parts = strict_split("..", arm, arm)
 
-    # `<->` (congruence) binds tighter than `..`. If any `..`-part holds a
-    # top-level `<->`, the arm is a congruence group or a range of them.
+    # `<->` (congruence) binds tighter than `..`. A `..`-part holding a
+    # top-level `<->` is an enumerated congruence group.
     cong = [split_top("<->", p) for p in parts]
     if any(len(c) > 1 for c in cong):
         return _resolve_congruence(parts, cong)
@@ -313,7 +313,12 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
             return t.UpperBoundNode(alpha=_alpha(a), upper=bv)  # α..τ
         if av is not None and bv is None:
             return t.LowerBoundNode(lower=av, alpha=_alpha(b))  # τ..α
-        return t.ZipRangeNode(left=_alpha(a), right=_alpha(b))  # α..α
+        # α..α — a class-to-class range has no ordering; congruence between two
+        # classes is written as enumerated groups, {{a<->A},{b<->B},…}.
+        raise CompileError(
+            f"A class-to-class range is not supported; enumerate the congruence "
+            f"groups instead (e.g. {{a<->A}},{{b<->B}},…): got {arm!r}"
+        )
 
     if len(parts) == 3:
         (av, bv, cv) = svals
@@ -338,43 +343,25 @@ def _congruence_members(members: list[str]) -> list[str]:
     for m in members:
         sv = _singleton_value(m)
         if sv is None:
-            raise CompileError(f"Congruence member must be a singleton or class: {m!r}")
+            raise CompileError(f"Congruence member must be a singleton: {m!r}")
         vals.append(sv)
     return vals
 
 
-def _congruence_union(members: list[str]) -> t.SemanticNode:
-    """Build a union node (or lone literal) from singleton `<->` members."""
-    children: list[t.SemanticNode] = [
-        t.LiteralNode(content=v) for v in _congruence_members(members)
-    ]
-    return children[0] if len(children) == 1 else t.UnionNode(options=children)
-
-
 def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNode:
-    """Resolve a `<->` congruence arm.
+    """Resolve a `<->` arm into one enumerated congruence group.
 
-    One part:  `a<->A`            → a single congruence group
-               `{a..z}<->{A..Z}`  → a zip of two classes
-    Two parts: `a<->A..z<->Z`     → a range of congruence pairs (zip)
+    `a<->A`, `a<->bc` → a single group of interchangeable singletons. A *range*
+    of congruence pairs is written by enumerating the groups,
+    `{{a<->A},{b<->B},…}`, not with `..` or class endpoints.
     """
-    if len(parts) == 1:
-        members = cong[0]
-        # α<->α — congruence of two classes (zip).
-        if len(members) == 2 and all(m.startswith("{") for m in members):
-            return t.ZipRangeNode(left=_alpha(members[0]), right=_alpha(members[1]))
-        # Singleton members — one enumerated congruence group.
-        return t.GroupClassNode(groups=[_congruence_members(members)])
-
-    if len(parts) == 2:
-        # Range of congruence pairs steps both columns in parallel (zip).
-        return t.ZipRangeNode(
-            left=_congruence_union(cong[0]), right=_congruence_union(cong[1])
+    members = cong[0]
+    if len(parts) != 1 or any(m.startswith("{") for m in members):
+        raise CompileError(
+            f"A '<->' range is not supported; enumerate the groups instead "
+            f"(e.g. {{a<->A}},{{b<->B}},…): got {'..'.join(parts)!r}"
         )
-
-    raise CompileError(
-        f"Congruence range supports at most two endpoints, got: {parts!r}"
-    )
+    return t.GroupClassNode(groups=[_congruence_members(members)])
 
 
 # ── Count parsing ─────────────────────────────────────────────────────────────
