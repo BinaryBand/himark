@@ -9,5 +9,7 @@ def parse(text: str) -> list[t.RootNode]:
     Pattern + template   => [pattern_tree, template_tree]
     Chained              => [p1_tree, p2_tree, ..., template_tree]
     """
-    stmt = phase1.split_statement(text)
-    return [phase3.parse(phase2.parse(phase0.preprocess(step))) for step in stmt.steps]
+    return [
+        phase3.parse(phase2.parse(phase0.preprocess(step)))
+        for step in phase1.split_statement(text)
+    ]

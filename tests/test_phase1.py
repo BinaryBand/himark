@@ -1,10 +1,10 @@
 """Tests for parser/phase1.py — statement splitting on the => transformer chain."""
 
-from marky.parser.phase1 import Statement, split_statement
+from marky.parser.phase1 import split_statement
 
 
 def steps(text: str) -> list[str]:
-    return split_statement(text).steps
+    return split_statement(text)
 
 
 # ── Basic shapes ──────────────────────────────────────────────────────────────
@@ -22,10 +22,9 @@ def test_chained_steps():
     assert steps("{a} => {b} => {c}") == ["{a}", "{b}", "{c}"]
 
 
-def test_returns_statement_dataclass():
+def test_returns_list():
     result = split_statement("{x}")
-    assert isinstance(result, Statement)
-    assert result.steps == ["{x}"]
+    assert result == ["{x}"]
 
 
 # ── Whitespace handling ───────────────────────────────────────────────────────

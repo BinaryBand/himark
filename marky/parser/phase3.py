@@ -19,9 +19,11 @@ from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser import phase2
 from marky.parser._text import brace_end, inner_of, split_top, strict_split, unescape
-from marky.parser.templates import parse_template_expr
 
-# Semantic node kinds that carry an `exclusions` field.
+_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
+_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
+
+
 _EXCLUDABLE = (
     t.CharRangeNode,
     t.FullAlphaNode,
@@ -30,11 +32,7 @@ _EXCLUDABLE = (
     t.BoundedRangeNode,
     t.UnionNode,
     t.TokenSetNode,
-    t.GroupClassNode,
 )
-
-_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
-_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
 
 
 def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.SemanticNode:
@@ -66,14 +64,7 @@ def parse(node: t.RootNode) -> t.RootNode:
                 child.count = _parse_count(child.count_src)
                 child.count_src = None
             new_children.append(child)
-        elif isinstance(child, t.DoubleBracesNode):
-            new_children.append(parse_template_expr(child.content))
         elif isinstance(child, t.SeparatorNode):
-            if child.count_src is not None:
-                raise CompileError(
-                    f"A count on <<...>> is not allowed: "
-                    f"<<{child.content}>>[{child.count_src}]"
-                )
             _resolve_separator(child)
             new_children.append(child)
         else:

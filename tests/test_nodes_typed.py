@@ -16,7 +16,7 @@ def test_typed_nodes_smoke():
     lit = LiteralNode(content="abc")
     rng = CharRangeNode(start="a", end="z", exclusions=["d..f"])
     union = UnionNode(options=[lit, rng], exclusions=["x"])
-    root = RootNode(content="{a..z}", children=[union])
+    root = RootNode(children=[union])
 
     assert lit.type == "literal"
     assert rng.type == "char_range"

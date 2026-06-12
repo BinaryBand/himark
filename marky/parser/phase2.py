@@ -2,8 +2,8 @@
 
 Constructs recognized:
   {expr}[count]   — brace_group with optional count modifier
-  <<sep>>[count]  — separator with optional count modifier
-  {{ref}}         — template reference (double-brace, passed through)
+  <<sep>>[count]  — separator (count modifier is a compile error)
+  {{ref}}         — template reference, parsed immediately into a typed node
   leaf text       — verbatim literal fragments
 """
 
@@ -12,6 +12,7 @@ import re
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser._text import ESCAPES
+from marky.parser.templates import parse_template_expr
 
 # Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no braces
 # inside (so {{a..z}..{A..Z}} stays a brace group, not a template ref).
@@ -70,12 +71,12 @@ def parse(text: str) -> t.RootNode:
             pos += 1
             continue
 
-        # Template refs {{...}} — must check before single {
+        # Template refs {{...}} — parsed immediately; must check before single {
         if text[pos : pos + 2] == "{{":
             m = _TEMPLATE_REF.match(text, pos)
             if m:
                 flush_leaf()
-                nodes.append(t.DoubleBracesNode(content=m.group(1)))
+                nodes.append(parse_template_expr(m.group(1)))
                 pos = m.end()
                 continue
 
@@ -92,7 +93,7 @@ def parse(text: str) -> t.RootNode:
             nodes.append(brace)
             continue
 
-        # Separator <<sep>>[count?]
+        # Separator <<sep>> — count modifier is not allowed
         if text[pos : pos + 2] == "<<":
             flush_leaf()
             end = _scan_chevrons(text, pos + 2)
@@ -100,8 +101,10 @@ def parse(text: str) -> t.RootNode:
             pos = end
             cm = _COUNT_SRC.match(text, pos)
             if cm:
-                sep.count_src = cm.group(1)
-                pos = cm.end()
+                raise CompileError(
+                    f"A count on <<...>> is not allowed: "
+                    f"<<{sep.content}>>[{cm.group(1)}]"
+                )
             nodes.append(sep)
             continue
 
@@ -109,4 +112,4 @@ def parse(text: str) -> t.RootNode:
         pos += 1
 
     flush_leaf()
-    return t.RootNode(content=text, children=nodes or [t.LeafNode(content=text)])
+    return t.RootNode(children=nodes or [t.LeafNode(content=text)])

@@ -56,36 +56,21 @@ class _Base:
 # ── Exclusion helpers (resolved once, at compile time) ────────────────────────
 
 
-def _split_excl(excl: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
-    singles, ranges = [], []
-    for e in excl:
-        if ".." in e:
-            lo, hi = e.split("..", 1)
-            ranges.append((lo, hi))
-        else:
-            singles.append(e)
-    return singles, ranges
+class _Excluder:
+    """Compiled exclusion set — works for both single chars and multi-char strings."""
 
-
-class _CharExcluder:
     __slots__ = ("singles", "ranges")
 
     def __init__(self, excl: list[str]):
-        s, r = _split_excl(excl)
-        self.singles = set(s)
-        self.ranges = r
-
-    def __call__(self, ch: str) -> bool:
-        return ch in self.singles or any(lo <= ch <= hi for lo, hi in self.ranges)
-
-
-class _StrExcluder:
-    __slots__ = ("singles", "ranges")
-
-    def __init__(self, excl: list[str]):
-        s, r = _split_excl(excl)
-        self.singles = set(s)
-        self.ranges = r
+        singles, ranges = [], []
+        for e in excl:
+            if ".." in e:
+                lo, hi = e.split("..", 1)
+                ranges.append((lo, hi))
+            else:
+                singles.append(e)
+        self.singles = set(singles)
+        self.ranges = ranges
 
     def __call__(self, s: str) -> bool:
         return s in self.singles or any(lo <= s <= hi for lo, hi in self.ranges)
@@ -95,9 +80,9 @@ class _ValueExcluder:
     __slots__ = ("singles", "ranges")
 
     def __init__(self, excl: list[str], alph: Alphabet):
-        s, r = _split_excl(excl)
-        self.singles = {alph.value(x) for x in s}
-        self.ranges = [(alph.value(lo), alph.value(hi)) for lo, hi in r]
+        base = _Excluder(excl)
+        self.singles = {alph.value(x) for x in base.singles}
+        self.ranges = [(alph.value(lo), alph.value(hi)) for lo, hi in base.ranges]
 
     def __call__(self, v: int) -> bool:
         return v in self.singles or any(lo <= v <= hi for lo, hi in self.ranges)
@@ -192,7 +177,7 @@ class _CharRange(_Base):
 
     def __init__(self, node: t.CharRangeNode):
         self.start, self.end = node.start, node.end
-        self._excl = _CharExcluder(node.exclusions)
+        self._excl = _Excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
         if pos >= len(text):
@@ -229,7 +214,7 @@ class _FullAlpha(_Base):
 
     def __init__(self, node: t.FullAlphaNode):
         self.inner = lower(node.inner)
-        self._excl = _CharExcluder(node.exclusions)
+        self._excl = _Excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
         end = pos
@@ -277,7 +262,7 @@ class _Union(_Base):
 
     def __init__(self, node: t.UnionNode):
         self.options = [lower(o) for o in node.options]
-        self._excl = _StrExcluder(node.exclusions)
+        self._excl = _Excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
         for arm in self.options:
@@ -369,15 +354,6 @@ class _Group(_Base):
             else:
                 return None
         return cur
-
-
-class _Never(_Base):
-    """A matcher that never matches (an ill-formed zip range)."""
-
-    __slots__ = ()
-
-    def match(self, text: str, pos: int) -> int | None:
-        return None
 
 
 class _ValueWindowPadded(_Base):
@@ -484,7 +460,11 @@ def _lower_value_range(node: t.SemanticNode) -> Matcher:
 
 def _lower_zip(node: t.ZipRangeNode) -> Matcher:
     groups = _zip_groups(node)
-    return _Group(groups) if groups else _Never()
+    if not groups:
+        raise CompileError(
+            "Zip range sides must have equal cardinality and single-character members"
+        )
+    return _Group(groups)
 
 
 # ── Lowering registry ─────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser.phase2 import parse
 
-_HAS_CONTENT = (t.LeafNode, t.BraceGroupNode, t.SeparatorNode, t.DoubleBracesNode)
+_HAS_CONTENT = (t.LeafNode, t.BraceGroupNode, t.SeparatorNode)
 
 
 def children_types(pattern):
@@ -21,7 +21,7 @@ def content_at(tree: t.RootNode, i: int) -> str:
 
 def count_src_at(tree: t.RootNode, i: int) -> str | None:
     node = tree.children[i]
-    assert isinstance(node, (t.BraceGroupNode, t.SeparatorNode))
+    assert isinstance(node, t.BraceGroupNode)
     return node.count_src
 
 
@@ -75,22 +75,23 @@ def test_separator_basic():
     assert content_at(tree, 0) == "\\n"
 
 
-def test_separator_with_count():
-    tree = parse("<<,>>[2]")
-    node = tree.children[0]
-    assert node.type == "separator"
-    assert node.count_src == "2"
+def test_separator_with_count_raises():
+    with pytest.raises(CompileError, match="count on <<"):
+        parse("<<,>>[2]")
 
 
-def test_template_ref_double_brace():
+def test_template_ref_group():
     tree = parse("{{0}}")
-    assert children_types("{{0}}") == ["double_braces"]
-    assert content_at(tree, 0) == "0"
+    assert children_types("{{0}}") == ["group_ref"]
+    node = tree.children[0]
+    assert isinstance(node, t.GroupRefNode)
+    assert node.index == [0]
 
 
 def test_template_ref_full_match():
     tree = parse("{{.}}")
-    assert content_at(tree, 0) == "."
+    node = tree.children[0]
+    assert isinstance(node, t.FullMatchNode)
 
 
 def test_escape_newline():

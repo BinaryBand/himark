@@ -30,19 +30,12 @@ CountSpec: TypeAlias = CountRange | CountRef
 @dataclass(slots=True)
 class RootNode:
     type: Literal["root"] = "root"
-    content: str = ""
     children: list[Node] = field(default_factory=list)
 
 
 @dataclass(slots=True)
 class LeafNode:
     type: Literal["leaf"] = "leaf"
-    content: str = ""
-
-
-@dataclass(slots=True)
-class DoubleBracesNode:
-    type: Literal["double_braces"] = "double_braces"
     content: str = ""
 
 
@@ -59,7 +52,6 @@ class BraceGroupNode:
 class SeparatorNode:
     type: Literal["separator"] = "separator"
     content: str = ""
-    count_src: str | None = None
     sep_value: str | None = None
     sep_class: SemanticNode | None = None
 
@@ -153,7 +145,6 @@ class TokenSetNode:
 class GroupClassNode:
     type: Literal["group_class"] = "group_class"
     groups: list[list[str]] = field(default_factory=list)
-    exclusions: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -217,13 +208,7 @@ SemanticNode: TypeAlias = (
 TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
 
 Node: TypeAlias = (
-    RootNode
-    | LeafNode
-    | DoubleBracesNode
-    | BraceGroupNode
-    | SeparatorNode
-    | SemanticNode
-    | TemplateNode
+    RootNode | LeafNode | BraceGroupNode | SeparatorNode | SemanticNode | TemplateNode
 )
 
 SemanticClasses = (
@@ -242,18 +227,12 @@ SemanticClasses = (
     PaddedNode,
 )
 
-
 TemplateClasses = (
     FullMatchNode,
     GroupRefNode,
     SpanRefNode,
     CountRefNode,
 )
-
-
-def is_semantic(node: Node) -> TypeGuard[SemanticNode]:
-    """Runtime check + narrowing for the semantic-node union."""
-    return isinstance(node, SemanticClasses)
 
 
 def is_template(node: Node) -> TypeGuard[TemplateNode]:

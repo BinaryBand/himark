@@ -1,14 +1,7 @@
 """Phase 1: Split a raw HMK statement into its ordered list of steps."""
 
-from dataclasses import dataclass
 
-
-@dataclass
-class Statement:
-    steps: list[str]  # one entry per => segment; last entry is the template (if > 1)
-
-
-def split_statement(text: str) -> Statement:
+def split_statement(text: str) -> list[str]:
     """Split 'P1 => P2 => ... => T' into an ordered list of step strings.
 
     Scans for => outside of any bracket/chevron/brace delimiters to avoid
@@ -23,7 +16,7 @@ def split_statement(text: str) -> Statement:
             break
         steps.append(remaining[:idx].strip())
         remaining = remaining[idx + 2 :]
-    return Statement(steps=steps)
+    return steps
 
 
 def _find_arrow(text: str) -> int | None:
