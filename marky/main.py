@@ -27,10 +27,18 @@ def execute_cmd(
     ),
     target: str = typer.Argument(help="String to match against, or a file path"),
 ) -> None:
-    """Match TARGET against PATTERN and print each transformed result."""
+    """Match TARGET against PATTERN and print each transformed result.
+
+    With `=>` the matches are printed one per line; with `=>+` the whole
+    transformed text is printed as a single block.
+    """
     trees = parser.parse(_resolve_pattern(pattern))
-    for result in execute(trees, _str_or_file(target)):
+    result = execute(trees, _str_or_file(target))
+    if isinstance(result, str):
         typer.echo(result)
+    else:
+        for line in result:
+            typer.echo(line)
 
 
 @app.command(name="find")

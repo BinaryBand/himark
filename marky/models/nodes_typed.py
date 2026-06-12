@@ -31,6 +31,9 @@ CountSpec: TypeAlias = CountRange | CountRef
 class RootNode:
     type: Literal["root"] = "root"
     children: list[Node] = field(default_factory=list)
+    # Statement-level output mode, set on the first step only: True (`=>+`)
+    # splices rendered matches back into the source; False (`=>`) extracts them.
+    replace: bool = False
 
 
 @dataclass(slots=True)

@@ -34,12 +34,18 @@ def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
     return [(m.start, m.end) for m in find_matches(steps[0], target)]
 
 
-def execute(steps: list[t.RootNode], target: str) -> list[str]:
+def execute(steps: list[t.RootNode], target: str) -> list[str] | str:
     """Execute an ordered list of HMK step trees against target.
 
     steps[0]   — pattern applied to target
     steps[1:]  — alternating patterns / templates (see module docstring)
+
+    Returns the list of rendered matches (`=>`, extract mode), or — when the
+    statement used `=>+` — the whole target with each match spliced in place
+    as a single string (replace mode).
     """
+    if steps and steps[0].replace:
+        return _transform(steps, target)
     return _run(steps, target)
 
 

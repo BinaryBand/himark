@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.6.0-draft  
+**Version:** 0.6.1-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -154,22 +154,21 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 
 When `{...}` items are class expressions, the alphabet defines **equivalence groups** -- sets of surface forms mapping to the same abstract position. Each group is one letter regardless of the physical length of its members.
 
-`<->` ($\leftrightarrow$) defines a **congruence group** -- a set of surface forms that are interchangeable at one position. `<->` binds tighter than `..`, so groups compose with ranges:
+`<->` ($\leftrightarrow$) defines a **congruence group** -- a set of surface forms that are interchangeable at one position. Groups are enumerated; a multi-group class lists each group in its own brace:
 
 ```proto
-{a<->A..z<->Z}            // range of 26 congruence pairs: a<->A, b<->B, through z<->Z
-{{a..z}<->{A..Z}}         // congruence of two ranges -- same 26-letter alphabet
+{a<->A}                   // one group: 'a' and 'A' interchangeable
 {{a<->A},{b<->B},{c<->C}} // 3 groups, enumerated
 {{a<->bc},{def<->ghi}}    // 2 groups with multi-char tokens
 ```
 
-> **Note:** Group members must be singletons. A range of groups is written with `<->` ranges (`a<->A..z<->Z`), not with classes as members -- `{{a..z},{A..Z}}` is an error.
+> **Note:** Group members must be singletons. A _range_ of congruence groups is written by enumerating them (`{{a<->A},..,{z<->Z}}`), not with `..` or class endpoints -- `{a<->A..z<->Z}`, `{{a..z}<->{A..Z}}`, and `{{a..z},{A..Z}}` are all errors.
 
 Under `[count]`, repetition-equality is checked against the congruence group -- `a` and `A` count as the same value:
 
 ```proto
-{a<->A}[2]          // 'aa', 'aA', 'Aa', 'AA' -- contrast {a,A}[2]: only 'aa' or 'AA'
-{a<->A..z<->Z}[2]   // same letter twice, any casing -- 'hh', 'hH', 'Hh', 'HH'; 'He' does not
+{a<->A}[2]               // 'aa', 'aA', 'Aa', 'AA' -- contrast {a,A}[2]: only 'aa' or 'AA'
+{{a<->A},..,{z<->Z}}[2]  // same letter twice, any casing -- 'hh', 'hH', 'Hh', 'HH'; 'He' does not
 ```
 
 ---
@@ -249,6 +248,21 @@ Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` 
 
 ```proto
 {@d}[1..] => <{{.}}> => {@d} => #{{.}}   // '42' -> '<#4>', '<#2>'
+```
+
+### Extract vs. replace (`=>` / `=>+`)
+
+The arrow has two forms, deciding the statement's output:
+
+- `=>` **extracts** -- returns the list of rendered matches, dropping the text between them.
+- `=>+` **replaces** -- splices each rendered match back into the source and returns the whole string, keeping the surrounding text verbatim. This is the document-transform mode: wrap the matches, keep the prose.
+
+The mode is taken from the **first** arrow (inner arrows in a chain stay plain `=>`).
+
+```proto
+{a..z} =>  <p>{{.}}</p>   // 'a1b2' -> ['<p>a</p>', '<p>b</p>']
+{a..z} =>+ <p>{{.}}</p>   // 'a1b2' -> '<p>a</p>1<p>b</p>2'
+{**<<>>**} =>+ <strong>{{0}}</strong>   // 'say **hi**' -> 'say <strong>hi</strong>'
 ```
 
 ---

@@ -258,7 +258,7 @@ def test_host_composition_arbitrary_row_count():
         head = execute(parser.parse(HEADER_ROW), lines[0])
         assert execute(parser.parse(ALIGN_ROW), lines[1])
         body = [r for ln in lines[2:] for r in execute(parser.parse(BODY_ROW), ln)]
-        return "<table>" + "".join(head + body) + "</table>"
+        return "<table>" + "".join([*head, *body]) + "</table>"
 
     assert md_table_to_html(TABLE) == TABLE_HTML
 
@@ -313,7 +313,7 @@ def _hmk_convert(source: str, n: int) -> str:
     )
     body_prog = _row_pat(n) + " => <tr>" + _refs("td", n) + "</tr>"
     body = [r for ln in lines[2:] for r in execute(parser.parse(body_prog), ln)]
-    return "<table>" + "".join(head + body) + "</table>"
+    return "<table>" + "".join([*head, *body]) + "</table>"
 
 
 if HAS_HYPOTHESIS:

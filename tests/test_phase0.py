@@ -4,7 +4,11 @@ from marky.parser.phase0 import split_statement
 
 
 def steps(text: str) -> list[str]:
-    return split_statement(text)
+    return split_statement(text)[0]
+
+
+def mode(text: str) -> bool:
+    return split_statement(text)[1]
 
 
 # ── Basic shapes ──────────────────────────────────────────────────────────────
@@ -22,9 +26,29 @@ def test_chained_steps():
     assert steps("{a} => {b} => {c}") == ["{a}", "{b}", "{c}"]
 
 
-def test_returns_list():
-    result = split_statement("{x}")
-    assert result == ["{x}"]
+def test_returns_steps_and_mode():
+    assert split_statement("{x}") == (["{x}"], False)
+
+
+# ── Replace-mode arrow (=>+) ──────────────────────────────────────────────────
+
+
+def test_extract_arrow_is_default():
+    assert mode("{a..z} => <p>{{.}}</p>") is False
+
+
+def test_replace_arrow_sets_mode():
+    steps_, replace = split_statement("{a..z} =>+ <p>{{.}}</p>")
+    assert replace is True
+    assert steps_ == ["{a..z}", "<p>{{.}}</p>"]  # the '+' is not in the template
+
+
+def test_replace_mode_taken_from_first_arrow():
+    # Inner arrows are plain; the first arrow decides the mode and its '+' is
+    # stripped, so it never leaks into a step.
+    steps_, replace = split_statement("{a} =>+ {b} => <x>{{.}}</x>")
+    assert replace is True
+    assert steps_ == ["{a}", "{b}", "<x>{{.}}</x>"]
 
 
 # ── Whitespace handling ───────────────────────────────────────────────────────
