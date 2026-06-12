@@ -383,10 +383,11 @@ def test_separator_count_raises():
         resolve("<<,>>[2]")
 
 
-def test_group_class_non_singleton_member_raises():
-    # Group members must be singletons; ranges of groups use <-> ranges.
-    with pytest.raises(CompileError):
-        resolve("{{a..z},{A..Z}}")
+def test_braced_class_arms_form_a_union():
+    # {{a..z},{A..Z}} is not a congruence — it is a plain union of two classes.
+    node = first_semantic("{{a..z},{A..Z}}")
+    assert node.type == "union"
+    assert len(node.options) == 2
 
 
 def test_full_alpha_disambiguation_space_allowed():

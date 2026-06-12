@@ -12,19 +12,25 @@ def matches(pattern, text):
 # ── Macro expansion (text level) ──────────────────────────────────────────────
 
 
+# The 26 case-fold congruence groups @i expands to.
+I_GROUPS = ",".join(f"{{{c}<->{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz")
+
+
 def test_macro_simple_range():
     assert phase1.preprocess("{@d}") == "{0..9}"
-    assert phase1.preprocess("{@hex}") == "{0..9,a..f}"
-    assert phase1.preprocess("{@HEX}") == "{0..9,A..F}"
+    assert phase1.preprocess("{@l}") == "{a..z}"
+    assert phase1.preprocess("{@u}") == "{A..Z}"
 
 
 def test_macro_congruence():
-    # Case-fold classes expand to enumerated congruence groups (the zip sugar
-    # was dropped); the letters are wrapped in their own brace to stay one
-    # group-class arm, distinct from the singly-matched digit arm.
-    assert phase1.preprocess("{@hexi}") == (
-        "{0..9,{{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F}}}"
-    )
+    # @i expands to the 26 enumerated case-fold congruence groups.
+    assert phase1.preprocess("{@i}") == "{" + I_GROUPS + "}"
+
+
+def test_macro_nested_expansion():
+    # @hex references @d and @i; expansion repeats until stable.
+    assert phase1.preprocess("{@hex}") == "{{0..9},{{" + I_GROUPS + "}..f}}"
+    assert phase1.preprocess("{@w}") == "{{" + I_GROUPS + "},_}"
 
 
 def test_macro_whitespace_set():
@@ -78,13 +84,18 @@ def test_macro_dec_value_bound():
     assert "300" not in result
 
 
-def test_macro_wi_case_insensitive_word():
-    # @wi is a union of digits, case-fold letters, and '_'; a union does not
-    # merge arms into one alphabet, so letter-runs and digit-runs match separately.
-    assert matches("{@wi}", "Ab9") == ["Ab", "9"]
-    assert matches("{@wi}", "xyz") == ["xyz"]  # case-fold letters as one run
-    assert matches("{@wi}", "a_b") == ["a", "_", "b"]
-    assert matches("{@wi}", "!.?") == []
+def test_macro_w_case_insensitive_word():
+    # @w is a union of the case-fold letter class and '_'; a union does not
+    # merge arms into one alphabet, so letter-runs and '_' match separately.
+    assert matches("{@w}", "Ab9") == ["Ab"]  # digits are not word chars
+    assert matches("{@w}", "xyz") == ["xyz"]  # case-fold letters as one run
+    assert matches("{@w}", "a_b") == ["a", "_", "b"]
+    assert matches("{@w}", "!.?") == []
+
+
+def test_macro_x_matches_non_whitespace():
+    # @x is the complement of @s: greedy runs of non-whitespace.
+    assert matches("{@x}", "ab cd\tef") == ["ab", "cd", "ef"]
 
 
 def test_macro_s_matches_whitespace():

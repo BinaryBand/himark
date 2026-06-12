@@ -19,7 +19,10 @@ except ImportError:
 
 
 def test_macros_present():
-    for name in ("d", "hex", "HEX", "b32", "b58", "b64", "b85", "ascii", "uni"):
+    for name in (
+        "d", "l", "u", "i", "s", "w", "x",
+        "hex", "b32", "b58", "b64", "ascii", "uni",
+    ):
         assert name in MACROS
 
 
@@ -52,9 +55,29 @@ def test_value_hex():
 
 def test_zero_and_contains():
     a = Alphabet("0123456789")
-    assert a.zero == "0"
+    assert a.is_zero("0")
+    assert not a.is_zero("5")
     assert "5" in a
     assert "x" not in a
+
+
+def test_group_alphabet_folds_congruent_spellings():
+    # One position per group: 'f' and 'F' share index 5, so values fold.
+    hexa = Alphabet([[c] for c in "0123456789"] + [[c, c.upper()] for c in "abcdef"])
+    assert hexa.value("ff") == hexa.value("FF") == hexa.value("fF") == 255
+    assert hexa.is_zero("0")
+    assert "F" in hexa
+
+
+def test_group_alphabet_distinct_rejects_cross_group_duplicates():
+    with pytest.raises(CompileError):
+        Alphabet([["a", "A"], ["b", "a"]], distinct=True)
+
+
+def test_multichar_group_member_rejected():
+    # Positional values need single-character symbols.
+    with pytest.raises(CompileError):
+        Alphabet([["a", "bc"]])
 
 
 def test_canonical_len():

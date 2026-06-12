@@ -197,13 +197,12 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     if len(arms) == 1:
         return _attach_exclusions(_resolve_arm(arms[0]), exclusions)
 
-    # All arms are brace sub-expressions → group_class. Members must be
-    # singletons — a range of groups is written with `<->` ranges instead.
-    if all(a.startswith("{") for a in arms):
+    # All arms are braced congruence groups ({x<->y}) → one group class.
+    if all(_is_group_arm(a) for a in arms):
         groups = [_group_members(a) for a in arms]
         return _attach_exclusions(t.GroupClassNode(groups=groups), exclusions)
 
-    # Any brace arm mixed with bare arms → plain union.
+    # Any brace arm → plain union of classes.
     if any(a.startswith("{") for a in arms):
         options = [_resolve_arm(a) for a in arms]
         return _attach_exclusions(t.UnionNode(options=options), exclusions)
@@ -222,6 +221,14 @@ def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     # Single-char or single-char ranges → union
     options = [_resolve_arm(a) for a in arms]
     return _attach_exclusions(t.UnionNode(options=options), exclusions)
+
+
+def _is_group_arm(arm: str) -> bool:
+    """True for a whole-braced arm holding a top-level `<->` — one congruence
+    group of an enumerated group class, e.g. `{a<->A}` in `{{a<->A},{b<->B}}`."""
+    if not arm.startswith("{") or brace_end(arm) != len(arm):
+        return False
+    return len(split_top("<->", inner_of(arm))) > 1
 
 
 def _group_members(brace_text: str) -> list[str]:
@@ -263,7 +270,11 @@ def _singleton_value(expr: str) -> str | None:
             return inner_val
         m = re.fullmatch(r"\[(\d+)\]", rest)
         return inner_val * int(m.group(1)) if m else None
-    if len(split_top(",", expr)) > 1 or len(split_top("..", expr)) > 1:
+    if (
+        len(split_top(",", expr)) > 1
+        or len(split_top("..", expr)) > 1
+        or len(split_top("<->", expr)) > 1
+    ):
         return None
     return expr
 
@@ -295,8 +306,13 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
             if sval is not None:
                 # Singleton {…} → literal match of its single value
                 return t.LiteralNode(content=sval)
+            inner = _alpha(part)
+            if isinstance(inner, t.GroupClassNode):
+                # A group class is already a full class of groups; wrapping it
+                # would only restate its greedy-run semantics.
+                return inner
             # α — full range (any length, any value in the alphabet)
-            return t.FullAlphaNode(inner=_alpha(part))
+            return t.FullAlphaNode(inner=inner)
         return t.LiteralNode(content=unescape(part))
 
     if len(parts) == 2:
@@ -357,7 +373,9 @@ def _resolve_congruence(parts: list[str], cong: list[list[str]]) -> t.SemanticNo
     if len(parts) != 1 or any(m.startswith("{") for m in members):
         raise CompileError(
             f"A '<->' range is not supported; enumerate the groups instead "
-            f"(e.g. {{a<->A}},{{b<->B}},…): got {'..'.join(parts)!r}"
+            f"(e.g. {{a<->A}},{{b<->B}},…), and write a range endpoint as a "
+            f"single spelling (congruent spellings share a value, so "
+            f"{{{{@i}}..f}} already folds case): got {'..'.join(parts)!r}"
         )
     return t.GroupClassNode(groups=[_congruence_members(members)])
 

@@ -1,9 +1,11 @@
-"""The `Alphabet` value object — an ordered set of symbols with positional
-value arithmetic.
+"""The `Alphabet` value object — an ordered set of symbol groups with
+positional value arithmetic.
 
 A range like `{aa..{a..z}..zz}` is positional numbering in base |alphabet|:
-each symbol contributes its index, most-significant first. This object owns that
-arithmetic so matchers never re-derive it.
+each symbol contributes its index, most-significant first. A symbol may be a
+*group* of congruent surface forms (`f<->F`): every member maps to the same
+index, so values fold across spellings. This object owns that arithmetic so
+matchers never re-derive it.
 """
 
 from __future__ import annotations
@@ -16,30 +18,41 @@ MAX_SYMBOLS = 0x10000
 
 
 class Alphabet:
-    """An ordered symbol set. `distinct=True` rejects repeated symbols, which
-    would make positional values ambiguous (used for `..`-endpoint alphabets)."""
+    """An ordered set of symbol groups. A plain string is shorthand for one
+    singleton group per character. `distinct=True` rejects a surface form that
+    appears twice (across or within groups), which would make positional
+    values ambiguous (used for `..`-endpoint alphabets)."""
 
-    __slots__ = ("symbols", "base", "_index")
+    __slots__ = ("groups", "base", "_index")
 
-    def __init__(self, symbols: str, *, distinct: bool = False) -> None:
-        if distinct and len(set(symbols)) != len(symbols):
+    def __init__(self, groups: list[list[str]] | str, *, distinct: bool = False) -> None:
+        if isinstance(groups, str):
+            groups = [[c] for c in groups]
+        members = [m for grp in groups for m in grp]
+        if any(len(m) != 1 for m in members):
+            raise CompileError(
+                "A value alphabet needs single-character symbols; "
+                "multi-character group members have no positional value"
+            )
+        if distinct and len(set(members)) != len(members):
             raise CompileError(
                 "Alphabet has duplicate symbols — symbol values would be "
                 "ambiguous; use congruence (<->) for case-folding"
             )
-        self.symbols = symbols
-        self.base = len(symbols)
-        self._index = {c: i for i, c in enumerate(symbols)}
+        self.groups = groups
+        self.base = len(groups)
+        self._index = {m: i for i, grp in enumerate(groups) for m in grp}
 
     def __contains__(self, ch: str) -> bool:
         return ch in self._index
 
-    @property
-    def zero(self) -> str:
-        return self.symbols[0]
+    def is_zero(self, ch: str) -> bool:
+        """True if `ch` spells the zero-valued symbol (a leading-pad char)."""
+        return self._index[ch] == 0
 
     def value(self, s: str) -> int:
-        """Positional value of `s` in this alphabet (most-significant first)."""
+        """Positional value of `s` in this alphabet (most-significant first).
+        Congruent spellings yield the same value."""
         v = 0
         for c in s:
             v = v * self.base + self._index[c]

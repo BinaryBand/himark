@@ -1,8 +1,10 @@
 # Himark Specification
 
-**Version:** 0.6.1-draft  
+**Version:** 0.6.2-draft  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
+
+<!-- cspell:words himark -->
 
 ---
 
@@ -28,29 +30,29 @@ Himark is designed to be strictly logically consistent at the cost of brevity. T
 
 Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement contains no `{}` or `<<>>` construct at all, it is implicitly `{}` wrapped before tokenization. A step that already contains a construct is never rewrapped -- its bare text is literal.
 
-**E.g.:** a..z $\to$ {a..z}
+> **E.g.:** a..z $\to$ {a..z}
 
 ### Macros
 
-| Name     | Expands to                                        |
-| -------- | ------------------------------------------------- |
-| `@d`     | `0..9`                                            |
-| `@hex`   | `0..9,a..f`                                       |
-| `@hexi`  | `0..9,{{a<->A},..,{f<->F}}`                       |
-| `@HEX`   | `0..9,A..F`                                       |
-| `@b32`   | `0..9,a..v` (RFC 4648 $\S7$)                      |
-| `@B32`   | `0..9,A..V`                                       |
-| `@b32i`  | `0..9,{{a<->A},..,{v<->V}}`                       |
-| `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z` (omits `0 O I l`) |
-| `@b64`   | `A..Z,a..z,0..9,+,/`                              |
-| `@b85`   | RFC 1924 Base85                                   |
-| `@ascii` | U+0000-U+007F                                     |
-| `@uni`   | U+0000-U+10FFFF                                   |
-| `@s`     | `\n,\r, ,\t`                                      |
-| `@w`     | `0..9,a..z,A..Z,_`                                |
-| `@wi`    | `0..9,{{a<->A},..,{z<->Z}},_`                     |
+| Name     | Expands to                              |
+| -------- | --------------------------------------- |
+| `@d`     | `0..9`                                  |
+| `@l`     | `a..z`                                  |
+| `@u`     | `A..Z`                                  |
+| `@i`     | `{a<->A},{b<->B},` $\dots$ `,{z<->Z}`   |
+| `@s`     | `\n,\r, ,\t`                            |
+| `@w`     | `{@i},_`                                |
+| `@x`     | `!@s`                                   |
+| `@hex`   | `{@d},{{@i}..f}`                        |
+| `@b32`   | `{@d},{{@i}..v}` (RFC 4648 $\S7$)       |
+| `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z`         |
+| `@b64`   | `{@d},{@i},+,/`                         |
+| `@ascii` | U+0000-U+007F                           |
+| `@uni`   | U+0000-U+10FFFF                         |
 
-**E.g.:** {@d} $\to$ {0..9}
+Macros may reference other macros; expansion repeats until the text is stable.
+
+> **E.g.:** {@d} $\to$ {0..9}, {@l} $\to$ {a..z}
 
 ---
 
@@ -76,13 +78,13 @@ Expressions inside `{...}` and `<<...>>` are built from one type:
 | `{a..z}`           | a$\dots$z | `a`         | `z`       |
 | `{m..{a..z}}`      | a$\dots$z | `m`         | unbounded |
 | `{cat..dog}`       | Unicode   | `cat`       | `dog`     |
-| `{{@d}..255}`      | dec       | `0` (floor) | `255`     |
-| `{128..{@d}}`      | dec       | `128`       | unbounded |
+| `{{@d}..255}`      | decimal   | `0` (floor) | `255`     |
+| `{128..{@d}}`      | decimal   | `128`       | unbounded |
 | `{aa..{a..z}..zz}` | a$\dots$z | `aa`        | `zz`      |
 
 A `{...}` is singleton when its inner expression has cardinality 1 **and** its count is exact (`[N]`, not a range).
 
-> **Note:** An alphabet used as a `..` endpoint must have distinct symbols. `{{@hex,@HEX}..ff}` is an error -- the digits appear twice, so symbol values are ambiguous. Case-folded value ranges use congruence instead (`@hexi`).
+> **Note:** An alphabet used as a `..` endpoint must have distinct symbols. `{{@d,@hex}..ff}` is an error -- the digits appear twice, so symbol values are ambiguous. Congruent spellings are one symbol, not duplicates: in `{{@hex}..ff}` the endpoint folds case, so `ff`, `fF`, and `FF` name the same value.
 
 **Valid** -- `{a}[3]` $\to$ `aaa`
 **Invalid** -- `{a..z}[3]` (inner has cardinality 26)
@@ -162,7 +164,7 @@ When `{...}` items are class expressions, the alphabet defines **equivalence gro
 {{a<->bc},{def<->ghi}}    // 2 groups with multi-char tokens
 ```
 
-> **Note:** Group members must be singletons. A _range_ of congruence groups is written by enumerating them (`{{a<->A},..,{z<->Z}}`), not with `..` or class endpoints -- `{a<->A..z<->Z}`, `{{a..z}<->{A..Z}}`, and `{{a..z},{A..Z}}` are all errors.
+> **Note:** Group members must be singletons. A _range_ of congruence groups is written by enumerating them (`{{a<->A},..,{z<->Z}}`), not with `..` or class endpoints -- `{a<->A..z<->Z}` and `{{a..z}<->{A..Z}}` are errors. `{{a..z},{A..Z}}` is not a congruence either; it is a plain union of two classes.
 
 Under `[count]`, repetition-equality is checked against the congruence group -- `a` and `A` count as the same value:
 
@@ -220,6 +222,8 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 
 `<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default -- the right boundary resolves to the nearest match.
 
+<!-- cspell:disable -->
+
 ```proto
 <<\n>>                          // split full input on newlines
 <<>>                            // full input as one segment
@@ -227,6 +231,8 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 {aa<<{a..z}..zz>>aa} => {{.}}   // 'aaaaa', 'aabaa', through 'aazzaa'
 {aa}<<{a..z}..zz>>{aa} => {{1}} // 'a', 'b', through 'zz'
 ```
+
+<!-- cspell:enable -->
 
 ---
 
@@ -290,8 +296,8 @@ Patterns are whitespace-significant: any space written between constructs is a l
 ### Crypto Wallet Addresses
 
 ```proto
-{1}{24..33:{@b58}}    // any valid Bitcoin address (P2PKH)
-{0x}{40:{@hex,@HEX}}  // any valid Ethereum address
+{1}{24..33:{@b58}}  // any valid Bitcoin address (P2PKH)
+{0x}{40:{@hex}}     // any valid Ethereum address
 ```
 
 > The above do not account for checksum verifications.
@@ -301,6 +307,19 @@ Patterns are whitespace-significant: any space written between constructs is a l
 ```proto
 {{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}
 ```
+
+**Modest proposals:**
+
+```proto
+{{@d}..255}{.}<<{@d}..255>>[3]
+{{@d}..255}{{\.{{@d}..255}}..{\.255}[3]}
+{{@d}..255}{{.{{@d}..255}}..{.255}[3]}
+```
+
+| Written          | Alphabet             | Low  | High   |
+| ---------------- | -------------------- | ---- | ------ |
+| `{{@d}..255}`    | decimal              | `.1` | `.255` |
+| `{.{{@d}..255}}` | '.0','.1',...,'.255' | `.1` | `.255` |
 
 <!--
 - Avoid using non-ASCII characters in this document

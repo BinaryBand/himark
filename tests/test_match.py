@@ -61,19 +61,25 @@ def test_named_alpha_dec():
 
 
 def test_named_alpha_hex():
+    # hex = {@d},{{@i}..f}: digit runs and case-fold letter runs bounded at f.
     result = matches("{@hex}", "xyz0af")
-    assert result == ["0", "a", "f"]
+    assert result == ["0", "af"]
 
 
-def test_named_alpha_hexi_case_insensitive():
-    # hexi = 0..9 plus a case-fold group-class for a..f — digits match singly;
-    # the case-fold letters match as a contiguous run, so "aF" is one unit.
-    result = matches("{@hexi}", "0aF g9C")
+def test_named_alpha_hex_case_insensitive():
+    # The letter arm is a value range over @i's congruence groups, so case
+    # folds; letters match as a contiguous run, so "aF" is one unit.
+    result = matches("{@hex}", "0aF g9C")
     assert result == ["0", "aF", "9", "C"]
 
 
-def test_named_alpha_hexi_rejects_non_hex():
-    assert matches("{@hexi}", "ghz") == []
+def test_named_alpha_hex_rejects_non_hex():
+    assert matches("{@hex}", "ghz") == []
+
+
+def test_hex_value_range_folds_case():
+    # {{@hex}..ff}: congruent spellings share a value, so 'FF' is also 255.
+    assert matches("{{@hex}..ff}", "ff FF 100") == ["ff", "FF", "10", "0"]
 
 
 # ── upper_bound ───────────────────────────────────────────────────────────────
@@ -162,16 +168,10 @@ def test_exclusion_char_range_stress():
     assert result == expected
 
 
-def test_exclusion_named_alpha_stress():
-    # Stress Bug 1 on named_alpha: exclusions should filter matches.
-    text = ("0123456789abcdefxyzABC" * 60) + "face"
-    result = matches("{@hex,!a..c,!f}", text)
-    expected = [
-        ch
-        for ch in text
-        if (ch in "0123456789abcdef") and not ("a" <= ch <= "c") and ch != "f"
-    ]
-    assert result == expected
+def test_exclusion_named_alpha_units():
+    # Exclusions filter whole matched units of the union: a lone 'f' run is
+    # dropped, while a longer run like 'af' is not the excluded value.
+    assert matches("{@hex,!f}", "f a 12") == ["a", "12"]
 
 
 def test_exclusion_full_alpha_stress():
@@ -220,7 +220,7 @@ def test_duplicate_symbols_in_value_alphabet_raise():
 
     # The digits appear twice; symbol values would be ambiguous.
     with pytest.raises(CompileError):
-        matches("{{@hex,@HEX}..ff}", "ff")
+        matches("{{@d,@hex}..ff}", "ff")
 
 
 # ── Padding ──────────────────────────────────────────────────────────────────
@@ -484,37 +484,17 @@ def test_complement_char_range():
     assert "c" not in result
 
 
-# ── named alphabets: b32, b64, b85 ───────────────────────────────────────────
+# ── named alphabets: b32, b64 ────────────────────────────────────────────────
 
 
 def test_named_alpha_b32():
-    # b32 = 0-9, a-v (RFC 4648 §7). Letters w-z are outside.
-    result = matches("{@b32}", "01v wxyz")
-    assert "0" in result
-    assert "1" in result
-    assert "v" in result
-    assert "w" not in result
-    assert "x" not in result
+    # b32 = {@d},{{@i}..v} (RFC 4648 §7). Letters w-z are outside the bound.
+    assert matches("{@b32}", "01v wxyz") == ["01", "v"]
 
 
 def test_named_alpha_b64():
-    # b64 = A-Z, a-z, 0-9, +, /
-    result = matches("{@b64}", "Az+/ !")
-    assert "A" in result
-    assert "z" in result
-    assert "+" in result
-    assert "/" in result
-    assert " " not in result
-    assert "!" not in result
-
-
-def test_named_alpha_b85():
-    # b85 = RFC 1924: 0-9, A-Z, a-z, !#$%&()*+-;<=>?@^_`{|}~
-    result = matches("{@b85}", "A! , ")
-    assert "A" in result
-    assert "!" in result
-    assert "," not in result
-    assert " " not in result
+    # b64 = {@d},{@i},+,/ — case-fold letters match as one run.
+    assert matches("{@b64}", "Az+/ !") == ["Az", "+", "/"]
 
 
 # ── separator with explicit bounds ────────────────────────────────────────────

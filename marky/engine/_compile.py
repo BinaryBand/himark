@@ -98,7 +98,11 @@ class _ValueExcluder:
 # ── Alphabet construction from a sub-node ─────────────────────────────────────
 
 
-def _symbols(node: t.SemanticNode) -> str:
+def _groups(node: t.SemanticNode) -> list[list[str]]:
+    """The ordered symbol groups a node contributes to a value alphabet.
+    Most symbols are singleton groups; a congruence group's members share one
+    position. A value-range sub-node contributes the bounded slice of its own
+    alphabet, so `{{@i}..f}` is the first six case-fold letter groups."""
     if isinstance(node, t.CharRangeNode):
         lo, hi = ord(node.start), ord(node.end)
         if hi - lo + 1 > 0x10000:
@@ -106,16 +110,39 @@ def _symbols(node: t.SemanticNode) -> str:
                 f"Range {node.start!r}..{node.end!r} is too large "
                 f"to use as a value bound"
             )
-        return "".join(chr(c) for c in range(lo, hi + 1))
+        return [[chr(c)] for c in range(lo, hi + 1)]
     if isinstance(node, t.UnionNode):
-        return "".join(_symbols(ch) for ch in node.options)
+        return [g for o in node.options for g in _groups(o)]
     if isinstance(node, t.LiteralNode):
-        return node.content
+        return [[ch] for ch in node.content]
+    if isinstance(node, t.GroupClassNode):
+        return [list(grp) for grp in node.groups]
+    if isinstance(node, t.FullAlphaNode):
+        return _groups(node.inner)
+    if isinstance(node, t.ValueRangeNode):
+        return _sliced_groups(node)
     raise CompileError(f"Cannot use {type(node).__name__} as a value alphabet")
 
 
+def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
+    """The sub-alphabet a bounded range stands for: its alphabet's groups
+    between the endpoint positions. Endpoints must be single positions."""
+    if node.exclusions:
+        raise CompileError("A range with exclusions cannot be a sub-alphabet")
+    groups = _groups(node.alpha)
+    alph = Alphabet(groups)
+    for end in (node.lower, node.upper):
+        if end is not None and len(end) != 1:
+            raise CompileError(
+                f"Sub-alphabet endpoint must be a single symbol, got {end!r}"
+            )
+    lo = alph.value(node.lower) if node.lower is not None else 0
+    hi = alph.value(node.upper) if node.upper is not None else len(groups) - 1
+    return groups[lo : hi + 1]
+
+
 def _alphabet_of(node: t.SemanticNode, *, distinct: bool) -> Alphabet:
-    return Alphabet(_symbols(node), distinct=distinct)
+    return Alphabet(_groups(node), distinct=distinct)
 
 
 # ── Value-range view (ValueRange / FullAlpha) ─────────────────────────────────
@@ -147,6 +174,15 @@ def _value_view(node: t.SemanticNode) -> _ValueView | None:
     if isinstance(node, t.FullAlphaNode):
         alph = _alphabet_of(node.inner, distinct=False)
         return _ValueView(alph, None, None, _ValueExcluder(node.exclusions, alph), 1)
+    if isinstance(node, (t.UnionNode, t.GroupClassNode)):
+        # A union/group class of alphabet arms (e.g. @hex) is itself an
+        # alphabet; arms that aren't (tokens, complements) fall back to None.
+        try:
+            alph = _alphabet_of(node, distinct=False)
+        except CompileError:
+            return None
+        excl = node.exclusions if isinstance(node, t.UnionNode) else []
+        return _ValueView(alph, None, None, _ValueExcluder(excl, alph), 1)
     return None
 
 
@@ -242,7 +278,7 @@ class _ValueRange(_Base):
             end += 1
         for length in range(end - pos, v.min_width - 1, -1):
             cand = text[pos : pos + length]
-            if length > v.min_width and cand[0] == v.alphabet.zero:
+            if length > v.min_width and v.alphabet.is_zero(cand[0]):
                 continue
             value = v.alphabet.value(cand)
             if (v.lo is not None and value < v.lo) or (
