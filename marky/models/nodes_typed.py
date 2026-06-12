@@ -257,6 +257,21 @@ SemanticClasses = (
 )
 
 
+TemplateClasses = (
+    FullMatchNode,
+    GroupRefNode,
+    SpanRefNode,
+    CountRefNode,
+    EmojiNode,
+    LatexNode,
+)
+
+
 def is_semantic(node: Node) -> TypeGuard[SemanticNode]:
     """Runtime check + narrowing for the semantic-node union."""
     return isinstance(node, SemanticClasses)
+
+
+def is_template(node: Node) -> TypeGuard[TemplateNode]:
+    """Runtime check + narrowing for the template-node union."""
+    return isinstance(node, TemplateClasses)

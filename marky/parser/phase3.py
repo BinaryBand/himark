@@ -326,10 +326,12 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
 
     if len(parts) == 3:
         (av, bv, cv) = svals
-        # Bounded range must be τ..α..τ — singleton endpoints, abstract middle.
+        # A bounded range needs single-value endpoints around a class middle,
+        # e.g. aa..{a..z}..zz.
         if av is None or cv is None or bv is not None:
             raise CompileError(
-                f"Bounded range must be τ..α..τ (e.g. aa..{{dec}}..zz), got: {arm!r}"
+                f"Bounded range must be value..class..value "
+                f"(e.g. aa..{{a..z}}..zz), got: {arm!r}"
             )
         return t.BoundedRangeNode(lower=av, alpha=_alpha(parts[1]), upper=cv)
 

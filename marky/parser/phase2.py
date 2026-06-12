@@ -11,6 +11,7 @@ import re
 
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
+from marky.parser._text import ESCAPES
 
 # Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no braces
 # inside (so {{a..z}..{A..Z}} stays a brace group, not a template ref).
@@ -55,25 +56,16 @@ def parse(text: str) -> t.RootNode:
     while pos < len(text):
         ch = text[pos]
 
-        # Escape sequences
+        # Escape sequences. A recognized escape becomes its literal character
+        # (so an escaped metacharacter is not tokenized); an unrecognized one
+        # keeps the backslash for a later phase to resolve.
         if ch == "\\" and pos + 1 < len(text):
             esc = text[pos + 1]
-            mapping = {
-                "n": "\n",
-                "t": "\t",
-                "r": "\r",
-                "\\": "\\",
-                "{": "{",
-                "}": "}",
-                "<": "<",
-                ">": ">",
-            }
-            if esc in mapping:
+            if esc in ESCAPES:
                 flush_leaf()
-                nodes.append(t.LeafNode(content=mapping[esc]))
+                nodes.append(t.LeafNode(content=ESCAPES[esc]))
                 pos += 2
                 continue
-            # unrecognized escape — treat \ as literal
             leaf_buf.append(ch)
             pos += 1
             continue

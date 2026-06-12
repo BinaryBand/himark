@@ -2,7 +2,7 @@
 
 from marky import parser
 from marky.engine import execute
-from marky.engine._match import find_matches
+from marky.engine import find_matches
 
 
 def matches(pattern, text):
@@ -374,7 +374,7 @@ def test_multichar_group_repetition():
 
 def test_standalone_separator():
     trees = parser.parse("<<\n>>")
-    from marky.engine._match import find_matches
+    from marky.engine import find_matches
 
     ms = find_matches(trees[0], "line1\nline2\nline3")
     assert [m.text for m in ms] == ["line1", "line2", "line3"]
@@ -393,7 +393,7 @@ def test_separator_span():
 
 def test_capture_groups():
     trees = parser.parse("{a..z}{0..9}")
-    from marky.engine._match import find_matches
+    from marky.engine import find_matches
 
     ms = find_matches(trees[0], "a1 b2")
     assert len(ms) == 2
@@ -403,7 +403,7 @@ def test_capture_groups():
 
 def test_count_refs_recorded():
     trees = parser.parse("{a..z}[3]")
-    from marky.engine._match import find_matches
+    from marky.engine import find_matches
 
     ms = find_matches(trees[0], "aaa")
     assert ms[0].count_refs[0] == 3

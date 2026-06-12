@@ -1,28 +1,23 @@
-"""SymbolResolver Protocol and central registry for {{ :emoji: }} / {{ $latex$ }} nodes.
+"""Central registry for the symbol-rendering hooks (`{{:emoji:}}`, `{{$latex$}}`).
+
+A resolver is just a function `str -> str`: it receives the inner content of a
+symbol node and returns its rendered form (or a fallback string when it cannot
+resolve). Register one under the template node-type it serves.
 
 To add a new symbol type:
-  1. Implement a class with `node_type`, `metadata_key`, and `resolve(content) -> str`.
-  2. Call `register(instance)` — the engine will pick it up automatically.
+  1. Write a `resolve(content: str) -> str` function.
+  2. Call `register("<node_type>", resolve)` — the renderer picks it up by name.
 """
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+
+Resolver = Callable[[str], str]
+
+RESOLVERS: dict[str, Resolver] = {}
 
 
-@runtime_checkable
-class SymbolResolver(Protocol):
-    node_type: str  # matches node.type, e.g. "emoji", "latex"
-    metadata_key: str  # key in node.metadata holding the resolver input
-
-    def resolve(self, content: str, /) -> str:
-        """Resolve *content* to Unicode, or return a fallback string."""
-        ...
-
-
-RESOLVERS: dict[str, SymbolResolver] = {}
-
-
-def register(resolver: SymbolResolver) -> None:
-    """Register *resolver* under its declared node_type."""
-    RESOLVERS[resolver.node_type] = resolver
+def register(node_type: str, resolver: Resolver) -> None:
+    """Register *resolver* under the template *node_type* it renders."""
+    RESOLVERS[node_type] = resolver

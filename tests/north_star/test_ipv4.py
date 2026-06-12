@@ -1,7 +1,7 @@
 """North Star: IPv4 — docs/HMK.md"""
 
 from marky import parser
-from marky.engine._match import find_matches
+from marky.engine import find_matches
 
 PATTERN = "{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}"
 

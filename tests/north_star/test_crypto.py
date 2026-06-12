@@ -1,7 +1,7 @@
 """North Star: Cryptocurrency address patterns."""
 
 from marky import parser
-from marky.engine._match import find_matches
+from marky.engine import find_matches
 
 
 def matches(pattern, text):

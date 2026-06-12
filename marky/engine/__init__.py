@@ -14,18 +14,24 @@ Two fold behaviors compose a chain:
   `{{.}}`.
 """
 
-from marky.engine._match import find_matches as _find_matches
+from marky.engine._compile import compile_pattern as _compile
 from marky.engine._render import is_template as _is_template
 from marky.engine._render import render as _render
+from marky.engine._run import find_matches as _run_pattern
 from marky.engine._types import Match
 from marky.models import nodes_typed as t
 
-__all__ = ["execute", "find", "Match"]
+__all__ = ["execute", "find", "find_matches", "Match"]
+
+
+def find_matches(tree: t.RootNode, target: str) -> list[Match]:
+    """Compile a pattern tree and return all its matches in target."""
+    return _run_pattern(_compile(tree), target)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
     """Return (start, end) positions of all matches of steps[0] in target."""
-    return [(m.start, m.end) for m in _find_matches(steps[0], target)]
+    return [(m.start, m.end) for m in find_matches(steps[0], target)]
 
 
 def execute(steps: list[t.RootNode], target: str) -> list[str]:
@@ -39,7 +45,7 @@ def execute(steps: list[t.RootNode], target: str) -> list[str]:
 
 def _run(steps: list[t.RootNode], text: str) -> list[str]:
     """Top-level extract: find matches of steps[0], transform each, flatten."""
-    matches = _find_matches(steps[0], text)
+    matches = find_matches(steps[0], text)
     rest = steps[1:]
 
     if not rest:
@@ -70,7 +76,7 @@ def _transform(steps: list[t.RootNode], text: str) -> str:
     if not steps:
         return text
 
-    matches = _find_matches(steps[0], text)
+    matches = find_matches(steps[0], text)
     if not matches:
         return text
 

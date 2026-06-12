@@ -1,7 +1,7 @@
 """Tests for parser/phase0.py — macro expansion and implicit root wrapping."""
 
 from marky import parser
-from marky.engine._match import find_matches
+from marky.engine import find_matches
 from marky.parser import phase0
 
 

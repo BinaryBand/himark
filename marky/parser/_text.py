@@ -6,18 +6,33 @@ escape resolution, and brace scanning — with no knowledge of semantics.
 
 from marky.models.exceptions import CompileError
 
-_ESCAPES = {"n": "\n", "t": "\t", "r": "\r"}
+# The single escape table for HMK source. Named control characters plus the
+# metacharacters that need escaping to appear literally; any other escaped
+# character resolves to itself (so `\!` -> `!`).
+ESCAPES = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "\\": "\\",
+    "{": "{",
+    "}": "}",
+    "<": "<",
+    ">": ">",
+}
 
 
 def unescape(s: str) -> str:
-    """Resolve backslash escapes in a literal arm (\\!, \\{, \\n, …)."""
+    """Resolve backslash escapes in a literal fragment (\\!, \\{, \\n, …).
+
+    An unknown escape resolves to the escaped character itself.
+    """
     if "\\" not in s:
         return s
     out: list[str] = []
     i = 0
     while i < len(s):
         if s[i] == "\\" and i + 1 < len(s):
-            out.append(_ESCAPES.get(s[i + 1], s[i + 1]))
+            out.append(ESCAPES.get(s[i + 1], s[i + 1]))
             i += 2
         else:
             out.append(s[i])

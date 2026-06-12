@@ -23,7 +23,7 @@ def _resolve_pattern(pattern: str) -> str:
 @app.command(name="execute")
 def execute_cmd(
     pattern: str = typer.Argument(
-        help="HMK pattern with template (e.g. '[a..z](1..) => <b>{{ . }}</b>'), file path, or '-' for stdin"
+        help="HMK pattern with template (e.g. '{a..z}[1..] => <b>{{.}}</b>'), file path, or '-' for stdin"
     ),
     target: str = typer.Argument(help="String to match against, or a file path"),
 ) -> None:
@@ -36,7 +36,7 @@ def execute_cmd(
 @app.command(name="find")
 def find_cmd(
     pattern: str = typer.Argument(
-        help="HMK pattern (e.g. '[a..z](1..)'), file path, or '-' for stdin"
+        help="HMK pattern (e.g. '{a..z}[1..]'), file path, or '-' for stdin"
     ),
     target: str = typer.Argument(help="String to search in, or a file path"),
 ) -> None:

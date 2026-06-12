@@ -2,7 +2,7 @@
 
 from marky import parser
 from marky.engine import execute
-from marky.engine._match import find_matches
+from marky.engine import find_matches
 
 
 def matches(pattern, text):
