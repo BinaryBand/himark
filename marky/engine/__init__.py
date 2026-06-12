@@ -14,19 +14,41 @@ Two fold behaviors compose a chain:
   `{{.}}`.
 """
 
-from marky.engine._compile import compile_pattern as _compile
 from marky.engine._render import is_template as _is_template
 from marky.engine._render import render as _render
-from marky.engine._run import find_matches as _run_pattern
 from marky.engine._types import Match
+from marky.engine.backend import Engine, PythonEngine
 from marky.models import nodes_typed as t
 
-__all__ = ["execute", "find", "find_matches", "Match"]
+__all__ = [
+    "execute",
+    "find",
+    "find_matches",
+    "Match",
+    "Engine",
+    "set_backend",
+    "get_backend",
+]
+
+# The active matching backend. Swap it (e.g. for a native engine) via
+# set_backend; orchestration below is backend-agnostic.
+_backend: Engine = PythonEngine()
+
+
+def set_backend(engine: Engine) -> None:
+    """Install `engine` as the matching backend for all subsequent calls."""
+    global _backend
+    _backend = engine
+
+
+def get_backend() -> Engine:
+    """The currently installed matching backend."""
+    return _backend
 
 
 def find_matches(tree: t.RootNode, target: str) -> list[Match]:
     """Compile a pattern tree and return all its matches in target."""
-    return _run_pattern(_compile(tree), target)
+    return _backend.run(_backend.compile(tree), target)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:

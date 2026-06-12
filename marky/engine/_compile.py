@@ -76,6 +76,13 @@ class _Excluder:
         return s in self.singles or any(lo <= s <= hi for lo, hi in self.ranges)
 
 
+def _excluder(excl: list[str]) -> _Excluder | None:
+    """An excluder, or None when there is nothing to exclude (the common case) —
+    so hot matchers skip the call with a cheap `is not None` test per character."""
+    e = _Excluder(excl)
+    return e if (e.singles or e.ranges) else None
+
+
 class _ValueExcluder:
     __slots__ = ("singles", "ranges")
 
@@ -162,13 +169,15 @@ class _CharRange(_Base):
 
     def __init__(self, node: t.CharRangeNode):
         self.start, self.end = node.start, node.end
-        self._excl = _Excluder(node.exclusions)
+        self._excl = _excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
         if pos >= len(text):
             return None
         ch = text[pos]
-        if not (self.start <= ch <= self.end) or self._excl(ch):
+        if not (self.start <= ch <= self.end):
+            return None
+        if self._excl is not None and self._excl(ch):
             return None
         return pos + 1
 
@@ -199,14 +208,17 @@ class _FullAlpha(_Base):
 
     def __init__(self, node: t.FullAlphaNode):
         self.inner = lower(node.inner)
-        self._excl = _Excluder(node.exclusions)
+        self._excl = _excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
+        excl = self._excl
+        inner = self.inner.match
+        n = len(text)
         end = pos
-        while end < len(text):
-            if self._excl(text[end]):
+        while end < n:
+            if excl is not None and excl(text[end]):
                 break
-            nxt = self.inner.match(text, end)
+            nxt = inner(text, end)
             if nxt is None or nxt == end:
                 break
             end = nxt
@@ -224,8 +236,9 @@ class _ValueRange(_Base):
 
     def match(self, text: str, pos: int) -> int | None:
         v = self.view
+        n = len(text)
         end = pos
-        while end < len(text) and text[end] in v.alphabet:
+        while end < n and text[end] in v.alphabet:
             end += 1
         for length in range(end - pos, v.min_width - 1, -1):
             cand = text[pos : pos + length]
@@ -247,12 +260,13 @@ class _Union(_Base):
 
     def __init__(self, node: t.UnionNode):
         self.options = [lower(o) for o in node.options]
-        self._excl = _Excluder(node.exclusions)
+        self._excl = _excluder(node.exclusions)
 
     def match(self, text: str, pos: int) -> int | None:
+        excl = self._excl
         for arm in self.options:
             end = arm.match(text, pos)
-            if end is not None and not self._excl(text[pos:end]):
+            if end is not None and (excl is None or not excl(text[pos:end])):
                 return end
         return None
 
@@ -266,8 +280,10 @@ class _Complement(_Base):
         self.inner = lower(node.inner)
 
     def match(self, text: str, pos: int) -> int | None:
+        inner = self.inner.match
+        n = len(text)
         end = pos
-        while end < len(text) and self.inner.match(text, end) is None:
+        while end < n and inner(text, end) is None:
             end += 1
         return end if end > pos else None
 
@@ -303,8 +319,9 @@ class _Group(_Base):
         )
 
     def match(self, text: str, pos: int) -> int | None:
+        n = len(text)
         end = pos
-        while end < len(text):
+        while end < n:
             for m, _ in self.members:
                 if text.startswith(m, end):
                     end += len(m)
@@ -353,8 +370,9 @@ class _ValueWindowPadded(_Base):
 
     def match(self, text: str, pos: int) -> int | None:
         v = self.view
+        n = len(text)
         end = pos
-        while end < len(text) and text[end] in v.alphabet:
+        while end < n and text[end] in v.alphabet:
             end += 1
         if self.max_width is not None:
             max_w = self.max_width
@@ -385,8 +403,10 @@ class _PerCharPadded(_Base):
         self.max_width = max_width
 
     def match(self, text: str, pos: int) -> int | None:
+        inner = self.inner.match
+        n = len(text)
         run = pos
-        while run < len(text) and self.inner.match(text, run) == run + 1:
+        while run < n and inner(text, run) == run + 1:
             run += 1
         max_w = self.max_width if self.max_width is not None else run - pos
         width = min(max_w, run - pos)

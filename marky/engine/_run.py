@@ -40,8 +40,9 @@ def find_matches(pattern: list[Element], text: str) -> list[Match]:
         return _split_by_separator(pattern[0], text)
 
     matches: list[Match] = []
+    n = len(text)
     pos = 0
-    while pos < len(text):
+    while pos < n:
         state = _State()
         end = _match_elements(pattern, text, pos, state)
         if end is not None and end > pos:
@@ -118,6 +119,11 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State) -> int | None:
     greedy_end = el.matcher.match(text, pos)
     if greedy_end is None or greedy_end == pos:
         return record(pos, []) if min_reps == 0 else None
+
+    # Common case ({expr}, i.e. exactly one rep): the greedy match *is* the one
+    # unit, so skip the length-backoff and equality machinery entirely.
+    if max_reps == 1:
+        return record(greedy_end, [text[pos:greedy_end]])
 
     # The first unit need not be greedy-maximal: a shorter first unit may let
     # the remainder split into equal repetitions ("2525" -> 25+25). Try lengths
