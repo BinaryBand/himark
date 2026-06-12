@@ -21,17 +21,20 @@ DST = ROOT / "docs" / "HMK.html"
 
 # Himark commands, applied in sequence to the whole document.
 COMMANDS = [
-    "{\<!--<<>>-->} =>+ ",  # strip comments (before escaping eats the delimiters)
     "{\&} =>+ &amp;",  # escape & first, or it re-escapes the entities below
     "{\<} =>+ &lt;",  # escape <
     "{\>} =>+ &gt;",  # escape >
+    "{&lt;!--} =>+ <!--",  # restore comment delimiters so comments stay
+    "{--&gt;} =>+ -->",  # comments (invisible), not visible escaped text
     # "{\n|}<<|>>{|\n} =>+ <tr>{{1}}</tr>",  # tables (rough)
     "{```<<>>```} =>+ <pre><code>{{0}}</code></pre>",  # code blocks
     "{`<<>>`} =>+ <code>{{0}}</code>",  # inline code
     "{#}[1..6]{ }{!\n} =>+ <h{{#0}}>{{2}}</h{{#0}}>",  # headings
     "{**<<>>**} =>+ <strong>{{0}}</strong>",  # bold
     "{*<<>>*} =>+ <em>{{0}}</em>",  # italic
-    "{\n---\n} =>+ \n<hr>\n",  # horizontal rule (own line, not table rules)
+    # hr: 3+ of the same rule char, spaces interleaved or not — each unit is a
+    # congruence of two spellings, "char + escaped space" and "char".
+    "{\n}{{-\\ <->-},{*\\ <->*},{_\\ <->_}}[3..]{ }[0..]{\n} =>+ \n<hr>\n",
 ]
 
 

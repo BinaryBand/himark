@@ -86,6 +86,15 @@ def test_congruence_range_of_pairs_rejected():
         resolve("{a<->A..z<->Z}")
 
 
+def test_congruence_escaped_space_member():
+    # '\ ' is a literal space in a member; raw padding is still rejected.
+    node = first_semantic("{-\\ <->-}")
+    assert node.type == "group_class"
+    assert node.groups == [["- ", "-"]]
+    with pytest.raises(CompileError):
+        resolve("{- <->-}")
+
+
 def test_congruence_enumerated_groups():
     node = first_semantic("{{a<->A},{b<->B}}")
     assert node.type == "group_class"

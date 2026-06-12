@@ -318,6 +318,19 @@ def test_group_class_rejects_partial_token():
     assert result == ["yz"]  # no-anchor: 'yz' still matches as a sub-token
 
 
+def test_group_class_interleave():
+    # Congruence of "char + escaped space" and "char" spellings makes [count]
+    # an interleave: separators optional between repetitions, never alone.
+    hr = "{{-\\ <->-},{*\\ <->*},{_\\ <->_}}[3..]"
+    assert matches(hr, "---") == ["---"]
+    assert matches(hr, "- - -") == ["- - -"]
+    assert matches(hr, "* * *") == ["* * *"]
+    assert matches(hr, "-- -") == ["-- -"]
+    assert matches(hr, "--") == []  # too short
+    assert matches(hr, "-*-") == []  # mixed rule chars are different groups
+    assert matches(hr, "    ") == []  # a space is a spelling, not a unit
+
+
 # ── complement ────────────────────────────────────────────────────────────────
 
 

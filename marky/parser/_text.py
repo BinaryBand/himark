@@ -40,6 +40,31 @@ def unescape(s: str) -> str:
     return "".join(out)
 
 
+def _is_escaped(s: str, i: int) -> bool:
+    """True if s[i] is escaped — preceded by an odd run of backslashes."""
+    n = 0
+    j = i - 1
+    while j >= 0 and s[j] == "\\":
+        n += 1
+        j -= 1
+    return n % 2 == 1
+
+
+def strip_unescaped(s: str) -> str:
+    """Strip whitespace from both ends, keeping backslash-escaped whitespace.
+
+    Arithmetic treats padding around operators as noise; `\\ ` makes a space a
+    literal part of the value (e.g. the `-\\ ` member of `{-\\ <->-}`).
+    """
+    start = 0
+    while start < len(s) and s[start] in " \t":
+        start += 1
+    end = len(s)
+    while end > start and s[end - 1] in " \t" and not _is_escaped(s, end - 1):
+        end -= 1
+    return s[start:end]
+
+
 def brace_end(expr: str) -> int | None:
     """Index just past the '}' matching the '{' at position 0, or None if unbalanced."""
     depth = 0
@@ -89,12 +114,14 @@ def split_top(sep: str, text: str) -> list[str]:
 
 def strict_split(sep: str, text: str, context: str) -> list[str]:
     """split_top that rejects whitespace-padded parts (whitespace is
-    significant; a part that is *purely* whitespace stays a literal)."""
+    significant; a part that is *purely* whitespace stays a literal, and
+    escaped whitespace is part of the value)."""
     parts = split_top(sep, text)
     for p in parts:
-        stripped = p.strip(" \t")
+        stripped = strip_unescaped(p)
         if stripped and stripped != p:
             raise CompileError(
-                f"Unexpected whitespace in {context!r}: remove spaces around {sep!r}"
+                f"Unexpected whitespace in {context!r}: remove spaces around "
+                f"{sep!r} (or escape a literal space as '\\ ')"
             )
     return parts

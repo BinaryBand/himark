@@ -18,7 +18,14 @@ import re
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 from marky.parser import phase2
-from marky.parser._text import brace_end, inner_of, split_top, strict_split, unescape
+from marky.parser._text import (
+    brace_end,
+    inner_of,
+    split_top,
+    strict_split,
+    strip_unescaped,
+    unescape,
+)
 
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
 _COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
@@ -253,9 +260,10 @@ def _singleton_value(expr: str) -> str | None:
     A singleton is τ: a bare literal, or a `{...}` (with an optional exact `[N]`
     count) whose inner expression is itself a singleton. `{a}` is implicitly
     `{a}[1]`, so `{a}[3]` → 'aaa'. Named alphabets, unions, value ranges, and
-    range-counts all have cardinality > 1 and yield None.
+    range-counts all have cardinality > 1 and yield None. The value is returned
+    with escapes resolved (`\\ ` is a literal space, `\\n` a newline, …).
     """
-    expr = expr.strip(" \t")
+    expr = strip_unescaped(expr)
     if not expr:
         return None
     if expr.startswith("{"):
@@ -276,7 +284,7 @@ def _singleton_value(expr: str) -> str | None:
         or len(split_top("<->", expr)) > 1
     ):
         return None
-    return expr
+    return unescape(expr)
 
 
 def _alpha(part: str) -> t.SemanticNode:
@@ -355,6 +363,11 @@ def _congruence_members(members: list[str]) -> list[str]:
     """Resolve each `<->` member to its singleton value."""
     vals = []
     for m in members:
+        if strip_unescaped(m) != m:
+            raise CompileError(
+                f"Unexpected whitespace in congruence member {m!r}: remove "
+                f"spaces around '<->' (or escape a literal space as '\\ ')"
+            )
         sv = _singleton_value(m)
         if sv is None:
             raise CompileError(f"Congruence member must be a singleton: {m!r}")

@@ -30,25 +30,25 @@ Himark is designed to be strictly logically consistent at the cost of brevity. T
 
 Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If the leading pattern step contains no `{}` or `<<>>` construct at all, it is implicitly `{}` wrapped before tokenization. A step that already contains a construct is never rewrapped -- its bare text is literal. Steps after `=>` are never wrapped: a bare step there is a constant template (see Transformers).
 
-> **E.g.:** a..z $\to$ {a..z}
+> **E.g.:** `a..z` $\to$ `{a..z}`, `{{@d}..255}` stays as-is
 
 ### Macros
 
-| Name     | Expands to                              |
-| -------- | --------------------------------------- |
-| `@d`     | `0..9`                                  |
-| `@l`     | `a..z`                                  |
-| `@u`     | `A..Z`                                  |
-| `@i`     | `{a<->A},{b<->B},` $\dots$ `,{z<->Z}`   |
-| `@s`     | `\n,\r, ,\t`                            |
-| `@w`     | `{@i},_`                                |
-| `@x`     | `!@s`                                   |
-| `@hex`   | `{@d},{{@i}..f}`                        |
-| `@b32`   | `{@d},{{@i}..v}` (RFC 4648 $\S7$)       |
-| `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z`         |
-| `@b64`   | `{@d},{@i},+,/`                         |
-| `@ascii` | U+0000-U+007F                           |
-| `@uni`   | U+0000-U+10FFFF                         |
+| Name     | Expands to                            |
+| -------- | ------------------------------------- |
+| `@d`     | `0..9`                                |
+| `@l`     | `a..z`                                |
+| `@u`     | `A..Z`                                |
+| `@i`     | `{a<->A},{b<->B},` $\dots$ `,{z<->Z}` |
+| `@s`     | `\n,\r, ,\t`                          |
+| `@w`     | `{@i},_`                              |
+| `@x`     | `!@s`                                 |
+| `@hex`   | `{@d},{{@i}..f}`                      |
+| `@b32`   | `{@d},{{@i}..v}` (RFC 4648 $\S7$)     |
+| `@b58`   | `1..9,A..H,J..N,P..Z,a..k,m..z`       |
+| `@b64`   | `{@d},{@i},+,/`                       |
+| `@ascii` | U+0000-U+007F                         |
+| `@uni`   | U+0000-U+10FFFF                       |
 
 Macros may reference other macros; expansion repeats until the text is stable.
 
@@ -162,6 +162,13 @@ When `{...}` items are class expressions, the alphabet defines **equivalence gro
 {a<->A}                   // one group: 'a' and 'A' interchangeable
 {{a<->A},{b<->B},{c<->C}} // 3 groups, enumerated
 {{a<->bc},{def<->ghi}}    // 2 groups with multi-char tokens
+```
+
+Whitespace around `<->` is rejected; an escaped space (`'\ '`) is a literal part of the member. Multi-char members make congruence an **interleave** primitive -- a unit with and without a trailing separator are two spellings of one group:
+
+```proto
+{-\ <->-}[3..]                       // '---', '- - -', '-- -'; not '   '
+{{-\ <->-},{*\ <->*},{_\ <->_}}[3..] // any Markdown horizontal rule
 ```
 
 > **Note:** Group members must be singletons. A _range_ of congruence groups is written by enumerating them (`{{a<->A},..,{z<->Z}}`), not with `..` or class endpoints -- `{a<->A..z<->Z}` and `{{a..z}<->{A..Z}}` are errors. `{{a..z},{A..Z}}` is not a congruence either; it is a plain union of two classes.
