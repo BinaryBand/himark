@@ -90,27 +90,15 @@ class FullAlphaNode:
 
 
 @dataclass(slots=True, kw_only=True)
-class UpperBoundNode:
+class ValueRangeNode:
+    """A value range over `alpha`. A `None` endpoint is open: no `lower` means a
+    floor of zero (width 1); no `upper` means unbounded. The three written forms
+    α..τ, τ..α, and τ..α..τ are just which endpoints are given."""
+
     alpha: SemanticNode
-    type: Literal["upper_bound"] = "upper_bound"
-    upper: str = ""
-    exclusions: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True, kw_only=True)
-class LowerBoundNode:
-    alpha: SemanticNode
-    type: Literal["lower_bound"] = "lower_bound"
-    lower: str = ""
-    exclusions: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True, kw_only=True)
-class BoundedRangeNode:
-    alpha: SemanticNode
-    type: Literal["bounded_range"] = "bounded_range"
-    lower: str = ""
-    upper: str = ""
+    type: Literal["value_range"] = "value_range"
+    lower: str | None = None
+    upper: str | None = None
     exclusions: list[str] = field(default_factory=list)
 
 
@@ -187,9 +175,7 @@ SemanticNode: TypeAlias = (
     | CharRangeNode
     | StringRangeNode
     | FullAlphaNode
-    | UpperBoundNode
-    | LowerBoundNode
-    | BoundedRangeNode
+    | ValueRangeNode
     | UnionNode
     | ComplementNode
     | TokenSetNode
@@ -208,9 +194,7 @@ SemanticClasses = (
     CharRangeNode,
     StringRangeNode,
     FullAlphaNode,
-    UpperBoundNode,
-    LowerBoundNode,
-    BoundedRangeNode,
+    ValueRangeNode,
     UnionNode,
     ComplementNode,
     TokenSetNode,

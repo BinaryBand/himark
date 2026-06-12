@@ -111,7 +111,7 @@ def _alphabet_of(node: t.SemanticNode, *, distinct: bool) -> Alphabet:
     return Alphabet(_symbols(node), distinct=distinct)
 
 
-# ── Value-range view (UpperBound / LowerBound / BoundedRange / FullAlpha) ──────
+# ── Value-range view (ValueRange / FullAlpha) ─────────────────────────────────
 
 
 @dataclass(slots=True)
@@ -129,28 +129,13 @@ def _value_view(node: t.SemanticNode) -> _ValueView | None:
     The min_width is the lower endpoint's written width: values are zero-padded
     to it, so `{aa..{a..z}..zz}` matches exactly the 2-char lowercase strings.
     """
-    if isinstance(node, t.UpperBoundNode):
+    if isinstance(node, t.ValueRangeNode):
         alph = _alphabet_of(node.alpha, distinct=True)
+        lo = alph.value(node.lower) if node.lower is not None else None
+        hi = alph.value(node.upper) if node.upper is not None else None
+        min_width = len(node.lower) if node.lower is not None else 1
         return _ValueView(
-            alph, None, alph.value(node.upper), _ValueExcluder(node.exclusions, alph), 1
-        )
-    if isinstance(node, t.LowerBoundNode):
-        alph = _alphabet_of(node.alpha, distinct=True)
-        return _ValueView(
-            alph,
-            alph.value(node.lower),
-            None,
-            _ValueExcluder(node.exclusions, alph),
-            len(node.lower),
-        )
-    if isinstance(node, t.BoundedRangeNode):
-        alph = _alphabet_of(node.alpha, distinct=True)
-        return _ValueView(
-            alph,
-            alph.value(node.lower),
-            alph.value(node.upper),
-            _ValueExcluder(node.exclusions, alph),
-            len(node.lower),
+            alph, lo, hi, _ValueExcluder(node.exclusions, alph), min_width
         )
     if isinstance(node, t.FullAlphaNode):
         alph = _alphabet_of(node.inner, distinct=False)
@@ -431,9 +416,7 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.CharRangeNode: _CharRange,
     t.StringRangeNode: _StringRange,
     t.FullAlphaNode: _FullAlpha,
-    t.UpperBoundNode: _lower_value_range,
-    t.LowerBoundNode: _lower_value_range,
-    t.BoundedRangeNode: _lower_value_range,
+    t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _Union,
     t.ComplementNode: _Complement,

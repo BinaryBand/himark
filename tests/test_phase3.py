@@ -45,21 +45,23 @@ def test_char_range():
 def test_upper_bound():
     # phase3 sees the expanded macro text (@d -> 0..9), not the @ ref.
     node = first_semantic("{{0..9}..255}")
-    assert node.type == "upper_bound"
+    assert node.type == "value_range"
+    assert node.lower is None  # open below (floor)
     assert node.upper == "255"
     assert node.alpha.type == "char_range"
 
 
 def test_lower_bound():
     node = first_semantic("{128..{0..9}}")
-    assert node.type == "lower_bound"
+    assert node.type == "value_range"
     assert node.lower == "128"
+    assert node.upper is None  # open above (unbounded)
     assert node.alpha.type == "char_range"
 
 
 def test_bounded_range():
     node = first_semantic("{aa..{a..z}..zz}")
-    assert node.type == "bounded_range"
+    assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
     assert node.alpha.type == "char_range"
@@ -123,7 +125,7 @@ def test_singleton_value_helper():
 def test_singleton_bounded_range_synonym():
     # {z}[3] is a singleton τ, equivalent to writing the literal 'zzz'.
     node = first_semantic("{{1}[3]..{a..z}..{z}[3]}")
-    assert node.type == "bounded_range"
+    assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
     assert node.alpha.type == "char_range"
@@ -132,14 +134,16 @@ def test_singleton_bounded_range_synonym():
 def test_singleton_upper_bound():
     # α..τ where τ is a singleton constructor.
     node = first_semantic("{{0..9}..{9}[3]}")
-    assert node.type == "upper_bound"
+    assert node.type == "value_range"
+    assert node.lower is None
     assert node.upper == "999"
 
 
 def test_singleton_lower_bound():
     node = first_semantic("{{0}[3]..{0..9}}")
-    assert node.type == "lower_bound"
+    assert node.type == "value_range"
     assert node.lower == "000"
+    assert node.upper is None
 
 
 def test_singleton_single_part_is_literal():
@@ -333,7 +337,7 @@ def test_separator_tau_singleton_constructor():
 
 def test_separator_alpha_bounded_range():
     node = first_separator("<<a..{a..z}..zz>>")
-    assert node.sep_class.type == "bounded_range"
+    assert node.sep_class.type == "value_range"
     assert node.sep_value is None
 
 

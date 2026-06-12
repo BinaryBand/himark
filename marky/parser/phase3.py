@@ -1,9 +1,9 @@
 """Phase 3: Semantic resolution — convert phase2 nodes into typed HMK AST nodes.
 
 Transforms:
-  brace_group  → literal | char_range | full_alpha |
-                 upper_bound | lower_bound | bounded_range |
-                 union | complement | token_set | group_class | padded
+  brace_group  → literal | char_range | string_range | full_alpha |
+                 value_range | union | complement | token_set |
+                 group_class | padded
   double_braces → template node (see parser/templates.py)
   separator    → separator (resolved to sep_value or sep_class)
 
@@ -27,9 +27,7 @@ _COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
 _EXCLUDABLE = (
     t.CharRangeNode,
     t.FullAlphaNode,
-    t.UpperBoundNode,
-    t.LowerBoundNode,
-    t.BoundedRangeNode,
+    t.ValueRangeNode,
     t.UnionNode,
     t.TokenSetNode,
 )
@@ -310,9 +308,9 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 return t.CharRangeNode(start=av, end=bv)
             return t.StringRangeNode(start=av, end=bv)
         if av is None and bv is not None:
-            return t.UpperBoundNode(alpha=_alpha(a), upper=bv)  # α..τ
+            return t.ValueRangeNode(alpha=_alpha(a), upper=bv)  # α..τ
         if av is not None and bv is None:
-            return t.LowerBoundNode(lower=av, alpha=_alpha(b))  # τ..α
+            return t.ValueRangeNode(alpha=_alpha(b), lower=av)  # τ..α
         # α..α — a class-to-class range has no ordering; congruence between two
         # classes is written as enumerated groups, {{a<->A},{b<->B},…}.
         raise CompileError(
@@ -329,7 +327,7 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 f"Bounded range must be value..class..value "
                 f"(e.g. aa..{{a..z}}..zz), got: {arm!r}"
             )
-        return t.BoundedRangeNode(lower=av, alpha=_alpha(parts[1]), upper=cv)
+        return t.ValueRangeNode(alpha=_alpha(parts[1]), lower=av, upper=cv)
 
     raise CompileError(f"Too many '..' separators in: {arm!r}")
 

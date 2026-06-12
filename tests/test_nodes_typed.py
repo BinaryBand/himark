@@ -1,5 +1,4 @@
 from marky.models.nodes_typed import (
-    BoundedRangeNode,
     BraceGroupNode,
     CharRangeNode,
     CountRange,
@@ -9,6 +8,7 @@ from marky.models.nodes_typed import (
     SpanRefNode,
     TokenSetNode,
     UnionNode,
+    ValueRangeNode,
 )
 
 
@@ -37,11 +37,11 @@ def test_typed_count_and_refs():
 
 
 def test_semantic_payload_fields():
-    bounded = BoundedRangeNode(
+    bounded = ValueRangeNode(
         lower="10", alpha=CharRangeNode(start="0", end="9"), upper="20"
     )
     tokens = TokenSetNode(tokens=["cat", "dog"], exclusions=["dog"])
 
-    assert bounded.type == "bounded_range"
+    assert bounded.type == "value_range"
     assert tokens.tokens == ["cat", "dog"]
     assert tokens.exclusions == ["dog"]
