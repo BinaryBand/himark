@@ -45,9 +45,14 @@ def _needs_wrap(step: str) -> bool:
     return bool(step) and "{" not in step and "<<" not in step
 
 
-def preprocess(step: str) -> str:
-    """Expand text macros, then wrap a bare expression step in `{…}`."""
+def preprocess(step: str, *, first: bool = True) -> str:
+    """Expand text macros, then wrap a bare expression step in `{…}`.
+
+    The wrap applies only to the first step (the pattern position): a bare
+    step after `=>` has no constructs to match with and is a constant
+    template, rendered as-is.
+    """
     expanded = _expand_macros(step)
-    if _needs_wrap(expanded):
+    if first and _needs_wrap(expanded):
         return "{" + expanded + "}"
     return expanded

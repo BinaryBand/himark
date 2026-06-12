@@ -13,7 +13,10 @@ def parse(text: str) -> list[t.RootNode]:
     `replace` attribute, where `execute` reads it.
     """
     steps, replace = phase0.split_statement(text)
-    trees = [phase3.parse(phase2.parse(phase1.preprocess(step))) for step in steps]
+    trees = [
+        phase3.parse(phase2.parse(phase1.preprocess(step, first=i == 0)))
+        for i, step in enumerate(steps)
+    ]
     if trees:
         trees[0].replace = replace
     return trees

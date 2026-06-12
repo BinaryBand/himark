@@ -36,15 +36,29 @@ def split_statement(text: str) -> tuple[list[str], bool]:
 
 
 def _find_arrow(text: str) -> int | None:
+    """Index of the first top-level `=>`, or None.
+
+    Only HMK's real delimiters track depth: `{…}`, `[…]`, and the two-char
+    chevrons `<<`/`>>`. A single `<` or `>` is plain text, and a
+    backslash-escaped character is never a delimiter.
+    """
     depth = 0
     i = 0
     while i < len(text):
         ch = text[i]
+        if ch == "\\":
+            i += 2
+            continue
         if ch == "=" and text[i + 1 : i + 2] == ">" and depth == 0:
             return i
-        if ch in ("[", "<", "{"):
+        if text[i : i + 2] in ("<<", ">>"):
+            depth += 1 if ch == "<" else -1
+            depth = max(0, depth)
+            i += 2
+            continue
+        if ch in ("[", "{"):
             depth += 1
-        elif ch in ("]", ">", "}"):
+        elif ch in ("]", "}"):
             depth = max(0, depth - 1)
         i += 1
     return None

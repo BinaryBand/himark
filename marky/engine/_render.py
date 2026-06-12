@@ -49,10 +49,13 @@ def is_template(tree: t.RootNode) -> bool:
     """True if `tree` is a template step (renders output) rather than a matcher.
 
     A step is a template when it contains any template-expression node
-    (`{{.}}`, `{{N}}`, `{{#N}}`, …). Pattern steps contain only matchable
-    constructs (brace groups, separators) and literal leaves.
+    (`{{.}}`, `{{N}}`, `{{#N}}`, …) — or nothing but literal leaves, which
+    makes it a constant template (`{\\<} =>+ &lt;`). Pattern steps are marked
+    by their matchable constructs (brace groups, separators).
     """
-    return any(t.is_template(n) for n in tree.children)
+    return any(t.is_template(n) for n in tree.children) or all(
+        isinstance(n, t.LeafNode) for n in tree.children
+    )
 
 
 def render(

@@ -28,7 +28,7 @@ Himark is designed to be strictly logically consistent at the cost of brevity. T
 
 ### Implicit Containers
 
-Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If a Himark expression statement contains no `{}` or `<<>>` construct at all, it is implicitly `{}` wrapped before tokenization. A step that already contains a construct is never rewrapped -- its bare text is literal.
+Every capture query is a finitely-bound alphabet, and every alphabet declaration in Himark must be `{}` or `<<>>` wrapped. If the leading pattern step contains no `{}` or `<<>>` construct at all, it is implicitly `{}` wrapped before tokenization. A step that already contains a construct is never rewrapped -- its bare text is literal. Steps after `=>` are never wrapped: a bare step there is a constant template (see Transformers).
 
 > **E.g.:** a..z $\to$ {a..z}
 
@@ -247,7 +247,7 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 
 Chains: `pattern => template => pattern => template`. `{{.}}` in a chained template is deferred -- it resolves to the result of applying the remaining chain to the current match, not the raw text.
 
-Each step is a **pattern** (a matcher) or a **template** (it contains `{{...}}` references and renders output). Two fold behaviors compose:
+Each step is a **pattern** (it contains `{}` or `<<>>` constructs and matches) or a **template** (it renders output). A template either contains `{{...}}` references or is bare text with no constructs at all -- a **constant template**, rendered as-is (`{\<} =>+ &lt;` replaces every `<` with `&lt;`). Two fold behaviors compose:
 
 - At the **top level**, every match of the leading pattern is transformed, yielding one result per match; non-matches are dropped. A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
 - A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
