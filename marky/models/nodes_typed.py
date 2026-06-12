@@ -198,18 +198,6 @@ class CountRefNode:
     group: int = 0
 
 
-@dataclass(slots=True)
-class EmojiNode:
-    type: Literal["emoji"] = "emoji"
-    code: str = ""
-
-
-@dataclass(slots=True)
-class LatexNode:
-    type: Literal["latex"] = "latex"
-    expr: str = ""
-
-
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
@@ -226,9 +214,7 @@ SemanticNode: TypeAlias = (
     | PaddedNode
 )
 
-TemplateNode: TypeAlias = (
-    FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode | EmojiNode | LatexNode
-)
+TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
 
 Node: TypeAlias = (
     RootNode
@@ -262,8 +248,6 @@ TemplateClasses = (
     GroupRefNode,
     SpanRefNode,
     CountRefNode,
-    EmojiNode,
-    LatexNode,
 )
 
 

@@ -9,7 +9,6 @@ from collections.abc import Callable
 
 from marky.engine._types import Match
 from marky.models import nodes_typed as t
-from marky.utils.resolver import RESOLVERS as _RESOLVERS
 
 
 def _full_match(node: t.FullMatchNode, match: Match) -> str:
@@ -37,24 +36,12 @@ def _count_ref(node: t.CountRefNode, match: Match) -> str:
     return str(match.count_refs.get(node.group, 0))
 
 
-def _emoji(node: t.EmojiNode, _match: Match) -> str:
-    r = _RESOLVERS.get("emoji")
-    return r(node.code) if r else f":{node.code}:"
-
-
-def _latex(node: t.LatexNode, _match: Match) -> str:
-    r = _RESOLVERS.get("latex")
-    return r(node.expr) if r else node.expr
-
-
 # Class-keyed dispatch — no node.type strings, no silent isinstance fallbacks.
 _RENDERERS: dict[type, Callable[..., str]] = {
     t.FullMatchNode: _full_match,
     t.GroupRefNode: _group_ref,
     t.SpanRefNode: _span_ref,
     t.CountRefNode: _count_ref,
-    t.EmojiNode: _emoji,
-    t.LatexNode: _latex,
 }
 
 

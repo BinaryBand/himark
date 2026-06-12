@@ -68,8 +68,6 @@ echo '[a||b](1..)' | poetry run marky - 'aabbab'
 {{ 1 }}        capture group 1
 {{ 1.2 }}      sub-group 1.2
 {{ 1.2..3.1 }} span across groups
-{{ :tada: }}   emoji shortcode
-{{ $\pi$ }}    LaTeX → Unicode
 ```
 
 ### Chaining
