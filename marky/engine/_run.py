@@ -63,8 +63,21 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
 
 def _split_by_separator(el: SepEl, text: str) -> list[Match]:
     if el.sep_class is not None:
-        # Constrained span: the whole input must be one member of the class.
-        return [Match(text, 0, len(text))] if el.sep_class.accepts(text) else []
+        # Split on every (leftmost, greedy) occurrence of the class — the
+        # class is the separator, exactly as a literal sep would be.
+        result: list[Match] = []
+        match = el.sep_class.match
+        i = last = 0
+        n = len(text)
+        while i < n:
+            end = match(text, i)
+            if end is not None and end > i:
+                result.append(Match(text[last:i], last, i))
+                last = i = end
+            else:
+                i += 1
+        result.append(Match(text[last:], last, n))
+        return result
     sep = el.sep_value or ""
     if not sep:
         return [Match(text, 0, len(text))] if text else []

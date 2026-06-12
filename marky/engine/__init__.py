@@ -12,6 +12,11 @@ Two fold behaviors compose a chain:
   *remaining* chain is applied to the current match in place via `_transform`,
   preserving the surrounding text. The transformed string is substituted for
   `{{.}}`.
+* **Pipe (inner `=>+`)** — a `pattern =>+ template` pair splices the template's
+  output at the pattern's matches within the current scope, and the chain
+  continues on the spliced text. Spans survive at scope granularity: the
+  outermost matches are the splice targets; piped stages are pure text
+  computation.
 """
 
 from marky.engine._render import is_template as _is_template
@@ -19,6 +24,7 @@ from marky.engine._render import render as _render
 from marky.engine._types import Match
 from marky.engine.backend import Engine, PythonEngine
 from marky.models import nodes_typed as t
+from marky.models.exceptions import CompileError
 
 __all__ = [
     "execute",
@@ -66,13 +72,44 @@ def execute(steps: list[t.RootNode], target: str) -> list[str] | str:
     statement used `=>+` — the whole target with each match spliced in place
     as a single string (replace mode).
     """
+    _validate_pipes(steps)
     if steps and steps[0].replace:
         return _transform(steps, target)
     return _run(steps, target)
 
 
+def _validate_pipes(steps: list[t.RootNode]) -> None:
+    for i, step in enumerate(steps):
+        if step.piped and (not _is_template(step) or _is_template(steps[i - 1])):
+            raise CompileError(
+                "An inner '=>+' pipes a pattern into a template "
+                "(pattern =>+ template); the chain continues on the spliced text"
+            )
+
+
+def _piped_pair(steps: list[t.RootNode]) -> bool:
+    """True when steps open with a `pattern =>+ template` pipe pair."""
+    return len(steps) >= 2 and steps[1].piped
+
+
+def _splice(pattern: t.RootNode, template: t.RootNode, text: str) -> str:
+    """Replace each match of `pattern` in `text` with the rendered template."""
+    out: list[str] = []
+    last = 0
+    for m in find_matches(pattern, text):
+        out.append(text[last : m.start])
+        out.append(_render(template, m))
+        last = m.end
+    out.append(text[last:])
+    return "".join(out)
+
+
 def _run(steps: list[t.RootNode], text: str) -> list[str]:
     """Top-level extract: find matches of steps[0], transform each, flatten."""
+    if _piped_pair(steps):
+        spliced = _splice(steps[0], steps[1], text)
+        return _run(steps[2:], spliced) if len(steps) > 2 else [spliced]
+
     matches = find_matches(steps[0], text)
     rest = steps[1:]
 
@@ -103,6 +140,10 @@ def _transform(steps: list[t.RootNode], text: str) -> str:
     remainder, leaving non-matched text untouched. Used for deferred `{{.}}`."""
     if not steps:
         return text
+
+    if _piped_pair(steps):
+        spliced = _splice(steps[0], steps[1], text)
+        return _transform(steps[2:], spliced) if len(steps) > 2 else spliced
 
     matches = find_matches(steps[0], text)
     if not matches:

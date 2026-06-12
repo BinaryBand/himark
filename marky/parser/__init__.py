@@ -12,11 +12,13 @@ def parse(text: str) -> list[t.RootNode]:
     The statement's replace-mode flag (`=>+`) rides on the first tree's
     `replace` attribute, where `execute` reads it.
     """
-    steps, replace = phase0.split_statement(text)
+    steps, replace, piped = phase0.split_statement(text)
     trees = [
         phase3.parse(phase2.parse(phase1.preprocess(step, first=i == 0)))
         for i, step in enumerate(steps)
     ]
     if trees:
         trees[0].replace = replace
+        for tree, p in zip(trees, piped):
+            tree.piped = p
     return trees

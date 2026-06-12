@@ -227,13 +227,15 @@ Every `{...}` and `<<...>>` creates a capture group, numbered left to right from
 
 ## Separators
 
-`<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default -- the right boundary resolves to the nearest match.
+`<<sep>>` captures the span between its bounding context and splits on every occurrence of `sep`. Lazy by default -- the right boundary resolves to the nearest match. `sep` may be a class: standalone, the input splits on every occurrence of the class; bounded, the class constrains the span.
 
 <!-- cspell:disable -->
 
 ```proto
 <<\n>>                          // split full input on newlines
 <<>>                            // full input as one segment
+<<!*>>                          // split on runs of anything but '*': '* * *' -> '*','*','*'
+<<{a,b}>>                       // split on members: 'xaybz' -> 'x','y','z'
 {X}<<sep>>{Y}                   // span from X to Y, split on sep
 {aa<<{a..z}..zz>>aa} => {{.}}   // 'aaaaa', 'aabaa', through 'aazzaa'
 {aa}<<{a..z}..zz>>{aa} => {{1}} // 'a', 'b', through 'zz'
@@ -270,12 +272,21 @@ The arrow has two forms, deciding the statement's output:
 - `=>` **extracts** -- returns the list of rendered matches, dropping the text between them.
 - `=>+` **replaces** -- splices each rendered match back into the source and returns the whole string, keeping the surrounding text verbatim. This is the document-transform mode: wrap the matches, keep the prose.
 
-The mode is taken from the **first** arrow (inner arrows in a chain stay plain `=>`).
+The statement's mode is taken from the **first** arrow.
 
 ```proto
 {a..z} =>  <p>{{.}}</p>   // 'a1b2' -> ['<p>a</p>', '<p>b</p>']
 {a..z} =>+ <p>{{.}}</p>   // 'a1b2' -> '<p>a</p>1<p>b</p>2'
 {**<<>>**} =>+ <strong>{{0}}</strong>   // 'say **hi**' -> 'say <strong>hi</strong>'
+```
+
+### Pipes (inner `=>+`)
+
+An **inner** `=>+` is a pipe: `pattern =>+ template` splices the template's output at the pattern's matches _within the current scope_, and the chain continues on the spliced text. Spans survive at scope granularity -- the outermost matches are the splice targets; piped stages are pure text computation. A piped splice **commits**: it is applied whether or not the rest of the chain matches.
+
+```proto
+{ }[1..] =>+ _                                     // top level: '+' on the first arrow is replace mode
+<<\n>> =>+ {\ }[1..] =>+  => {-,*,_}[3..] => <hr>  // per line: drop spaces, then test the result
 ```
 
 ---

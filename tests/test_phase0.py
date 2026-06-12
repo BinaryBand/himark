@@ -26,8 +26,8 @@ def test_chained_steps():
     assert steps("{a} => {b} => {c}") == ["{a}", "{b}", "{c}"]
 
 
-def test_returns_steps_and_mode():
-    assert split_statement("{x}") == (["{x}"], False)
+def test_returns_steps_mode_and_pipes():
+    assert split_statement("{x}") == (["{x}"], False, [False])
 
 
 # ── Replace-mode arrow (=>+) ──────────────────────────────────────────────────
@@ -38,17 +38,27 @@ def test_extract_arrow_is_default():
 
 
 def test_replace_arrow_sets_mode():
-    steps_, replace = split_statement("{a..z} =>+ <p>{{.}}</p>")
+    steps_, replace, piped = split_statement("{a..z} =>+ <p>{{.}}</p>")
     assert replace is True
     assert steps_ == ["{a..z}", "<p>{{.}}</p>"]  # the '+' is not in the template
+    assert piped == [False, False]  # the first arrow's '+' is the replace flag
 
 
 def test_replace_mode_taken_from_first_arrow():
-    # Inner arrows are plain; the first arrow decides the mode and its '+' is
-    # stripped, so it never leaks into a step.
-    steps_, replace = split_statement("{a} =>+ {b} => <x>{{.}}</x>")
+    # The first arrow decides the mode; its '+' is stripped, never leaking
+    # into a step.
+    steps_, replace, piped = split_statement("{a} =>+ {b} => <x>{{.}}</x>")
     assert replace is True
     assert steps_ == ["{a}", "{b}", "<x>{{.}}</x>"]
+    assert piped == [False, False, False]
+
+
+def test_inner_plus_marks_pipe():
+    # An inner '=>+' flags the step after it as piped.
+    steps_, replace, piped = split_statement("{a} => {b} =>+ <x> => {c}")
+    assert replace is False
+    assert steps_ == ["{a}", "{b}", "<x>", "{c}"]
+    assert piped == [False, False, True, False]
 
 
 # ── Whitespace handling ───────────────────────────────────────────────────────

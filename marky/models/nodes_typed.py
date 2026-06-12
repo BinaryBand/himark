@@ -34,6 +34,9 @@ class RootNode:
     # Statement-level output mode, set on the first step only: True (`=>+`)
     # splices rendered matches back into the source; False (`=>`) extracts them.
     replace: bool = False
+    # Inner-arrow `=>+` (pipe): this template's output is spliced at the
+    # preceding pattern's matches and the chain continues on the result.
+    piped: bool = False
 
 
 @dataclass(slots=True)

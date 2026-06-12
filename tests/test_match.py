@@ -532,6 +532,23 @@ def test_separator_bounded_multiple_spans():
     assert ms[1].groups[1] == "two"
 
 
+# ── Standalone class separator: split on every occurrence ───────────────────
+
+
+def test_split_on_complement_class():
+    # <<!*>> splits on every run of anything but '*'.
+    assert matches("<<!*>>", "* * *") == ["*", "*", "*"]
+
+
+def test_split_on_union_class():
+    assert matches("<<{a,b}>>", "xaybz") == ["x", "y", "z"]
+
+
+def test_bare_bang_separator_stays_literal():
+    # A lone '!' has no operand; it is the literal separator '!'.
+    assert matches("<<!>>", "x!y") == ["x", "y"]
+
+
 # ── α-separator: cardinality dispatch ────────────────────────────────────────
 
 

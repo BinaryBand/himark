@@ -95,7 +95,12 @@ def _resolve_separator(node: t.SeparatorNode) -> None:
 
     dot_parts = split_top("..", content)
     comma_parts = split_top(",", content)
-    has_ops = len(dot_parts) > 1 or len(comma_parts) > 1 or content.startswith("{")
+    has_ops = (
+        len(dot_parts) > 1
+        or len(comma_parts) > 1
+        or content.startswith("{")
+        or (content.startswith("!") and len(content) > 1)  # complement class
+    )
 
     # τ: bare constant with no arithmetic operators (<<\n>>, << >>, <<abc>>)
     if not has_ops:
@@ -172,7 +177,7 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     raw_arms = split_top(",", content)
     arms = []
     for a in raw_arms:
-        stripped = a.strip(" \t")
+        stripped = strip_unescaped(a)
         if stripped and stripped != a:
             if len(raw_arms) == 1 and stripped.startswith("{"):
                 arms.append(stripped)  # single nested-brace: disambiguation space
@@ -266,6 +271,8 @@ def _singleton_value(expr: str) -> str | None:
     expr = strip_unescaped(expr)
     if not expr:
         return None
+    if expr.startswith("!") and len(expr) > 1:
+        return None  # complement — a class, never a singleton
     if expr.startswith("{"):
         end = brace_end(expr)
         if end is None:

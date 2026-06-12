@@ -1,20 +1,23 @@
 """Phase 0: Split a raw HMK statement into its ordered list of steps.
 
 The transform arrow has two forms. `=>` *extracts* — the statement returns the
-list of rendered matches. `=>+` *replaces* — it splices each rendered match back
-into the source text and returns the whole string. The mode is taken from the
-first arrow (inner arrows are plain `=>`); its `+`, wherever it appears, is
-consumed so it never leaks into a step's text.
+list of rendered matches. `=>+` *splices* — the template's output replaces the
+preceding pattern's matches in place. On the first arrow that makes the whole
+statement replace-mode; on an inner arrow it is a *pipe*: the chain continues
+on the spliced text. Every `+` is consumed so it never leaks into a step.
 """
 
 
-def split_statement(text: str) -> tuple[list[str], bool]:
-    """Split 'P1 => P2 => ... => T' into its steps and the replace-mode flag.
+def split_statement(text: str) -> tuple[list[str], bool, list[bool]]:
+    """Split 'P1 => P2 => ... => T' into (steps, replace, piped).
 
-    Scans for => outside of any bracket/chevron/brace delimiters to avoid
-    false splits on => appearing inside a token.
+    `replace` is the first arrow's `+` (statement-level replace mode). `piped`
+    has one flag per step: True when the arrow *before* that step carried a
+    `+` (inner arrows only — the first arrow's `+` is the replace flag).
+    Scans for => outside of any construct delimiters to avoid false splits.
     """
     steps = []
+    piped = [False]
     remaining = text
     replace = False
     first_arrow = True
@@ -30,9 +33,12 @@ def split_statement(text: str) -> tuple[list[str], bool]:
             after += 1
         if first_arrow:
             replace = plus
+            piped.append(False)
             first_arrow = False
+        else:
+            piped.append(plus)
         remaining = remaining[after:]
-    return steps, replace
+    return steps, replace, piped
 
 
 def _find_arrow(text: str) -> int | None:

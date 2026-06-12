@@ -144,3 +144,33 @@ def test_template_span_ref_partial():
     # {{0..1}} covers only the first two groups, excluding the last char.
     result = execute(parser.parse("{a..z} {a..z} {a..z} => [{{0..1}}]"), "x y z")
     assert result == ["[x y]"]
+
+
+# ── Pipes (inner =>+) ─────────────────────────────────────────────────────────
+
+
+def test_pipe_normalize_then_test():
+    # Per line: delete space-runs, then test the spliced text for an hr run.
+    cmd = "<<\n>> =>+ {\\ }[1..] =>+  => {-,*,_}[3..] => <hr>"
+    assert execute(parser.parse(cmd), "a\n* * *\nb") == "a\n<hr>\nb"
+
+
+def test_pipe_commits_splice():
+    # A piped splice is unconditional — applied even when the rest never matches.
+    cmd = "<<\n>> =>+ {\\ }[1..] =>+ _ => {-,*,_}[3..] => <hr>"
+    assert execute(parser.parse(cmd), "a b") == "a_b"
+
+
+def test_pipe_in_extract_mode():
+    # The chain continues on the spliced text; extraction happens afterwards.
+    cmd = "<<>> => {@d} =>+ # => {#}[2..]"
+    assert execute(parser.parse(cmd), "a11b2c") == ["##"]
+
+
+def test_pipe_requires_template():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        execute(parser.parse("{a} => {b} =>+ {c}"), "x")
