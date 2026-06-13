@@ -1,7 +1,7 @@
-"""North Star: in-place document transpilation via replace-mode (`=>+`).
+﻿"""North Star: in-place document transpilation via replace-mode (`=>+`).
 
-`=>` *extracts* — the statement returns the list of rendered matches. `=>+`
-*replaces* — it splices each rendered match back into the source and returns the
+`=>` *extracts* â€” the statement returns the list of rendered matches. `=>+`
+*replaces* â€” it splices each rendered match back into the source and returns the
 whole string, keeping the text between matches verbatim. That turns a single HMK
 statement into a document transform, and a short pipeline of them into a small
 Markdown transpiler.
@@ -15,7 +15,7 @@ def transform(pattern, text):
     return execute(parser.parse(pattern), text)
 
 
-# ── Extract vs replace ────────────────────────────────────────────────────────
+# â”€â”€ Extract vs replace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 def test_extract_returns_list_of_matches():
@@ -39,7 +39,7 @@ def test_replace_no_match_is_identity():
     assert transform("{a..z} =>+ <p>{{.}}</p>", "123") == "123"
 
 
-# ── Whitespace formatting ─────────────────────────────────────────────────────
+# â”€â”€ Whitespace formatting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # A captured single unit ({{0}}) is the replacement, so a run collapses to one.
 
 
@@ -60,7 +60,7 @@ def test_collapse_blank_lines():
     assert transform("{\n}{\n}[1..] =>+ {{0}}", "a\n\n\nb\nc") == "a\nb\nc"
 
 
-# ── A small Markdown transpiler ───────────────────────────────────────────────
+# â”€â”€ A small Markdown transpiler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Each rule is one replace-mode statement; the host applies them in order. Bold
 # runs before italic so '**' is consumed before the single-'*' rule sees it.
 

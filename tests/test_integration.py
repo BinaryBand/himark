@@ -174,3 +174,29 @@ def test_pipe_requires_template():
 
     with pytest.raises(CompileError):
         execute(parser.parse("{a} => {b} =>+ {c}"), "x")
+
+
+# ── Brace grouping ────────────────────────────────────────────────────────────
+
+
+def test_grouped_sequence_matches_like_bare():
+    # {X} is match-equivalent to X: an outer brace over a concatenation groups
+    # without changing what is matched.
+    bare = matches("a{@d}b{@d}", "a1b2 a9b9 xx")
+    grouped = matches("{a{@d}b{@d}}", "a1b2 a9b9 xx")
+    assert bare == grouped == ["a1b2", "a9b9"]
+
+
+def test_grouped_sequence_table_row():
+    # The motivating case: a whole table-row pattern wrapped in one brace.
+    row = "| Construct | Role  |"
+    assert matches("{| Construct{ }[..]| Role{ }[..]|}", row) == [row]
+
+
+def test_counted_group_repeats_whole_unit():
+    # {seq}[N] repeats the entire sub-sequence with value-equality.
+    assert matches("{a{@d}}[2]", "a1a1 a1a2 a7a7") == ["a1a1", "a7a7"]
+
+
+def test_counted_group_open_ended():
+    assert matches("{ab}[2..]", "ababab cd abab") == ["ababab", "abab"]

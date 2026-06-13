@@ -238,6 +238,57 @@ def test_count_zero_or_more():
     assert bg.count == t.CountRange(min=0, max=None)
 
 
+# ── Brace grouping (sequence vs. alphabet) ────────────────────────────────────
+
+
+def types(pattern):
+    """Top-level child node types of the resolved tree."""
+    return [c.type for c in resolve(pattern).children]
+
+
+def test_sequence_brace_splices_when_uncounted():
+    # A brace wrapping a concatenation is transparent: its interior is spliced
+    # into the parent, so {X} numbers exactly like the bare X.
+    assert types("{a{@d}b}") == types("a{@d}b") == [
+        "leaf",
+        "brace_group",
+        "leaf",
+    ]
+
+
+def test_unit_count_brace_also_splices():
+    # [1] is identical to no count, so {X}[1] splices like {X}.
+    assert types("{a{@d}b}[1]") == ["leaf", "brace_group", "leaf"]
+
+
+def test_counted_sequence_brace_is_one_group():
+    # A real count makes the brace a single repeatable unit (SequenceNode).
+    bg = first_brace("{a{@d}}[2]")
+    assert bg.semantic.type == "sequence"
+    assert bg.count == t.CountRange(min=2, max=2)
+
+
+def test_pure_alphabet_braces_stay_arithmetic():
+    # Genuine σ expressions must NOT be mistaken for sequences.
+    assert first_semantic("{a..z}").type == "char_range"
+    assert first_semantic("{cat,dog}").type == "token_set"
+    assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
+    assert first_semantic("{ {a..z} }").type == "full_alpha"
+    assert first_semantic("{{a<->A},{b<->B}}").type == "group_class"
+
+
+def test_class_congruence_still_rejected_not_sequenced():
+    # {{a..z}<->{A..Z}} is σ (a congruence of classes), so it must raise the
+    # class-to-class error — not silently become a literal-'<->' sequence.
+    with pytest.raises(CompileError):
+        resolve("{{a..z}<->{A..Z}}")
+
+
+def test_counted_sequence_with_separator_rejected():
+    with pytest.raises(CompileError):
+        resolve("{a<<>>b}[2]")
+
+
 # ── Template expressions ──────────────────────────────────────────────────────
 
 

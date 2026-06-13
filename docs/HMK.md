@@ -182,6 +182,28 @@ Under `[count]`, repetition-equality is checked against the congruence group -- 
 
 ---
 
+## Grouping
+
+A `{...}` whose interior is a single alphabet expression is arithmetic, as above. A `{...}` whose interior is instead a **sequence** -- literal text and constructs concatenated -- is a **group**: it matches that sub-pattern as one unit. The two readings never collide because $\sigma$ has no concatenation operator: every `..`-, `,`-, and `<->`-joined atom is bare text or one `{...}`. A brace that glues a construct onto adjacent text can only be a group.
+
+Uncounted, a group is **transparent** -- `{X}` matches and captures exactly as the bare `X`, like parentheses dropped when not needed. Capture numbers are unchanged: inner constructs number left-to-right as if the brace were not there.
+
+```proto
+{a{0..9}b}        // identical to a{0..9}b -- literal 'a', a digit, literal 'b'
+{**<<>>**}        // group around a separator span (bold: '**' text '**')
+```
+
+Counted, `{seq}[N]` repeats the **whole** sub-sequence as one repeatable unit, under the same value-equality rule as any `[count]` -- each repetition must match the same string:
+
+```proto
+{a{0..9}}[2]      // 'a1a1', 'a7a7'; not 'a1a2' (the two units must be equal)
+{ab}[2..]         // 'abab', 'ababab', through any number of 'ab'
+```
+
+> **Note:** A group is not an ordered alphabet, so it cannot be a `..` endpoint or carry `{N:}` padding, and a _counted_ group cannot contain a `<<...>>` separator. Use grouping to match or repeat a sub-pattern, not to build a $\sigma$.
+
+---
+
 ## Repetition
 
 `[count]` repeats the preceding `{...}`. Every repetition must match the same value as the first.

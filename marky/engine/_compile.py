@@ -394,6 +394,31 @@ class _Group(_Base):
         return cur
 
 
+class _Sequence(_Base):
+    """A grouped sub-pattern matched as one unit — the brace `{seq}[N]`.
+
+    Its elements are the same compiled `Element`s the top-level loop runs, so a
+    grouped sub-sequence behaves exactly like the bare form, just bounded as a
+    single repeatable unit. Repetition-equality falls back to literal text
+    equality (`_Base.equal_unit`): each repetition must match the same string."""
+
+    __slots__ = ("elements",)
+
+    def __init__(self, elements: list[Element]):
+        self.elements = elements
+
+    def match(self, text: str, pos: int) -> int | None:
+        # Reuse the real sequence loop with a throwaway capture state — a counted
+        # group exposes only its own span/reps, never its internal captures.
+        # import_module sidesteps the package-namespace shadow: `marky.engine`
+        # defines a *function* named `_run`, which hides the submodule of the
+        # same name from a plain `from ... import`.
+        import importlib
+
+        run_mod = importlib.import_module("marky.engine._run")
+        return run_mod._match_elements(self.elements, text, pos, run_mod._State())
+
+
 class _ValueWindowPadded(_Base):
     """Fixed-width or width-range value match; leading zero-padding allowed."""
 
@@ -465,6 +490,10 @@ def _lower_value_range(node: t.SemanticNode) -> Matcher:
     return _ValueRange(view)
 
 
+def _lower_sequence(node: t.SequenceNode) -> Matcher:
+    return _Sequence(compile_pattern(t.RootNode(children=node.children)))
+
+
 # ── Lowering registry ─────────────────────────────────────────────────────────
 
 _LOWERINGS: dict[type, Callable[..., Matcher]] = {
@@ -478,6 +507,7 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.ComplementNode: _Complement,
     t.TokenSetNode: _TokenSet,
     t.PaddedNode: _lower_padded,
+    t.SequenceNode: _lower_sequence,
 }
 
 

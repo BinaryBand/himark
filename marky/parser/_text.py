@@ -85,7 +85,9 @@ def inner_of(part: str) -> str:
 
 
 def split_top(sep: str, text: str) -> list[str]:
-    """Split `text` on `sep` only at brace depth 0."""
+    """Split `text` on `sep` only at top level — outside every `{…}` brace and
+    `[…]` count. Tracking count brackets keeps a range count like `[1..3]` from
+    being mistaken for a top-level `..` range operator."""
     parts: list[str] = []
     depth = 0
     cur: list[str] = []
@@ -93,12 +95,13 @@ def split_top(sep: str, text: str) -> list[str]:
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch == "{":
+        if ch in "{[":
             depth += 1
             cur.append(ch)
             i += 1
-        elif ch == "}":
-            depth -= 1
+        elif ch in "}]":
+            if depth > 0:
+                depth -= 1
             cur.append(ch)
             i += 1
         elif depth == 0 and text[i : i + sep_len] == sep:

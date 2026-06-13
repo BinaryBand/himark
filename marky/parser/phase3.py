@@ -52,17 +52,8 @@ def parse(node: t.RootNode) -> t.RootNode:
     new_children: list[t.Node] = []
     for child in node.children:
         if isinstance(child, t.BraceGroupNode):
-            if _has_top_level_separator(child.content):
-                # Transparent sub-sequence: splice the re-tokenized interior
-                # into the parent so inner constructs number left-to-right
-                # as if unwrapped.
-                if child.count_src is not None:
-                    raise CompileError(
-                        f"Count modifier is not supported on a sequence brace: "
-                        f"{{{child.content}}}[{child.count_src}]"
-                    )
-                sub = parse(phase2.parse(child.content))
-                new_children.extend(sub.children)
+            if _is_sequence_brace(child.content):
+                _resolve_sequence_brace(child, new_children)
                 continue
             child.semantic = _resolve_brace(child.content)
             if child.count_src is not None:
@@ -146,6 +137,90 @@ def _has_top_level_separator(content: str) -> bool:
             return True
         i += 1
     return False
+
+
+# ── Brace grouping (sequence vs. alphabet) ────────────────────────────────────
+
+
+def _is_sequence_brace(content: str) -> bool:
+    """True if a brace's interior is a *sequence* (a concatenation of constructs)
+    rather than a single alphabet expression.
+
+    The σ-grammar has no concatenation operator: every `..`/`,`-separated part is
+    either bare text or exactly one `{…}`/`<->` atom. So a part that glues a
+    construct onto adjacent text — or holds more than one construct, or a
+    separator — can only be a sub-pattern. Such a brace becomes a transparent
+    group (spliced when uncounted, a repeatable unit when counted), making
+    `{X}` match-equivalent to `X`.
+    """
+    if _has_top_level_separator(content):
+        return True
+    _, body = _parse_padding(content)
+    if body.startswith("!"):
+        body = body[1:]
+    # σ joins atoms with `,`, `..`, and `<->`; none is concatenation. Split on
+    # all three and check each atom — a leftover concatenation is a sub-pattern.
+    for arm in split_top(",", body):
+        for part in split_top("..", arm):
+            for atom in split_top("<->", part):
+                if not _is_sigma_atom(atom):
+                    return True
+    return False
+
+
+def _is_sigma_atom(part: str) -> bool:
+    """True if `part` is a valid σ atom: bare text, or a single `{…}` (with an
+    optional exact `[N]` count) surrounded only by whitespace. Anything else —
+    a construct glued to text, several constructs, a separator, or a ranged
+    count — is a sub-pattern fragment, not arithmetic."""
+    part = strip_unescaped(part)
+    if not part:
+        return True
+    children = phase2.parse(part).children
+    constructs = [
+        c for c in children if isinstance(c, (t.BraceGroupNode, t.SeparatorNode))
+    ]
+    if not constructs:
+        return True  # bare token (a..z, cat, etc.)
+    if len(constructs) > 1 or isinstance(constructs[0], t.SeparatorNode):
+        return False
+    only = constructs[0]
+    if any(isinstance(c, t.LeafNode) and c.content.strip() for c in children):
+        return False  # a brace glued to adjacent literal text → concatenation
+    if only.count_src is not None and not re.fullmatch(r"\d+", only.count_src.strip()):
+        return False  # a ranged/star count is repetition, not a σ singleton
+    return True
+
+
+def _is_unit_count(count_src: str | None) -> bool:
+    """True if the count is absent or exactly `[1]` — i.e. one repetition, which
+    the spec defines as identical to no count."""
+    if count_src is None:
+        return True
+    count = _parse_count(count_src)
+    return isinstance(count, t.CountRange) and count.min == 1 and count.max == 1
+
+
+def _resolve_sequence_brace(child: t.BraceGroupNode, out: list[t.Node]) -> None:
+    """Resolve a sequence brace into the parent child list.
+
+    Uncounted (or `[1]`): the re-tokenized interior is spliced transparently, so
+    inner constructs number left-to-right as if the brace were not there. With a
+    real count: the interior becomes one `SequenceNode` matched as a single
+    repeatable unit."""
+    sub = parse(phase2.parse(child.content))
+    if _is_unit_count(child.count_src):
+        out.extend(sub.children)
+        return
+    if any(isinstance(c, t.SeparatorNode) for c in sub.children):
+        raise CompileError(
+            f"A repeated group cannot contain a separator: "
+            f"{{{child.content}}}[{child.count_src}]"
+        )
+    child.semantic = t.SequenceNode(children=sub.children)
+    child.count = _parse_count(child.count_src)
+    child.count_src = None
+    out.append(child)
 
 
 def _parse_padding(content: str) -> tuple[tuple[int, int | None] | None, str]:

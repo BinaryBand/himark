@@ -134,6 +134,19 @@ class GroupClassNode:
     groups: list[list[str]] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class SequenceNode:
+    """A grouped sub-pattern: a brace whose interior is a concatenation of
+    constructs rather than a single alphabet expression (`{| a{ }[..]| b|}`).
+
+    Without a count the brace is spliced transparently into its parent, so this
+    node only carries a *counted* group — `{seq}[N]` matches the whole sub-
+    sequence as one repeatable unit. `children` are the resolved phase-3 nodes."""
+
+    type: Literal["sequence"] = "sequence"
+    children: list[Node] = field(default_factory=list)
+
+
 @dataclass(slots=True, kw_only=True)
 class PaddedNode:
     """Width-constrained value match: {N:expr}, {N..M:expr}, or {:expr}.
@@ -187,6 +200,7 @@ SemanticNode: TypeAlias = (
     | TokenSetNode
     | GroupClassNode
     | PaddedNode
+    | SequenceNode
 )
 
 TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
@@ -206,6 +220,7 @@ SemanticClasses = (
     TokenSetNode,
     GroupClassNode,
     PaddedNode,
+    SequenceNode,
 )
 
 TemplateClasses = (
