@@ -212,9 +212,12 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 # Singleton {…} → literal match of its single value
                 return t.LiteralNode(content=sval)
             inner = _alpha(part)
-            if isinstance(inner, (t.GroupClassNode, t.ZipNode)):
-                # A folded alphabet is already a full class of positions;
-                # wrapping it would only restate its greedy-run semantics.
+            if isinstance(
+                inner, (t.GroupClassNode, t.ZipNode, t.FullAlphaNode)
+            ):
+                # Already a full class / run; wrapping would only restate its
+                # greedy-run semantics (and `{a..z}` now resolves to a full
+                # alpha on its own, so `{ {a..z} }` must not double-wrap).
                 return inner
             # α — full range (any length, any value in the alphabet)
             return t.FullAlphaNode(inner=inner)
@@ -224,9 +227,13 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         a, b = parts
         av, bv = svals
         if av is not None and bv is not None:
-            # τ..τ — character range (single-char) or string range (multi-char)
+            # τ..τ — a single-char range is an *unbounded* alphabet: `{a..z}`
+            # matches any lowercase string (a through zz…zz), so it is a full
+            # alpha. As a `..` endpoint the wrapper is transparent (the engine
+            # reads the inner range's groups). Multi-char endpoints are a string
+            # range (bounded between the two words).
             if len(av) == 1 and len(bv) == 1:
-                return t.CharRangeNode(start=av, end=bv)
+                return t.FullAlphaNode(inner=t.CharRangeNode(start=av, end=bv))
             return t.StringRangeNode(start=av, end=bv)
         if av is None and bv is not None:
             return t.ValueRangeNode(alpha=_alpha(a), upper=bv)  # α..τ

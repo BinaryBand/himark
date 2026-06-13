@@ -69,8 +69,9 @@ def test_same_digit_twice():
 
 
 def test_template_full_match():
-    result = execute(parser.parse("{a..z} => <{{.}}>"), "abc")
-    assert result == ["<a>", "<b>", "<c>"]
+    # {a..z} is unbounded — each run is one match.
+    result = execute(parser.parse("{a..z} => <{{.}}>"), "ab cd")
+    assert result == ["<ab>", "<cd>"]
 
 
 # ── Chained transformers (alternating pattern => template) ────────────────────
@@ -78,9 +79,10 @@ def test_template_full_match():
 
 def test_chain_deferred_full_match():
     # P => T => P => T. {{.}} in the first template is deferred: it resolves to
-    # the result of applying the remaining chain (`{@d} => #{{.}}`) to the match.
-    result = execute(parser.parse("{@d}[1..] => <{{.}}> => {@d} => #{{.}}"), "42")
-    assert result == ["<#4>", "<#2>"]
+    # the result of applying the remaining chain (`{a} => #{{.}}`) to the match.
+    # Each 'a' run is one unit, so #-prefixing happens per run.
+    result = execute(parser.parse("{x}[1..] => <{{.}}> => {x} => #{{.}}"), "xx")
+    assert result == ["<#x#x>"]
 
 
 # ── Token set ────────────────────────────────────────────────────────────────

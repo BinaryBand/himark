@@ -44,8 +44,9 @@ def test_literal_multiple():
 
 
 def test_char_range_matches():
-    result = matches("{a..z}", "hello")
-    assert result == ["h", "e", "l", "l", "o"]
+    # {a..z} is unbounded: it matches a whole lowercase string as one run.
+    result = matches("{a..z}", "hello world")
+    assert result == ["hello", "world"]
 
 
 def test_char_range_no_match():
@@ -162,10 +163,23 @@ def test_exclusion_single_value():
 
 
 def test_exclusion_char_range_stress():
-    # Stress Bug 1 on char_range: excluded chars must never match.
+    # {a..z,!d..f} is an unbounded alphabet minus d-f: excluded chars split the
+    # greedy lowercase run; they must never appear in a match.
     text = "abcdefghijklmnopqrstuvwxyz" * 50
     result = matches("{a..z,!d..f}", text)
-    expected = [ch for ch in text if "a" <= ch <= "z" and not ("d" <= ch <= "f")]
+
+    expected = []
+    run = ""
+    for ch in text:
+        if "a" <= ch <= "z" and not ("d" <= ch <= "f"):
+            run += ch
+        else:
+            if run:
+                expected.append(run)
+                run = ""
+    if run:
+        expected.append(run)
+
     assert result == expected
 
 

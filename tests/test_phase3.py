@@ -32,11 +32,14 @@ def test_literal():
     assert node.content == "hello"
 
 
-def test_char_range():
+def test_char_range_is_unbounded_full_alpha():
+    # {a..z} is an unbounded alphabet (any lowercase string), so it is a full
+    # alpha wrapping the char range.
     node = first_semantic("{a..z}")
-    assert node.type == "char_range"
-    assert node.start == "a"
-    assert node.end == "z"
+    assert node.type == "full_alpha"
+    assert node.inner.type == "char_range"
+    assert node.inner.start == "a"
+    assert node.inner.end == "z"
 
 
 # ── α forms ──────────────────────────────────────────────────────────────────
@@ -48,7 +51,7 @@ def test_upper_bound():
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)
     assert node.upper == "255"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.inner.type == "char_range"
 
 
 def test_lower_bound():
@@ -56,7 +59,7 @@ def test_lower_bound():
     assert node.type == "value_range"
     assert node.lower == "128"
     assert node.upper is None  # open above (unbounded)
-    assert node.alpha.type == "char_range"
+    assert node.alpha.inner.type == "char_range"
 
 
 def test_bounded_range():
@@ -64,7 +67,7 @@ def test_bounded_range():
     assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.inner.type == "char_range"
 
 
 def test_class_to_class_zip():
@@ -140,7 +143,7 @@ def test_singleton_bounded_range_synonym():
     assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.inner.type == "char_range"
 
 
 def test_singleton_upper_bound():
@@ -245,7 +248,7 @@ def types(pattern):
 
 def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
-    assert first_semantic("{a..z}").type == "char_range"
+    assert first_semantic("{a..z}").type == "full_alpha"
     assert first_semantic("{cat,dog}").type == "token_set"
     assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "full_alpha"
