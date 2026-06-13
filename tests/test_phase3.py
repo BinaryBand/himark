@@ -67,38 +67,41 @@ def test_bounded_range():
     assert node.alpha.type == "char_range"
 
 
-def test_class_to_class_range_rejected():
-    # {{a..z}<->{A..Z}} — congruence of two classes was dropped; enumerate instead.
-    with pytest.raises(CompileError):
-        resolve("{{a..z}<->{A..Z}}")
+def test_class_to_class_zip():
+    # {{a..z}<->{A..Z}} — zip two classes position-wise into one folded alphabet.
+    node = first_semantic("{{a..z}<->{A..Z}}")
+    assert node.type == "zip"
+    assert len(node.tracks) == 2
 
 
 def test_congruence_single_pair():
-    # {a<->A} — one enumerated congruence group.
+    # {a<->A} — the cardinality-1 zip: one position, two spellings.
     node = first_semantic("{a<->A}")
-    assert node.type == "group_class"
-    assert node.groups == [["a", "A"]]
+    assert node.type == "zip"
+    assert [tr.content for tr in node.tracks] == ["a", "A"]
 
 
-def test_congruence_range_of_pairs_rejected():
-    # {a<->A..z<->Z} — the range-of-pairs sugar was dropped; enumerate instead.
-    with pytest.raises(CompileError):
-        resolve("{a<->A..z<->Z}")
+def test_congruence_n_ary():
+    # {a<->A<->b} — an n-ary zip carries three tracks.
+    node = first_semantic("{a<->A<->b}")
+    assert node.type == "zip"
+    assert [tr.content for tr in node.tracks] == ["a", "A", "b"]
 
 
 def test_congruence_escaped_space_member():
-    # '\ ' is a literal space in a member; raw padding is still rejected.
+    # '\ ' is a literal space in a track; raw whitespace around '<->' is rejected.
     node = first_semantic("{-\\ <->-}")
-    assert node.type == "group_class"
-    assert node.groups == [["- ", "-"]]
+    assert node.type == "zip"
+    assert [tr.content for tr in node.tracks] == ["- ", "-"]
     with pytest.raises(CompileError):
         resolve("{- <->-}")
 
 
-def test_congruence_enumerated_groups():
+def test_congruence_enumerated_is_union_of_zips():
+    # The enumerated form is a union of single-position zips.
     node = first_semantic("{{a<->A},{b<->B}}")
-    assert node.type == "group_class"
-    assert node.groups == [["a", "A"], ["b", "B"]]
+    assert node.type == "union"
+    assert [o.type for o in node.options] == ["zip", "zip"]
 
 
 def test_full_alpha():
@@ -175,12 +178,6 @@ def test_token_set():
     node = first_semantic("{cat,dog}")
     assert node.type == "token_set"
     assert node.tokens == ["cat", "dog"]
-
-
-def test_group_class():
-    node = first_semantic("{{a<->A},{b<->B}}")
-    assert node.type == "group_class"
-    assert node.groups == [["a", "A"], ["b", "B"]]
 
 
 # ── Complement ───────────────────────────────────────────────────────────────
@@ -274,14 +271,13 @@ def test_pure_alphabet_braces_stay_arithmetic():
     assert first_semantic("{cat,dog}").type == "token_set"
     assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "full_alpha"
-    assert first_semantic("{{a<->A},{b<->B}}").type == "group_class"
+    assert first_semantic("{{a<->A},{b<->B}}").type == "union"
 
 
-def test_class_congruence_still_rejected_not_sequenced():
-    # {{a..z}<->{A..Z}} is σ (a congruence of classes), so it must raise the
-    # class-to-class error — not silently become a literal-'<->' sequence.
-    with pytest.raises(CompileError):
-        resolve("{{a..z}<->{A..Z}}")
+def test_class_congruence_is_a_zip_not_a_sequence():
+    # {{a..z}<->{A..Z}} is σ (a zip of two classes), so it resolves to one
+    # folded alphabet — not a literal-'<->' sequence.
+    assert first_semantic("{{a..z}<->{A..Z}}").type == "zip"
 
 
 def test_counted_sequence_with_separator_rejected():

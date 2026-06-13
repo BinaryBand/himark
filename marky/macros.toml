@@ -13,20 +13,21 @@
 d = "0..9"
 l = "a..z"
 u = "A..Z"
-b58 = "1..9,A..H,J..N,P..Z,a..k,m..z" # base58: omits 0 O I l
+# base58: every digit and letter minus the four ambiguous glyphs. Digits, then
+# upper, then lower keeps the canonical Bitcoin ordering.
+b58 = "{@d},{@u},{@l},!{0,l,I,O}"
 
-# Case-fold letters: 26 congruence groups, so 'f' and 'F' share one position.
-i = "{a<->A},{b<->B},{c<->C},{d<->D},{e<->E},{f<->F},{g<->G},{h<->H},{i<->I},{j<->J},{k<->K},{l<->L},{m<->M},{n<->N},{o<->O},{p<->P},{q<->Q},{r<->R},{s<->S},{t<->T},{u<->U},{v<->V},{w<->W},{x<->X},{y<->Y},{z<->Z}"
-
-# Character sets
+# Character sets. @w folds case with one <-> zip (a..z paired to A..Z), so a
+# letter and its capital share a single position.
 s = "\n,\r, ,\t"
-w = "{@i},_"
+w = "{@l}<->{@u},_"
 x = "!@s"
 
-# Derived alphabets — case-fold letter slices bounded inside @i.
-hex = "{@d},{{@i}..f}"
-b32 = "{@d},{{@i}..v}" # RFC 4648 §7
-b64 = "{@d},{@i},+,/"
+# Derived alphabets — @w sliced to f/v carries the fold along, so hex stays base
+# 16 and case-insensitive at once.
+hex = "{@d},{{@w}..f}"
+b32 = "{@d},{{@w}..v}" # RFC 4648 §7
+b64 = "{@d},{@l},{@u},+,/"
 
 # Code-point ranges (endpoints written as \\u escapes).
 ascii = "\u0000..\u007f"

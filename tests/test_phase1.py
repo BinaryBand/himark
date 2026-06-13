@@ -12,9 +12,6 @@ def matches(pattern, text):
 # ── Macro expansion (text level) ──────────────────────────────────────────────
 
 
-# The 26 case-fold congruence groups @i expands to.
-I_GROUPS = ",".join(f"{{{c}<->{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz")
-
 
 def test_macro_simple_range():
     assert phase1.preprocess("{@d}") == "{0..9}"
@@ -22,15 +19,14 @@ def test_macro_simple_range():
     assert phase1.preprocess("{@u}") == "{A..Z}"
 
 
-def test_macro_congruence():
-    # @i expands to the 26 enumerated case-fold congruence groups.
-    assert phase1.preprocess("{@i}") == "{" + I_GROUPS + "}"
+def test_macro_w_zip():
+    # @w folds case with one <-> zip, plus '_'.
+    assert phase1.preprocess("{@w}") == "{{a..z}<->{A..Z},_}"
 
 
 def test_macro_nested_expansion():
-    # @hex references @d and @i; expansion repeats until stable.
-    assert phase1.preprocess("{@hex}") == "{{0..9},{{" + I_GROUPS + "}..f}}"
-    assert phase1.preprocess("{@w}") == "{{" + I_GROUPS + "},_}"
+    # @hex references @d and @w; expansion repeats until stable.
+    assert phase1.preprocess("{@hex}") == "{{0..9},{{{a..z}<->{A..Z},_}..f}}"
 
 
 def test_macro_whitespace_set():
@@ -38,9 +34,9 @@ def test_macro_whitespace_set():
     assert phase1.preprocess("{@s}") == "{\n,\r, ,\t}"
 
 
-def test_macro_b58_skip_ranges():
-    # b58 expands to skip-ranges that bake in the 0/O/I/l omissions.
-    assert phase1.preprocess("{@b58}") == "{1..9,A..H,J..N,P..Z,a..k,m..z}"
+def test_macro_b58_complement():
+    # b58 = digits, upper, lower, minus the four ambiguous glyphs.
+    assert phase1.preprocess("{@b58}") == "{{0..9},{A..Z},{a..z},!{0,l,I,O}}"
 
 
 def test_macro_word_boundary():
@@ -85,11 +81,11 @@ def test_macro_dec_value_bound():
 
 
 def test_macro_w_case_insensitive_word():
-    # @w is a union of the case-fold letter class and '_'; a union does not
-    # merge arms into one alphabet, so letter-runs and '_' match separately.
-    assert matches("{@w}", "Ab9") == ["Ab"]  # digits are not word chars
-    assert matches("{@w}", "xyz") == ["xyz"]  # case-fold letters as one run
-    assert matches("{@w}", "a_b") == ["a", "_", "b"]
+    # @w is one folded alphabet (case-fold letters plus '_'), so a word matches
+    # as a single contiguous run; digits are not word chars.
+    assert matches("{@w}", "Ab9") == ["Ab"]
+    assert matches("{@w}", "xyz") == ["xyz"]
+    assert matches("{@w}", "a_b") == ["a_b"]
     assert matches("{@w}", "!.?") == []
 
 

@@ -20,7 +20,7 @@ except ImportError:
 
 def test_macros_present():
     for name in (
-        "d", "l", "u", "i", "s", "w", "x",
+        "d", "l", "u", "s", "w", "x",
         "hex", "b32", "b58", "b64", "ascii", "uni",
     ):
         assert name in MACROS
@@ -30,9 +30,9 @@ def test_dec_expands_to_range():
     assert MACROS["d"] == "0..9"
 
 
-def test_b58_omits_ambiguous_via_ranges():
-    # Skip-ranges bake in the 0/O/I/l exclusions without a value-corrupting `!`.
-    assert MACROS["b58"] == "1..9,A..H,J..N,P..Z,a..k,m..z"
+def test_b58_complement_form():
+    # base58 = digits, upper, lower, minus the four ambiguous glyphs.
+    assert MACROS["b58"] == "{@d},{@u},{@l},!{0,l,I,O}"
 
 
 # ── Positional value arithmetic ───────────────────────────────────────────────

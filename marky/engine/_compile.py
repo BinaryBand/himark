@@ -114,14 +114,48 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
     if isinstance(node, t.UnionNode):
         return [g for o in node.options for g in _groups(o)]
     if isinstance(node, t.LiteralNode):
-        return [[ch] for ch in node.content]
+        # One position whose single spelling is the whole literal — so a
+        # multi-char token (`bc` in `{a<->bc}`) folds as one unit, not per char.
+        return [[node.content]]
     if isinstance(node, t.GroupClassNode):
         return [list(grp) for grp in node.groups]
+    if isinstance(node, t.ZipNode):
+        return _zip_groups(node)
     if isinstance(node, t.FullAlphaNode):
         return _groups(node.inner)
     if isinstance(node, t.ValueRangeNode):
         return _sliced_groups(node)
     raise CompileError(f"Cannot use {type(node).__name__} as a value alphabet")
+
+
+def _zip_groups(node: t.ZipNode) -> list[list[str]]:
+    """Fold the tracks of a `<->` position-wise into one ordered alphabet.
+
+    Each track contributes its own ordered groups; position i collects the i-th
+    group of every track. The tracks must share one cardinality (an unequal zip
+    is an incoherent claim, not a request to truncate), and every spelling must
+    name exactly one position (so the folded value stays unambiguous)."""
+    track_groups = [_groups(tr) for tr in node.tracks]
+    card = len(track_groups[0])
+    for tg in track_groups:
+        if len(tg) != card:
+            raise CompileError(
+                f"<-> cardinality mismatch: tracks have lengths "
+                f"{[len(t) for t in track_groups]}"
+            )
+    zipped: list[list[str]] = []
+    seen: set[str] = set()
+    for i in range(card):
+        position = [spelling for tg in track_groups for spelling in tg[i]]
+        for spelling in position:
+            if spelling in seen:
+                raise CompileError(
+                    f"<-> reuses the spelling {spelling!r} across positions; "
+                    f"every spelling must name exactly one position"
+                )
+            seen.add(spelling)
+        zipped.append(position)
+    return zipped
 
 
 def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
@@ -305,6 +339,22 @@ class _Union(_Base):
             if end is not None and (excl is None or not excl(text[pos:end])):
                 return end
         return None
+
+
+def _lower_union(node: t.UnionNode) -> Matcher:
+    """A union of pure alphabets is itself one alphabet: merge the arms' ordered
+    groups into a single folded class so a mixed run (`{a..z,A..Z}` over "aBc")
+    matches as one unit and value/repetition see one axis. Token or complement
+    arms have no group form, so those fall back to arm-by-arm `_Union`."""
+    try:
+        groups = _groups(node)
+    except CompileError:
+        return _Union(node)
+    excl = _Excluder(node.exclusions)
+    if excl.singles or excl.ranges:
+        groups = [[m for m in g if not excl(m)] for g in groups]
+        groups = [g for g in groups if g]
+    return _Group(groups)
 
 
 class _Complement(_Base):
@@ -503,7 +553,8 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.FullAlphaNode: _FullAlpha,
     t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
-    t.UnionNode: _Union,
+    t.ZipNode: lambda n: _Group(_zip_groups(n)),
+    t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
     t.TokenSetNode: _TokenSet,
     t.PaddedNode: _lower_padded,

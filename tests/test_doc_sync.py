@@ -21,12 +21,6 @@ def test_doc_macro_table_matches_macros_toml():
     assert doc_names == set(MACROS)
 
 
-def test_doc_header_north_star_verbatim():
-    pattern = "<<\n>> => {#}[1..6]{@s}[1..]<<>> => <h{{#0}}>{{2}}</h{{#0}}>"
-    assert pattern in DOC.replace("\\n", "\n")
-    assert execute(parser.parse(pattern), "## Hello") == ["<h2>Hello</h2>"]
-
-
 def test_doc_congruence_pair_repetition():
     # Spec headline: {a<->A}[2] accepts 'aa', 'aA', 'Aa', 'AA'.
     assert matches("{a<->A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]

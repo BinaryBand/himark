@@ -61,16 +61,17 @@ def test_named_alpha_dec():
 
 
 def test_named_alpha_hex():
-    # hex = {@d},{{@i}..f}: digit runs and case-fold letter runs bounded at f.
+    # hex = {@d},{{@w}..f}: one folded base-16 alphabet, so a mixed hex run
+    # like "0af" matches as a single unit.
     result = matches("{@hex}", "xyz0af")
-    assert result == ["0", "af"]
+    assert result == ["0af"]
 
 
 def test_named_alpha_hex_case_insensitive():
-    # The letter arm is a value range over @i's congruence groups, so case
-    # folds; letters match as a contiguous run, so "aF" is one unit.
+    # @w carries the case fold, so 'a' and 'F' are hex digits in one alphabet
+    # and "0aF" is a single contiguous run.
     result = matches("{@hex}", "0aF g9C")
-    assert result == ["0", "aF", "9", "C"]
+    assert result == ["0aF", "9C"]
 
 
 def test_named_alpha_hex_rejects_non_hex():
@@ -458,16 +459,19 @@ def test_case_fold_class_rejects_non_alpha():
     assert matches(CASE_FOLD, "123") == []
 
 
-def test_dropped_zip_syntax_raises():
+def test_class_zip_matches_case_fold():
+    # {{a..z}<->{A..Z}} zips the two classes into one folded alphabet.
+    assert matches("{{a..z}<->{A..Z}}", "Hello 123") == ["Hello"]
+
+
+def test_zip_cardinality_mismatch_raises():
     import pytest
 
     from marky.models.exceptions import CompileError
 
-    # Both zip spellings were removed in favor of enumerated groups.
+    # a(1) <-> A..z(58) <-> Z(1): unequal tracks cannot zip.
     with pytest.raises(CompileError):
-        matches("{{a..z}<->{A..Z}}", "x")  # class <-> class
-    with pytest.raises(CompileError):
-        matches("{a<->A..z<->Z}", "x")  # range of pairs
+        matches("{a<->A..z<->Z}", "x")
 
 
 # ── variable-width padding ────────────────────────────────────────────────────
@@ -501,13 +505,15 @@ def test_complement_char_range():
 
 
 def test_named_alpha_b32():
-    # b32 = {@d},{{@i}..v} (RFC 4648 §7). Letters w-z are outside the bound.
-    assert matches("{@b32}", "01v wxyz") == ["01", "v"]
+    # b32 = {@d},{{@w}..v} (RFC 4648 §7), one folded alphabet. Letters w-z are
+    # outside the bound, so "01v" is one run and "wxyz" matches nothing.
+    assert matches("{@b32}", "01v wxyz") == ["01v"]
 
 
 def test_named_alpha_b64():
-    # b64 = {@d},{@i},+,/ — case-fold letters match as one run.
-    assert matches("{@b64}", "Az+/ !") == ["Az", "+", "/"]
+    # b64 = {@d},{@l},{@u},+,/ — case-sensitive (a != A), one 64-symbol alphabet,
+    # so a run of base64 chars matches as a single unit.
+    assert matches("{@b64}", "Az+/ !") == ["Az+/"]
 
 
 # ── separator with explicit bounds ────────────────────────────────────────────

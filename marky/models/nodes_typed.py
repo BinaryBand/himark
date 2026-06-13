@@ -135,6 +135,17 @@ class GroupClassNode:
 
 
 @dataclass(slots=True)
+class ZipNode:
+    """A congruence (`<->`): an n-ary position-wise zip of its tracks into one
+    folded alphabet. Each track is a $\\sigma$; the i-th position accepts the
+    i-th spelling of any track. Equal cardinality and distinct spellings are
+    checked when the zip is lowered (it needs each track's ordered groups)."""
+
+    type: Literal["zip"] = "zip"
+    tracks: list[SemanticNode] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class SequenceNode:
     """A grouped sub-pattern: a brace whose interior is a concatenation of
     constructs rather than a single alphabet expression (`{| a{ }[..]| b|}`).
@@ -199,6 +210,7 @@ SemanticNode: TypeAlias = (
     | ComplementNode
     | TokenSetNode
     | GroupClassNode
+    | ZipNode
     | PaddedNode
     | SequenceNode
 )
@@ -219,6 +231,7 @@ SemanticClasses = (
     ComplementNode,
     TokenSetNode,
     GroupClassNode,
+    ZipNode,
     PaddedNode,
     SequenceNode,
 )
