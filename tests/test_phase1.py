@@ -59,12 +59,8 @@ def test_no_wrap_when_already_braced():
     assert phase1.preprocess("{x}.{y}") == "{x}.{y}"
 
 
-def test_no_wrap_separator_step():
-    assert phase1.preprocess("<<\n>>") == "<<\n>>"
-
-
 def test_no_wrap_template_step():
-    assert phase1.preprocess("<h{{#0}}>{{1}}</h>") == "<h{{#0}}>{{1}}</h>"
+    assert phase1.preprocess("<h>{{.}}</h>") == "<h>{{.}}</h>"
 
 
 # ── End-to-end through the full pipeline ──────────────────────────────────────

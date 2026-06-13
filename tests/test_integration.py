@@ -68,11 +68,6 @@ def test_same_digit_twice():
 # ── Template rendering ────────────────────────────────────────────────────────
 
 
-def test_template_wrap():
-    result = execute(parser.parse("{hello} => [{{0}}]"), "say hello")
-    assert result == ["[hello]"]
-
-
 def test_template_full_match():
     result = execute(parser.parse("{a..z} => <{{.}}>"), "abc")
     assert result == ["<a>", "<b>", "<c>"]
@@ -88,40 +83,6 @@ def test_chain_deferred_full_match():
     assert result == ["<#4>", "<#2>"]
 
 
-def test_chain_deferred_preserves_surrounding_text():
-    # The deferred chain transforms in place — non-matched characters survive.
-    result = execute(
-        parser.parse("{x}<<>>{x} => [{{.}}] => {@d} => #{{.}}"), "x a4b2 x"
-    )
-    assert result == ["[x a#4b#2 x]"]
-
-
-def test_chain_filter_then_template_still_works():
-    # A run of patterns before a single trailing template (filter style) is
-    # unchanged: non-matching lines are dropped.
-    result = execute(
-        parser.parse("<<\n>> => {#}[1..6]{ }{!\n} => <h{{#0}}>{{2}}</h{{#0}}>"),
-        "## Hello\nplain line\n### World",
-    )
-    assert result == ["<h2>Hello</h2>", "<h3>World</h3>"]
-
-
-# ── Separator ─────────────────────────────────────────────────────────────────
-
-
-def test_separator_splits_lines():
-    trees = parser.parse("<<\n>>")
-    ms = find_matches(trees[0], "line1\nline2\nline3")
-    assert [m.text for m in ms] == ["line1", "line2", "line3"]
-
-
-def test_separator_empty_captures_all():
-    trees = parser.parse("<<>>")
-    ms = find_matches(trees[0], "hello world")
-    assert len(ms) == 1
-    assert ms[0].text == "hello world"
-
-
 # ── Token set ────────────────────────────────────────────────────────────────
 
 
@@ -130,41 +91,7 @@ def test_http_token_set():
     assert result == ["https", "http"]
 
 
-# ── Span ref rendering ────────────────────────────────────────────────────────
-
-
-def test_template_span_ref_full():
-    # {{0..2}} spans from start of group 0 to end of group 2 — identical to {{.}}
-    # here, but exercises the span_ref code path explicitly.
-    result = execute(parser.parse("{a..z}{0..9}{a..z} => {{0..2}}"), "a1b c2d")
-    assert result == ["a1b", "c2d"]
-
-
-def test_template_span_ref_partial():
-    # {{0..1}} covers only the first two groups, excluding the last char.
-    result = execute(parser.parse("{a..z} {a..z} {a..z} => [{{0..1}}]"), "x y z")
-    assert result == ["[x y]"]
-
-
 # ── Pipes (inner =>+) ─────────────────────────────────────────────────────────
-
-
-def test_pipe_normalize_then_test():
-    # Per line: delete space-runs, then test the spliced text for an hr run.
-    cmd = "<<\n>> =>+ {\\ }[1..] =>+  => {-,*,_}[3..] => <hr>"
-    assert execute(parser.parse(cmd), "a\n* * *\nb") == "a\n<hr>\nb"
-
-
-def test_pipe_commits_splice():
-    # A piped splice is unconditional — applied even when the rest never matches.
-    cmd = "<<\n>> =>+ {\\ }[1..] =>+ _ => {-,*,_}[3..] => <hr>"
-    assert execute(parser.parse(cmd), "a b") == "a_b"
-
-
-def test_pipe_in_extract_mode():
-    # The chain continues on the spliced text; extraction happens afterwards.
-    cmd = "<<>> => {@d} =>+ # => {#}[2..]"
-    assert execute(parser.parse(cmd), "a11b2c") == ["##"]
 
 
 def test_pipe_requires_template():
@@ -174,28 +101,6 @@ def test_pipe_requires_template():
 
     with pytest.raises(CompileError):
         execute(parser.parse("{a} => {b} =>+ {c}"), "x")
-
-
-# ── Brace grouping ────────────────────────────────────────────────────────────
-
-
-def test_grouped_sequence_matches_like_bare():
-    # {X} is match-equivalent to X: an outer brace over a concatenation groups
-    # without changing what is matched.
-    bare = matches("a{@d}b{@d}", "a1b2 a9b9 xx")
-    grouped = matches("{a{@d}b{@d}}", "a1b2 a9b9 xx")
-    assert bare == grouped == ["a1b2", "a9b9"]
-
-
-def test_grouped_sequence_table_row():
-    # The motivating case: a whole table-row pattern wrapped in one brace.
-    row = "| Construct | Role  |"
-    assert matches("{| Construct{ }[..]| Role{ }[..]|}", row) == [row]
-
-
-def test_counted_group_repeats_whole_unit():
-    # {seq}[N] repeats the entire sub-sequence with value-equality.
-    assert matches("{a{@d}}[2]", "a1a1 a1a2 a7a7") == ["a1a1", "a7a7"]
 
 
 def test_counted_group_open_ended():

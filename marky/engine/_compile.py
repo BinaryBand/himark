@@ -444,31 +444,6 @@ class _Group(_Base):
         return cur
 
 
-class _Sequence(_Base):
-    """A grouped sub-pattern matched as one unit — the brace `{seq}[N]`.
-
-    Its elements are the same compiled `Element`s the top-level loop runs, so a
-    grouped sub-sequence behaves exactly like the bare form, just bounded as a
-    single repeatable unit. Repetition-equality falls back to literal text
-    equality (`_Base.equal_unit`): each repetition must match the same string."""
-
-    __slots__ = ("elements",)
-
-    def __init__(self, elements: list[Element]):
-        self.elements = elements
-
-    def match(self, text: str, pos: int) -> int | None:
-        # Reuse the real sequence loop with a throwaway capture state — a counted
-        # group exposes only its own span/reps, never its internal captures.
-        # import_module sidesteps the package-namespace shadow: `marky.engine`
-        # defines a *function* named `_run`, which hides the submodule of the
-        # same name from a plain `from ... import`.
-        import importlib
-
-        run_mod = importlib.import_module("marky.engine._run")
-        return run_mod._match_elements(self.elements, text, pos, run_mod._State())
-
-
 class _ValueWindowPadded(_Base):
     """Fixed-width or width-range value match; leading zero-padding allowed."""
 
@@ -540,10 +515,6 @@ def _lower_value_range(node: t.SemanticNode) -> Matcher:
     return _ValueRange(view)
 
 
-def _lower_sequence(node: t.SequenceNode) -> Matcher:
-    return _Sequence(compile_pattern(t.RootNode(children=node.children)))
-
-
 # ── Lowering registry ─────────────────────────────────────────────────────────
 
 _LOWERINGS: dict[type, Callable[..., Matcher]] = {
@@ -558,7 +529,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.ComplementNode: _Complement,
     t.TokenSetNode: _TokenSet,
     t.PaddedNode: _lower_padded,
-    t.SequenceNode: _lower_sequence,
 }
 
 
@@ -583,24 +553,15 @@ class GroupEl:
     matcher: Matcher
     min_reps: int
     max_reps: int | None
-    count_ref: int | None
 
 
-@dataclass(slots=True)
-class SepEl:
-    sep_value: str | None
-    sep_class: Matcher | None
+Element = LiteralEl | GroupEl
 
 
-Element = LiteralEl | GroupEl | SepEl
-
-
-def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
+def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
     if isinstance(count, t.CountRange):
-        return count.min, count.max, None
-    if isinstance(count, t.CountRef):
-        return 1, 1, count.index
-    return 1, 1, None
+        return count.min, count.max
+    return 1, 1
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
@@ -612,13 +573,8 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-            min_reps, max_reps, count_ref = _count_config(child.count)
-            elements.append(
-                GroupEl(lower(child.semantic), min_reps, max_reps, count_ref)
-            )
-        elif isinstance(child, t.SeparatorNode):
-            sep_class = lower(child.sep_class) if child.sep_class is not None else None
-            elements.append(SepEl(child.sep_value, sep_class))
+            min_reps, max_reps = _count_config(child.count)
+            elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements

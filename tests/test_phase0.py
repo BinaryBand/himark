@@ -80,25 +80,9 @@ def test_arrow_inside_braces_not_split():
     assert steps("{a=>b}") == ["{a=>b}"]
 
 
-def test_arrow_inside_chevrons_not_split():
-    assert steps("{x}<<=>>>{y}") == ["{x}<<=>>>{y}"]
-
-
 def test_real_arrow_after_balanced_delimiters():
-    # <<>> and {**} are balanced; only the top-level => splits.
-    assert steps("{**}<<>>{**} => <strong>{{1}}</strong>") == [
-        "{**}<<>>{**}",
-        "<strong>{{1}}</strong>",
-    ]
-
-
-# ── North-star example ────────────────────────────────────────────────────────
-
-
-def test_markdown_heading_chain():
-    src = "<<\\n>> => {#}[1..6] { } {!\\n} => <h{{#0}}>{{2}}</h{{#0}}>"
-    assert steps(src) == [
-        "<<\\n>>",
-        "{#}[1..6] { } {!\\n}",
-        "<h{{#0}}>{{2}}</h{{#0}}>",
+    # {**} braces are balanced; only the top-level => splits.
+    assert steps("{**}{!**}{**} => <strong>{{.}}</strong>") == [
+        "{**}{!**}{**}",
+        "<strong>{{.}}</strong>",
     ]

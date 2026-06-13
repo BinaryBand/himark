@@ -2,13 +2,13 @@ from marky.models.nodes_typed import (
     BraceGroupNode,
     CharRangeNode,
     CountRange,
-    GroupRefNode,
+    FullMatchNode,
     LiteralNode,
     RootNode,
-    SpanRefNode,
     TokenSetNode,
     UnionNode,
     ValueRangeNode,
+    ZipNode,
 )
 
 
@@ -24,16 +24,15 @@ def test_typed_nodes_smoke():
     assert root.children[0].type == "union"
 
 
-def test_typed_count_and_refs():
+def test_typed_count_and_template():
     group = BraceGroupNode(content="a", semantic=LiteralNode(content="a"))
     group.count = CountRange(min=1, max=3)
 
-    ref = GroupRefNode(index=[0, 1])
-    span = SpanRefNode(start=[0], end=[1])
+    zip_node = ZipNode(tracks=[LiteralNode(content="a"), LiteralNode(content="A")])
 
     assert group.count is not None
-    assert ref.index == [0, 1]
-    assert span.end == [1]
+    assert FullMatchNode().type == "full_match"
+    assert zip_node.type == "zip"
 
 
 def test_semantic_payload_fields():

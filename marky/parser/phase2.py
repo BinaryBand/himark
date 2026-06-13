@@ -2,7 +2,6 @@
 
 Constructs recognized:
   {expr}[count]   — brace_group with optional count modifier
-  <<sep>>[count]  — separator (count modifier is a compile error)
   {{ref}}         — template reference, parsed immediately into a typed node
   leaf text       — verbatim literal fragments
 """
@@ -33,14 +32,6 @@ def _scan_braces(text: str, pos: int) -> int:
         if depth == 0:
             return i + 1
     raise CompileError(f"Unclosed '{{' at position {pos}")
-
-
-def _scan_chevrons(text: str, pos: int) -> int:
-    """Return end index (exclusive) of <<...>> starting at pos (past the opening <<)."""
-    end = text.find(">>", pos)
-    if end == -1:
-        raise CompileError(f"Unclosed '<<' at position {pos - 2}")
-    return end + 2
 
 
 def parse(text: str) -> t.RootNode:
@@ -91,21 +82,6 @@ def parse(text: str) -> t.RootNode:
                 brace.count_src = cm.group(1)
                 pos = cm.end()
             nodes.append(brace)
-            continue
-
-        # Separator <<sep>> — count modifier is not allowed
-        if text[pos : pos + 2] == "<<":
-            flush_leaf()
-            end = _scan_chevrons(text, pos + 2)
-            sep = t.SeparatorNode(content=text[pos + 2 : end - 2])
-            pos = end
-            cm = _COUNT_SRC.match(text, pos)
-            if cm:
-                raise CompileError(
-                    f"A count on <<...>> is not allowed: "
-                    f"<<{sep.content}>>[{cm.group(1)}]"
-                )
-            nodes.append(sep)
             continue
 
         leaf_buf.append(ch)

@@ -243,28 +243,6 @@ def types(pattern):
     return [c.type for c in resolve(pattern).children]
 
 
-def test_sequence_brace_splices_when_uncounted():
-    # A brace wrapping a concatenation is transparent: its interior is spliced
-    # into the parent, so {X} numbers exactly like the bare X.
-    assert types("{a{@d}b}") == types("a{@d}b") == [
-        "leaf",
-        "brace_group",
-        "leaf",
-    ]
-
-
-def test_unit_count_brace_also_splices():
-    # [1] is identical to no count, so {X}[1] splices like {X}.
-    assert types("{a{@d}b}[1]") == ["leaf", "brace_group", "leaf"]
-
-
-def test_counted_sequence_brace_is_one_group():
-    # A real count makes the brace a single repeatable unit (SequenceNode).
-    bg = first_brace("{a{@d}}[2]")
-    assert bg.semantic.type == "sequence"
-    assert bg.count == t.CountRange(min=2, max=2)
-
-
 def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
     assert first_semantic("{a..z}").type == "char_range"
@@ -276,13 +254,8 @@ def test_pure_alphabet_braces_stay_arithmetic():
 
 def test_class_congruence_is_a_zip_not_a_sequence():
     # {{a..z}<->{A..Z}} is σ (a zip of two classes), so it resolves to one
-    # folded alphabet — not a literal-'<->' sequence.
+    # folded alphabet.
     assert first_semantic("{{a..z}<->{A..Z}}").type == "zip"
-
-
-def test_counted_sequence_with_separator_rejected():
-    with pytest.raises(CompileError):
-        resolve("{a<<>>b}[2]")
 
 
 # ── Template expressions ──────────────────────────────────────────────────────
@@ -294,24 +267,11 @@ def test_template_full_match():
     assert node.type == "full_match"
 
 
-def test_template_group_ref():
-    tree = resolve("{{0}}")
-    node = tree.children[0]
-    assert node.type == "group_ref"
-    assert node.index == [0]
-
-
-def test_template_span_ref():
-    tree = resolve("{{0..2}}")
-    node = tree.children[0]
-    assert node.type == "span_ref"
-
-
-def test_template_count_ref():
-    tree = resolve("{{#0}}")
-    node = tree.children[0]
-    assert node.type == "count_ref"
-    assert node.group == 0
+def test_template_numbered_refs_rejected():
+    # Numbered, sub, span, and count captures were dropped; only {{.}} survives.
+    for ref in ("{{0}}", "{{0.1}}", "{{0..2}}", "{{#0}}"):
+        with pytest.raises(CompileError):
+            resolve(ref)
 
 
 # ── Error cases ───────────────────────────────────────────────────────────────
@@ -364,79 +324,6 @@ def test_pure_whitespace_arm_is_literal_space():
     node = first_semantic("{ }")
     assert node.type == "literal"
     assert node.content == " "
-
-
-# ── Separator content (τ/α cardinality dispatch) ─────────────────────────────
-
-
-def first_separator(pattern):
-    tree = resolve(pattern)
-    return next(c for c in tree.children if c.type == "separator")
-
-
-def test_separator_tau_constant():
-    node = first_separator("<<\n>>")
-    assert node.sep_value == "\n"
-    assert node.sep_class is None
-
-
-def test_separator_tau_punctuation_comma():
-    # A lone comma is a punctuation constant, not an empty union.
-    node = first_separator("<<,>>")
-    assert node.sep_value == ","
-
-
-def test_separator_tau_singleton_constructor():
-    node = first_separator("<<{a}[3]>>")
-    assert node.sep_value == "aaa"
-
-
-def test_separator_alpha_bounded_range():
-    node = first_separator("<<a..{a..z}..zz>>")
-    assert node.sep_class.type == "value_range"
-    assert node.sep_value is None
-
-
-def test_separator_alpha_full_alpha():
-    node = first_separator("<<{a..z}>>")
-    assert node.sep_class.type == "full_alpha"
-
-
-def test_separator_empty_unconstrained():
-    node = first_separator("<<>>")
-    assert node.sep_value is None
-    assert node.sep_class is None
-
-
-# ── Sequence braces (transparent sub-sequence) ───────────────────────────────
-
-
-def test_sequence_brace_splices_children():
-    # {**<<>>**} — top-level <<>> flips the interior to sequence context; the
-    # brace is transparent and its children splice into the parent.
-    tree = resolve("{**<<>>**}")
-    types = [c.type for c in tree.children]
-    assert types == ["leaf", "separator", "leaf"]
-    assert tree.children[0].content == "**"
-    assert tree.children[2].content == "**"
-
-
-def test_sequence_brace_inner_groups_resolve():
-    # Inner brace groups inside a sequence brace resolve normally.
-    tree = resolve("{{a..z}<<,>>{0..9}}")
-    types = [c.type for c in tree.children]
-    assert types == ["brace_group", "separator", "brace_group"]
-
-
-def test_sequence_brace_count_raises():
-    with pytest.raises(CompileError):
-        resolve("{**<<>>**}[2]")
-
-
-def test_separator_count_raises():
-    # A count on <<...>> is a compile error; the syntax is reserved.
-    with pytest.raises(CompileError):
-        resolve("<<,>>[2]")
 
 
 def test_braced_class_arms_form_a_union():

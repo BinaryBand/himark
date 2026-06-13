@@ -26,7 +26,3 @@ def test_doc_congruence_pair_repetition():
     assert matches("{a<->A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
-def test_doc_count_ref_in_count_position():
-    # {a}[2..5]{b}[{{#0}}] — [b] repeats as many times as [a] did.
-    assert matches("{a}[2..5]{b}[{{#0}}]", "aaabbb") == ["aaabbb"]
-    assert matches("{a}[2..5]{b}[{{#0}}]", "aabbb") == ["aabb"]
