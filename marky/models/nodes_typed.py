@@ -16,7 +16,7 @@ class CountRange:
 
 @dataclass(slots=True)
 class CountRef:
-    index: int
+    index: list[int]
 
 
 CountSpec: TypeAlias = CountRange | CountRef
@@ -187,7 +187,7 @@ class SpanRefNode:
 @dataclass(slots=True)
 class CountRefNode:
     type: Literal["count_ref"] = "count_ref"
-    group: int = 0
+    index: list[int] = field(default_factory=list)
 
 
 SemanticNode: TypeAlias = (

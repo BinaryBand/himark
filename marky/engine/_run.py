@@ -26,9 +26,15 @@ class _State:
         self.captures: list[Capture] = []
         self.root = root if root is not None else self
 
-    def count_of(self, index: int) -> int:
+    def count_of(self, index: list[int]) -> int:
         caps = self.root.captures
-        return len(caps[index].reps) if index < len(caps) else 0
+        cap = None
+        for i in index:
+            if i >= len(caps):
+                return 0
+            cap = caps[i]
+            caps = cap.subs
+        return len(cap.reps) if cap is not None else 0
 
 
 def find_matches(pattern: list[Element], text: str) -> list[Match]:

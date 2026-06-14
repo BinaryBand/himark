@@ -32,7 +32,16 @@ def _span_ref(node: t.SpanRefNode, match: Match) -> str:
 
 
 def _count_ref(node: t.CountRefNode, match: Match) -> str:
-    return str(match.count_refs.get(node.group, 0))
+    """Repeat count of the capture at `index` — a path into the capture tree, so
+    `{{#N}}` is a top-level group's count and `{{#N.M}}` is sub-group M's count."""
+    caps = match.captures
+    cap = None
+    for i in node.index:
+        if i >= len(caps):
+            return "0"
+        cap = caps[i]
+        caps = cap.subs
+    return str(len(cap.reps)) if cap is not None else "0"
 
 
 # Class-keyed dispatch — no node.type strings, no silent isinstance fallbacks.

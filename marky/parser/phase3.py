@@ -26,7 +26,7 @@ from marky.parser._text import (
 )
 
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
-_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
+_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+(?:\.\d+)*)\}\}$")
 
 
 _EXCLUDABLE = (
@@ -147,8 +147,12 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     for a in raw_arms:
         stripped = strip_unescaped(a)
         if stripped and stripped != a:
-            if len(raw_arms) == 1 and stripped.startswith("{"):
-                arms.append(stripped)  # single nested-brace: disambiguation space
+            if len(raw_arms) == 1:
+                # A single arm has no comma to pad. A leading-brace value keeps its
+                # disambiguation spacing stripped ({ {a..z} } → {a..z}); otherwise
+                # the surrounding whitespace may be a `<->`/`..` operand ({a<-> }),
+                # so keep it raw and let _resolve_arm apply whitespace significance.
+                arms.append(stripped if stripped.startswith("{") else a)
             else:
                 raise CompileError(
                     f"Unexpected whitespace in '{{{content}}}': "
@@ -328,7 +332,7 @@ def _parse_count(src: str) -> t.CountSpec:
     src = src.strip()
     m = _COUNT_SRC_REF_RE.match(src)
     if m:
-        return t.CountRef(index=int(m.group(1)))
+        return t.CountRef(index=[int(p) for p in m.group(1).split(".")])
     m = re.fullmatch(r"(\d*)(\.\.)?(\d*)", src)
     if m and (m.group(1) or m.group(2)):
         lo, dots, hi = m.groups()

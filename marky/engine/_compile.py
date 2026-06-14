@@ -553,7 +553,7 @@ class GroupEl:
     matcher: Matcher
     min_reps: int
     max_reps: int | None
-    count_ref: int | None
+    count_ref: list[int] | None
 
 
 @dataclass(slots=True)
@@ -564,13 +564,15 @@ class SeqGroupEl:
     elements: "list[Element]"
     min_reps: int
     max_reps: int | None
-    count_ref: int | None
+    count_ref: list[int] | None
 
 
 Element = LiteralEl | GroupEl | SeqGroupEl
 
 
-def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
+def _count_config(
+    count: t.CountSpec | None,
+) -> tuple[int, int | None, list[int] | None]:
     if isinstance(count, t.CountRange):
         return count.min, count.max, None
     if isinstance(count, t.CountRef):

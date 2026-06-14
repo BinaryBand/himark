@@ -12,7 +12,7 @@ from marky.models.exceptions import CompileError
 
 _SPAN_RE = re.compile(r"^(\d+(?:\.\d+)?)\.\.(\d+(?:\.\d+)?)$")
 _GROUP_RE = re.compile(r"^\d+(?:\.\d+)?$")
-_COUNT_REF_RE = re.compile(r"^#(\d+)$")
+_COUNT_REF_RE = re.compile(r"^#(\d+(?:\.\d+)*)$")
 
 
 def _capture_path(dotted: str) -> list[int]:
@@ -27,7 +27,7 @@ def parse_template_expr(content: str) -> t.TemplateNode:
 
     m = _COUNT_REF_RE.match(expr)
     if m:
-        return t.CountRefNode(group=int(m.group(1)))
+        return t.CountRefNode(index=_capture_path(m.group(1)))
 
     m = _SPAN_RE.match(expr)
     if m:
