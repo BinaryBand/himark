@@ -13,15 +13,22 @@ from marky.engine._types import Capture, Match
 
 
 class _State:
-    """Captures accumulated during one match attempt, with absolute spans."""
+    """Captures accumulated during one match attempt, with absolute spans.
 
-    __slots__ = ("captures",)
+    `root` is the top-level state shared by every nested sub-match, so a count
+    reference (`{{#N}}`) always resolves against the document-order top-level
+    groups — even when it is evaluated inside a grouping brace's own sub-state
+    (e.g. a table's per-row cell count `[{{#0}}]` referencing the first row)."""
 
-    def __init__(self) -> None:
+    __slots__ = ("captures", "root")
+
+    def __init__(self, root: "_State | None" = None) -> None:
         self.captures: list[Capture] = []
+        self.root = root if root is not None else self
 
     def count_of(self, index: int) -> int:
-        return len(self.captures[index].reps) if index < len(self.captures) else 0
+        caps = self.root.captures
+        return len(caps[index].reps) if index < len(caps) else 0
 
 
 def find_matches(pattern: list[Element], text: str) -> list[Match]:
@@ -84,7 +91,7 @@ def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int 
         min_reps = max_reps = state.count_of(el.count_ref)
 
     def once(p: int) -> tuple[int, list[Capture]] | None:
-        sub = _State()
+        sub = _State(root=state.root)
         end = _match_elements(el.elements, text, p, sub)
         return None if end is None else (end, sub.captures)
 
@@ -100,18 +107,23 @@ def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int 
     if max_reps == 1:
         return record(end, [text[pos:end]], subs)
 
-    # Repetition: each iteration must match the same text as the first; the
-    # group's sub-captures come from that first iteration.
+    # Structural repetition: a grouping brace is a *shape*, so each iteration
+    # only has to re-match that shape — its content may differ between reps (the
+    # cells of a row, the rows of a table). Every iteration's sub-captures are
+    # kept, in document order. (Atomic classes still repeat by *value*; that
+    # stays in _match_group.)
     reps = [text[pos:end]]
+    all_subs = list(subs)
     current = end
     while max_reps is None or len(reps) < max_reps:
         nxt = once(current)
-        if nxt is None or text[current : nxt[0]] != reps[0]:
+        if nxt is None or nxt[0] == current:  # no further match / zero-width
             break
         reps.append(text[current : nxt[0]])
+        all_subs.extend(nxt[1])
         current = nxt[0]
     if len(reps) >= min_reps:
-        return record(current, reps, subs)
+        return record(current, reps, all_subs)
     return record(pos, [], []) if min_reps == 0 else None
 
 

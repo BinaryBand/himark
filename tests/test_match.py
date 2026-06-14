@@ -461,6 +461,70 @@ def test_sub_capture_refs():
     assert out == ["black+quartz"]
 
 
+# ── Structural repetition of grouping braces (tables) ────────────────────────
+
+
+def test_grouping_brace_repetition_is_structural():
+    # A grouping brace is a *shape*: each repetition re-matches the shape, with
+    # content free between reps — unlike an atomic class, which repeats by value.
+    # So a row of differing cells matches, where value-equal repetition would not.
+    row = r"{{|}{!|,\n}}[2]{|}"
+    assert matches(row, "| a | bb |") == ["| a | bb |"]
+    # The repeat count is that structural count: two cell units, so #0 == 2.
+    assert execute(parser.parse(row + " => {{#0}}"), "| a | bb |") == ["2"]
+
+
+def test_table_whole_match_via_structural_rep_and_count_ref():
+    # A table is n rows each with the same m columns. Row 0's cell repetition
+    # fixes m (group 0); every later row repeats exactly #0 cells. The count-ref
+    # crosses the grouping-brace sub-state to reach that outer group.
+    cells = r"{{|}{!|,\n}}"
+    table = cells + r"[1..]{|}{\n}" + "{" + cells + r"[{{#0}}]{|}{\n}}[0..]"
+    src = "| a | b |\n| --- | --- |\n| c | d |\n"
+    assert matches(table, src) == [src]
+    # A ragged row (different column count) is not absorbed into the table.
+    ragged = "| a | b |\n| c | d | e |\n"
+    assert matches(table, ragged)[0] == "| a | b |\n"
+    # The whole table wraps as one unit; row/cell wrapping chains from there.
+    # (=>+ splices in place and returns the whole document as a string.)
+    assert execute(parser.parse(table + r" =>+ <table>{{.}}</table>"), src) == (
+        "<table>" + src + "</table>"
+    )
+
+
+# ── Reference conveyor + quoted template literals ────────────────────────────
+
+
+def test_reference_conveyor_forwards_refs():
+    # A chained template's references form the forward payload; the literal
+    # chrome wraps the transformed result. {{0}}{{2}}{{4}} render to '|||',
+    # which the next step matches and replaces, then <row>…</row> wraps it.
+    p = r"{|}{!|,\n}{|}{!|,\n}{|} => <row>{{0}}{{2}}{{4}}</row> => {|}[3] => COLS"
+    assert execute(parser.parse(p), "| a | b |") == ["<row>COLS</row>"]
+
+
+def test_full_match_ref_still_defers():
+    # A {{.}}-only template keeps the classic deferral: the remainder transforms
+    # the whole match in place, inside the chrome.
+    p = (
+        r"{|}{!|,\n}{|}{!|,\n}{|} => <row>{{.}}</row>"
+        r" => {|}{!|,\n} => <col>{{1}}</col>"
+    )
+    assert execute(parser.parse(p), "| a | b |") == [
+        "<row><col> a </col><col> b </col>|</row>"
+    ]
+
+
+def test_quoted_template_literals():
+    # Static template text may be quoted; whole-quoted and chrome-quoted agree.
+    whole = execute(parser.parse('{a} => "<b>{{.}}</b>"'), "a")
+    split = execute(parser.parse('{a} => "<b>"{{.}}"</b>"'), "a")
+    assert whole == split == ["<b>a</b>"]
+    # Inside quotes single braces are literal, and a lone ' is an ordinary char.
+    assert execute(parser.parse('{a} => "{lit}"'), "a") == ["{lit}"]
+    assert execute(parser.parse('{a} => "it\'s {{.}}"'), "a") == ["it's a"]
+
+
 # ── enumerated case-fold class (replaces the dropped zip-range sugar) ─────────
 
 

@@ -113,7 +113,7 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 
 ## Repetition
 
-`[count]` repeats the preceding `{...}`. Every repetition must match the same value as the first.
+`[count]` repeats the preceding `{...}`.
 
 | Form   | Meaning      |
 | ------ | ------------ |
@@ -123,11 +123,22 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 | `N..M` | N to M       |
 | `..`   | Zero or more |
 
+What "repeats" means depends on what is repeated:
+
+- A **class** (an alphabet -- `{a..z}`, `{cat,dog}`, a value range) repeats **by value**: every repetition matches the same value as the first.
+- A **grouping brace** (a `{...}` whose interior is a sequence of constructs) repeats **by shape**: each repetition re-matches the structure, and its content may differ between repetitions.
+
 ```proto
-{a..z}[3]     // same string three times: 'aaa', 'ababab', through 'barbarbar'
-{a..z}[2..5]  // same string 2-5 times
-{0..9}[..]    // same string any number of times
+{a..z}[3]     // class: same string three times -- 'aaa', 'ababab', through 'barbarbar'
+{a..z}[2..5]  // class: same string 2-5 times
+{0..9}[..]    // class: same string any number of times
+{{|}{!|,\n}}[3]   // grouping brace: three '|'+cell units, each a different cell
 ```
+
+The structural form is what lets a single pattern walk a homogeneous block. A
+table is `n` rows of the same `m` columns: row 0's cell repetition fixes `m` as
+its repeat count, and every later row repeats exactly `{{#0}}` cells -- so the
+match covers the whole table and stops at the first ragged row.
 
 ---
 
@@ -207,14 +218,26 @@ So, given the input string: `"### Sphinx of black quartz, judge my vow!"` and th
 
 ## Transformers
 
-`=>` applies a replacement template to a match: `pattern => template => pattern => template`. `{{.}}` in a chained template is deferred to the next match expression.
+`=>` applies a replacement template to a match: `pattern => template => pattern => template`.
 
 - A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
-- A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved.
+- A chained template's **references** (`{{.}}`, `{{N}}`, `{{#N}}`, ...) are its **forward payload**: the remaining chain transforms their rendered text in place, and the template's **literal** text is chrome that wraps the result. The payload is the span from the first reference to the last (interior literals included); leading and trailing literals are the chrome. A `{{.}}`-only template is the special case where the payload is the whole match.
 
 ```proto
-{**}{!**}{**} => <strong>{{1}}</strong>
-{*}{!*}{*} => <em>{{1}}</em>
+{|}{!|,\n}{|}{!|,\n}{|} => "<row>"{{0}}{{2}}{{4}}"</row>" => {|}[3] => ...
+// the references render to '|||'; the rest of the chain transforms that,
+// and <row>...</row> wraps whatever comes back.
+```
+
+### Quoting static text
+
+Literal template text is written in double quotes. Inside `"..."`, characters are emitted verbatim except `{{...}}`, which interpolates a reference; `\"` and `\\` escape. **Single** braces inside quotes are literal, so a template can emit `{` and `}` unambiguously. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
+
+```proto
+"<strong>"{{1}}"</strong>"   // chrome quoted, reference bare
+"<strong>{{1}}</strong>"     // same template -- references interpolate inside quotes
+"{lit}"                       // emits the literal text {lit}
+"it's {{.}}"                  // ' needs no escaping
 ```
 
 ---

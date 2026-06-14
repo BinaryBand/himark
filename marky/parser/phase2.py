@@ -34,6 +34,49 @@ def _scan_braces(text: str, pos: int) -> int:
     raise CompileError(f"Unclosed '{{' at position {pos}")
 
 
+def _scan_string(text: str, pos: int) -> int:
+    """Return the end index (exclusive) of the `"..."` literal starting at pos."""
+    i = pos + 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == '"':
+            return i + 1
+        i += 1
+    raise CompileError(f"Unclosed '\"' at position {pos}")
+
+
+def _emit_quoted(inner: str, nodes: list[t.Node]) -> None:
+    """Tokenize the body of a `"..."` literal: verbatim text with `{{...}}`
+    interpolation. Single braces are literal here, so a template can emit `{`
+    or `}`; only `{{ref}}` resolves to a reference."""
+    buf: list[str] = []
+
+    def flush() -> None:
+        if buf:
+            nodes.append(t.LeafNode(content="".join(buf)))
+            buf.clear()
+
+    i = 0
+    while i < len(inner):
+        if inner[i] == "\\" and i + 1 < len(inner):
+            esc = inner[i + 1]
+            buf.append(ESCAPES.get(esc, esc))
+            i += 2
+            continue
+        if inner[i : i + 2] == "{{":
+            m = _TEMPLATE_REF.match(inner, i)
+            if m:
+                flush()
+                nodes.append(parse_template_expr(m.group(1)))
+                i = m.end()
+                continue
+        buf.append(inner[i])
+        i += 1
+    flush()
+
+
 def parse(text: str) -> t.RootNode:
     """Tokenize HMK pattern text into a typed node tree."""
     nodes: list[t.Node] = []
@@ -60,6 +103,17 @@ def parse(text: str) -> t.RootNode:
                 continue
             leaf_buf.append(ch)
             pos += 1
+            continue
+
+        # Quoted literal text: verbatim output (or match), with {{...}}
+        # interpolation and \" / \\ / \n escapes. Single braces inside are
+        # literal, so it can carry brace characters unambiguously. A lone ' is
+        # an ordinary character — only " delimits.
+        if ch == '"':
+            flush_leaf()
+            end = _scan_string(text, pos)
+            _emit_quoted(text[pos + 1 : end - 1], nodes)
+            pos = end
             continue
 
         # Template refs {{...}} — parsed immediately; must check before single {

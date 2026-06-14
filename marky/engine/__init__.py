@@ -8,10 +8,10 @@ Two fold behaviors compose a chain:
 * **Top level** — `execute` extracts every match and transforms it, returning a
   list of strings. Non-matches are dropped. A run of patterns
   (`P => P => … => T`) narrows successively; the trailing template renders.
-* **Deferred `{{.}}`** — when a template's `{{.}}` is reached mid-chain, the
-  *remaining* chain is applied to the current match in place via `_transform`,
-  preserving the surrounding text. The transformed string is substituted for
-  `{{.}}`.
+* **Reference conveyor** — a chained template's *references* form its forward
+  payload: the remaining chain transforms their rendered text in place via
+  `_transform`, while the template's *literal* text is chrome that wraps the
+  result. A `{{.}}`-only template reduces to plain deferral of the whole match.
 * **Pipe (inner `=>+`)** — a `pattern =>+ template` pair splices the template's
   output at the pattern's matches within the current scope, and the chain
   continues on the spliced text. Spans survive at scope granularity: the
@@ -119,20 +119,35 @@ def _run(steps: list[t.RootNode], text: str) -> list[str]:
     head = rest[0]
     if _is_template(head):
         remaining = rest[1:]
-        return [
-            _render(
-                head,
-                m,
-                _transform(remaining, m.text) if remaining else None,
-            )
-            for m in matches
-        ]
+        return [_render_chained(head, m, remaining) for m in matches]
 
     # head is another pattern — feed each match forward and flatten.
     out: list[str] = []
     for m in matches:
         out.extend(_run(rest, m.text))
     return out
+
+
+def _render_chained(head: t.RootNode, m: Match, remaining: list[t.RootNode]) -> str:
+    """Render a chained template. Its **references** (`{{.}}`, `{{N}}`, `{{#N}}`,
+    …) form the forward payload: the remaining chain transforms their rendered
+    text in order, and the template's **literal** text is chrome that wraps the
+    result. The payload is the contiguous span from the first reference to the
+    last (interior literals included); leading/trailing literals are the chrome.
+
+    With no remaining chain, or a reference-free (constant) template, this is a
+    plain render. A `{{.}}`-only template reduces to the classic deferral, so
+    existing chains are unchanged."""
+    children = head.children
+    refs = [i for i, n in enumerate(children) if not isinstance(n, t.LeafNode)]
+    if not remaining or not refs:
+        return _render(head, m)
+    lo, hi = refs[0], refs[-1]
+    prefix = t.RootNode(children=children[:lo])
+    region = t.RootNode(children=children[lo : hi + 1])
+    suffix = t.RootNode(children=children[hi + 1 :])
+    payload = _transform(remaining, _render(region, m))
+    return _render(prefix, m) + payload + _render(suffix, m)
 
 
 def _transform(steps: list[t.RootNode], text: str) -> str:
@@ -166,7 +181,5 @@ def _render_match(rest: list[t.RootNode], m: Match) -> str:
         return m.text
     head = rest[0]
     if _is_template(head):
-        remaining = rest[1:]
-        deferred = _transform(remaining, m.text) if remaining else None
-        return _render(head, m, deferred)
+        return _render_chained(head, m, rest[1:])
     return _transform(rest, m.text)
