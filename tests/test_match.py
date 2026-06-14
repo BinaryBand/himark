@@ -413,6 +413,54 @@ def test_template_full_match():
     assert result == ["<b>hello</b>"]
 
 
+# ── Captures ──────────────────────────────────────────────────────────────────
+
+
+def test_capture_groups_numbered():
+    ms = find_matches(parser.parse("{@d}{@l}")[0], "1a 2b")
+    assert [m.groups for m in ms] == [["1", "a"], ["2", "b"]]
+
+
+def test_group_ref_in_template():
+    # {{1}} renders the second group — the doc's decorator idiom.
+    out = execute(parser.parse("{**}{!**}{**} => <strong>{{1}}</strong>"), "a **hi** b")
+    assert out == ["<strong>hi</strong>"]
+
+
+def test_count_ref_template():
+    # {{#0}} is the repeat count of group 0.
+    assert execute(parser.parse("{a}[1..] => {{#0}}"), "aaa") == ["3"]
+
+
+def test_count_ref_in_count_position():
+    # [b] repeats as many times as [a] matched.
+    assert matches("{a}[2..5]{b}[{{#0}}]", "aaabbb") == ["aaabbb"]
+    assert matches("{a}[2..5]{b}[{{#0}}]", "aabbb") == ["aabb"]
+
+
+def test_span_ref_groups_inclusive():
+    # {{0..2}} spans from group 0's start to group 2's end.
+    assert execute(parser.parse("{@d}{@l}{@d} => [{{0..2}}]"), "1a2 3b4") == [
+        "[1a2]",
+        "[3b4]",
+    ]
+
+
+def test_grouping_brace_sub_captures():
+    # A grouping brace is one capture whose nested braces are sub-captures.
+    ms = find_matches(parser.parse("{of{black}{quartz}}")[0], "ofblackquartz")
+    assert len(ms) == 1
+    assert ms[0].groups == ["ofblackquartz"]
+    assert ms[0].sub_groups == [["black", "quartz"]]
+
+
+def test_sub_capture_refs():
+    out = execute(
+        parser.parse("{of{black}{quartz}} => {{0.0}}+{{0.1}}"), "ofblackquartz"
+    )
+    assert out == ["black+quartz"]
+
+
 # ── enumerated case-fold class (replaces the dropped zip-range sugar) ─────────
 
 

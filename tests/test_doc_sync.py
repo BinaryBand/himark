@@ -26,3 +26,17 @@ def test_doc_congruence_pair_repetition():
     assert matches("{a<->A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
+def test_doc_captures_example():
+    # The Captures section: {#}[1..]{Sphinx}{of{black}{quartz}} numbers groups
+    # 0,1,2 left-to-right, with {black}/{quartz} as sub-captures of group 2.
+    pat = "{#}[1..]{Sphinx}{of{black}{quartz}}"
+    tgt = "###Sphinxofblackquartz"
+    out = execute(
+        parser.parse(
+            pat + " => 0={{0}} 2={{2}} 2.0={{2.0}} 2.1={{2.1}} #0={{#0}}"
+        ),
+        tgt,
+    )
+    assert out == ["0=### 2=ofblackquartz 2.0=black 2.1=quartz #0=3"]
+
+

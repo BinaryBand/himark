@@ -14,7 +14,12 @@ class CountRange:
     max: int | None
 
 
-CountSpec: TypeAlias = CountRange
+@dataclass(slots=True)
+class CountRef:
+    index: int
+
+
+CountSpec: TypeAlias = CountRange | CountRef
 
 
 # -----------------------------
@@ -145,6 +150,17 @@ class PaddedNode:
     max_width: int | None = None
 
 
+@dataclass(slots=True)
+class SequenceNode:
+    """A grouping brace: a `{...}` whose interior is a concatenation of constructs
+    (`{of{black}{quartz}}`) rather than one alphabet expression. It is a single
+    capture group whose nested brace children become its sub-captures (`{{N.M}}`).
+    `children` are the resolved phase-3 nodes of the interior."""
+
+    type: Literal["sequence"] = "sequence"
+    children: list[Node] = field(default_factory=list)
+
+
 # -----------------------------
 # Template/reference nodes
 # -----------------------------
@@ -153,6 +169,25 @@ class PaddedNode:
 @dataclass(slots=True)
 class FullMatchNode:
     type: Literal["full_match"] = "full_match"
+
+
+@dataclass(slots=True)
+class GroupRefNode:
+    type: Literal["group_ref"] = "group_ref"
+    index: list[int] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class SpanRefNode:
+    type: Literal["span_ref"] = "span_ref"
+    start: list[int] = field(default_factory=list)
+    end: list[int] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class CountRefNode:
+    type: Literal["count_ref"] = "count_ref"
+    group: int = 0
 
 
 SemanticNode: TypeAlias = (
@@ -167,9 +202,10 @@ SemanticNode: TypeAlias = (
     | GroupClassNode
     | ZipNode
     | PaddedNode
+    | SequenceNode
 )
 
-TemplateNode: TypeAlias = FullMatchNode
+TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
 
 Node: TypeAlias = (
     RootNode | LeafNode | BraceGroupNode | SemanticNode | TemplateNode
@@ -187,9 +223,15 @@ SemanticClasses = (
     GroupClassNode,
     ZipNode,
     PaddedNode,
+    SequenceNode,
 )
 
-TemplateClasses = (FullMatchNode,)
+TemplateClasses = (
+    FullMatchNode,
+    GroupRefNode,
+    SpanRefNode,
+    CountRefNode,
+)
 
 
 def is_template(node: Node) -> TypeGuard[TemplateNode]:

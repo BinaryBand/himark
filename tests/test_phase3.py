@@ -270,11 +270,12 @@ def test_template_full_match():
     assert node.type == "full_match"
 
 
-def test_template_numbered_refs_rejected():
-    # Numbered, sub, span, and count captures were dropped; only {{.}} survives.
-    for ref in ("{{0}}", "{{0.1}}", "{{0..2}}", "{{#0}}"):
-        with pytest.raises(CompileError):
-            resolve(ref)
+def test_template_refs_resolve():
+    # The full capture vocabulary: numbered, sub, span, and count references.
+    assert resolve("{{0}}").children[0].type == "group_ref"
+    assert resolve("{{0.1}}").children[0].type == "group_ref"
+    assert resolve("{{0..2}}").children[0].type == "span_ref"
+    assert resolve("{{#0}}").children[0].type == "count_ref"
 
 
 # ── Error cases ───────────────────────────────────────────────────────────────

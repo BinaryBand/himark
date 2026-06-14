@@ -2,17 +2,20 @@
 
 Transforms:
   brace_group  → literal | char_range | string_range | full_alpha |
-                 value_range | union | complement | token_set | zip | padded
+                 value_range | union | complement | token_set | zip | padded |
+                 sequence (a grouping brace — a concatenation of constructs)
   double_braces → template node (see parser/templates.py)
 
-A `{…}` brace is always an alphabet expression: its interior is one σ, built
-from `..` (range), `<->` (zip/congruence), `,` (union), and `!` (complement).
+A `{…}` brace is one σ (built from `..`, `<->`, `,`, `!`) unless its interior is
+a *concatenation* of constructs — then it is a grouping brace (a capture group
+whose nested braces are sub-captures, `{of{black}{quartz}}`).
 """
 
 import re
 
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
+from marky.parser import phase2
 from marky.parser._text import (
     brace_end,
     inner_of,
@@ -23,6 +26,7 @@ from marky.parser._text import (
 )
 
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
+_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+)\}\}$")
 
 
 _EXCLUDABLE = (
@@ -42,15 +46,71 @@ def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.Semanti
 
 
 def parse(node: t.RootNode) -> t.RootNode:
-    """Walk the phase2 tree and resolve each brace group in place. A `{…}` is
-    always an alphabet expression — its interior resolves to a single σ node."""
+    """Walk the phase2 tree and resolve each brace group in place. A `{…}` is an
+    alphabet expression unless its interior concatenates constructs, in which
+    case it is a grouping brace (`SequenceNode`)."""
     for child in node.children:
         if isinstance(child, t.BraceGroupNode):
-            child.semantic = _resolve_brace(child.content)
+            if _is_sequence_brace(child.content):
+                child.semantic = _resolve_sequence_brace(child.content)
+            else:
+                child.semantic = _resolve_brace(child.content)
             if child.count_src is not None:
                 child.count = _parse_count(child.count_src)
                 child.count_src = None
     return node
+
+
+# ── Grouping brace (concatenation vs. alphabet) ───────────────────────────────
+
+
+def _resolve_sequence_brace(content: str) -> t.SequenceNode:
+    """Re-tokenize and resolve a grouping brace's interior into one capture group;
+    its nested brace children become the group's sub-captures."""
+    sub = parse(phase2.parse(content))
+    return t.SequenceNode(children=sub.children)
+
+
+def _is_sequence_brace(content: str) -> bool:
+    """True if a brace's interior is a *concatenation* of constructs rather than a
+    single alphabet expression.
+
+    The σ-grammar has no concatenation operator: every `,`/`..`/`<->`-separated
+    part is bare text or exactly one `{…}` atom. A part that glues a construct
+    onto adjacent text — or holds more than one construct — is a sub-pattern.
+    """
+    _, body = _parse_padding(content)
+    if body.startswith("!"):
+        body = body[1:]
+    for arm in split_top(",", body):
+        for part in split_top("..", arm):
+            for atom in split_top("<->", part):
+                if not _is_sigma_atom(atom):
+                    return True
+    return False
+
+
+def _is_sigma_atom(part: str) -> bool:
+    """True if `part` is a valid σ atom: bare text, or a single `{…}` (optionally
+    with an exact `[N]` count) surrounded only by whitespace. A construct glued
+    to text, several constructs, or a ranged count is a sub-pattern fragment."""
+    part = strip_unescaped(part)
+    if part.startswith("!"):
+        part = part[1:].strip()  # a `!` complement/exclusion arm, e.g. !{0,l,I,O}
+    if not part:
+        return True
+    children = phase2.parse(part).children
+    constructs = [c for c in children if isinstance(c, t.BraceGroupNode)]
+    if not constructs:
+        return True  # bare token (a..z, cat, etc.)
+    if len(constructs) > 1:
+        return False
+    only = constructs[0]
+    if any(isinstance(c, t.LeafNode) and c.content.strip() for c in children):
+        return False  # a brace glued to adjacent literal text → concatenation
+    if only.count_src is not None and not re.fullmatch(r"\d+", only.count_src.strip()):
+        return False  # a ranged/star count is repetition, not a σ singleton
+    return True
 
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
@@ -266,6 +326,9 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
 def _parse_count(src: str) -> t.CountSpec:
     """Parse a count modifier string into a count descriptor."""
     src = src.strip()
+    m = _COUNT_SRC_REF_RE.match(src)
+    if m:
+        return t.CountRef(index=int(m.group(1)))
     m = re.fullmatch(r"(\d*)(\.\.)?(\d*)", src)
     if m and (m.group(1) or m.group(2)):
         lo, dots, hi = m.groups()

@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.0.1-experimental  
+**Version:** 0.7.2-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -30,8 +30,8 @@ These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{exp
 | `@s`     | `\n,\r, ,\t`                |
 | `@w`     | `{@l}<->{@u},_`             |
 | `@x`     | `!@s`                       |
-| `@hex`   | `{@d},{{@w}..f<->F}`        |
-| `@b32`   | `{@d},{{@w}..v<->V}`        |
+| `@hex`   | `{@d},{{@w}..f}`            |
+| `@b32`   | `{@d},{{@w}..v}`            |
 | `@b58`   | `{@d},{@u},{@l},!{0,I,O,l}` |
 | `@b64`   | `{@d},{@l},{@u},+,/`        |
 | `@ascii` | U+0000-U+007F               |
@@ -43,18 +43,18 @@ These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{exp
 
 ## Arithmetic
 
-- **$\sigma$** -- an ordered alphabet; a bare string is a $\sigma$ with cardinality 1
+**$\Sigma$** represents an ordered alphabet. **$\sigma$** represents a singleton value (equivalently, a one-element alphabet).
 
-| Operator | Role                                                 |
-| -------- | ---------------------------------------------------- |
-| `..`     | Range between endpoints                              |
-| `<->`    | Congruence -- zip two equal-length $\sigma$'s to one |
-| `,`      | Union of $\sigma$'s                                  |
-| `!`      | Complement -- subtract a $\sigma$ from the group     |
+| Operator | Role                                         |
+| -------- | -------------------------------------------- |
+| `..`     | Range between endpoints                      |
+| `<->`    | Congruence -- zip two equal-length $\Sigma$s |
+| `,`      | Union of $\Sigma$s                           |
+| `!`      | Subtract a $\Sigma$ from the group           |
 
-Precedence binds tightest to loosest: `..` then `<->` then `,`. So `{a..f<->A..F}` is `(a..f)<->(A..F)`, and `{@d,a..f<->A..F}` unions the digits with that zip. The `!` complement subtracts within a union (see [Value Exclusion](#value-exclusion)).
+A $\Sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton $\sigma$ contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
 
-**Endpoint projection.** A $\sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
+> **Note:** Precedence binds tightest to loosest: `..` then `<->` then `,`.
 
 | Written                | Alphabet               | Low   | High      |
 | ---------------------- | ---------------------- | ----- | --------- |
@@ -78,7 +78,7 @@ Precedence binds tightest to loosest: `..` then `<->` then `,`. So `{a..f<->A..F
 
 ### Value Exclusion
 
-`!`$\sigma$ is the complement of $\sigma$. Inside a union the positive arms set the universe and the `!` arms **subtract** from it, so `{...,!`$\sigma$`}` is "everything written, minus $\sigma$". The operand is any $\sigma$ -- a value, a sub-range, or a set:
+Inside a union the positive arms set the universe and the `!` arms **subtract** from it, so `{...,!`$\Sigma$`}` is "everything written, minus $\Sigma$".
 
 ```proto
 {aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
@@ -87,61 +87,27 @@ Precedence binds tightest to loosest: `..` then `<->` then `,`. So `{a..f<->A..F
 {@d,@l,@u,!{0,l,I,O}}      // base58: digits and letters minus the four ambiguous glyphs
 ```
 
-With no positive arm the universe defaults to the ambient alphabet, so `{!x}` is "any value except `x`" -- e.g. `{!**}` matches a run up to the next `**`.
+> **Note:** With no positive arm the universe defaults to the ambient alphabet, so `{!x}` is "any Unicode value except `x`" -- e.g. `{!**}` matches a run up to the next `**`.
 
 ---
 
 ## String-Token Alphabets
 
-When comma-separated items inside `{...}` are multi-character, the class defines a string-token alphabet -- each item is a discrete token (singleton $\sigma$).
+Comma-separated items inside `{...}` can be multi-character. The class defines a string-token alphabet where each item is a discrete token (singleton $\sigma$).
 
 ```proto
 {cat,dog}     // 'cat' or 'dog'
 {http,https}  // 'http' or 'https'
 ```
 
-Token order matches write order. `..` between string tokens defines a lexicographic range -- any string between the two endpoints inclusive:
+Token order matches write order. `..` between string tokens defines a lexicographic range. Any string between the two endpoints inclusive.
 
 ```proto
 {cat,dog,fish}   // 'cat', 'dog', or 'fish'
 {cat..dog}       // 'cat', 'cau', through 'dog'
 ```
 
-> **Note:** Declaring a multi-character range without an explicit $\sigma$ means it uses Unicode by default. `{cat..dog}` includes 'cat', 'dog', and 'cup', but it also includes c$\lambda$t.
-
----
-
-## Congruence
-
-`<->` ($\leftrightarrow$) **zips** two $\sigma$'s position-wise into one folded alphabet: it pairs `L[i]` with `R[i]`, and the i-th position then accepts either spelling. The result keeps `L`'s ordering and cardinality -- only the surface forms fold, never the value axis. So `a` and `A` are one _position_ (`value('a') = value('A')`), not two.
-
-```proto
-{a<->A}                // 1 position: 'a' or 'A'        (the cardinality-1 zip)
-{{a..z}<->{A..Z}}      // 26 positions: {a,A},{b,B},...,{z,Z}
-{cat,dog}<->{CAT,DOG}  // 2 positions: {cat,CAT},{dog,DOG}
-```
-
-The enumerated form is just this zip written out -- a union of singleton zips -- so both forms below denote the same 3-position alphabet:
-
-```proto
-{a..c}<->{A..C}            // zip of two ranges
-{{a<->A},{b<->B},{c<->C}}  // the same thing, written out
-```
-
-**Rules.**
-
-- **Equal cardinality.** `|L|` must equal `|R|`; otherwise it is a compile error. `{a..z}<->{A..C}` (26 vs 3) is rejected -- a mismatch is an incoherent claim ("these 26 letters are those 3"), not a request to truncate.
-- **Distinct spellings** when the result is used for value (a `..` endpoint or `[count]`): every spelling must name exactly one position. `{a..c}<->{b..d}` reuses `b` and `c` across positions, so it is rejected.
-- **n-ary, per-position commutative.** `{\n<->\r<->\r\n}` folds the three newline spellings into one position; order within a position does not matter.
-
-Under `[count]`, repetition-equality is checked against the _position_, so the folded spellings count as the same value:
-
-```proto
-{a<->A}[2]               // 'aa', 'aA', 'Aa', 'AA' -- contrast {a,A}[2]: only 'aa' or 'AA'
-{{a..z}<->{A..Z}}[2]     // same letter twice, any casing -- 'hh', 'hH', 'Hh', 'HH'; 'He' does not
-```
-
-Folding is the one thing union and range cannot express: it collapses two ordered tracks onto a single axis _without_ losing place value, which is why `@hex` can be base-16 and case-insensitive at once (`{@d},{a..f}<->{A..F}`).
+> **Note:** Multi-character ranges without an explicitly declared $\Sigma$ use Unicode by default, so `{cat..dog}` can include 'c$\lambda$t'.
 
 ---
 
@@ -165,32 +131,90 @@ Folding is the one thing union and range cannot express: it collapses two ordere
 
 ---
 
-## Transformers
+### Padding
 
-`=>` applies a replacement template to a match:
+A plain value range matches only the **canonical** form of each value. `{{@d}..255}` matches '7' but not '007'. Padding relaxes the width:
+
+| Form          | Width                |
+| ------------- | -------------------- |
+| `{N:expr}`    | Exactly `N`          |
+| `{N..M:expr}` | `N` through `M`      |
+| `{:expr}`     | 1 through `len(max)` |
 
 ```proto
-{**}{!**}{**} => {!**} => <strong>{{.}}</strong>
-{*}{!*}{*}    => {!*}  => <em>{{.}}</em>
+{2:{@d}..99}     // '00', '01', through '99'
+{3:{@d}..255}    // '000', '001', through '255'
+{2..3:{@d}..255} // '00', '000', through '255'
+{:{@d}..255}     // '0', '00', through '255'
 ```
 
-Chains: `pattern => template => pattern => template`. `{{.}}` in a chained template is deferred -- it resolves to the result of applying the remaining chain to the current match, not the raw text.
+---
 
-- At the **top level**, every match of the leading pattern is transformed, yielding one result per match; non-matches are dropped. A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
-- A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved -- and the result is substituted for `{{.}}`.
+## Congruence
 
-### Extract vs. replace (`=>` / `=>+`)
-
-The arrow has two forms, deciding the statement's output:
-
-- `=>` **extracts** -- returns the list of rendered matches, dropping the text between them.
-- `=>+` **replaces** -- splices each rendered match back into the source and returns the whole string, keeping the surrounding text verbatim. This is the document-transform mode: wrap the matches, keep the prose.
-
-The statement's mode is taken from the **first** arrow.
+`<->` ($\leftrightarrow$) **zips** two $\Sigma$s position-wise into one folded alphabet. It pairs `L[i]` with `R[i]`, and the i-th position then accepts either spelling. Only the surface forms fold, never the value axis. So `a` and `A` are one _position_ (`value('a') = value('A')`), not two.
 
 ```proto
-{a..z} =>  <p>{{.}}</p>   // 'a1b2' -> ['<p>a</p>', '<p>b</p>']
-{a..z} =>+ <p>{{.}}</p>   // 'a1b2' -> '<p>a</p>1<p>b</p>2'
+{a<->A}                // 1 position: 'a' or 'A'        (the cardinality-1 zip)
+{{a..z}<->{A..Z}}      // 26 positions: {a,A},{b,B},...,{z,Z}
+{cat,dog}<->{CAT,DOG}  // 2 positions: {cat,CAT},{dog,DOG}
+```
+
+The enumerated form is just this zip written out -- a union of singleton zips -- so both forms below denote the same 3-position alphabet:
+
+```proto
+{a..c}<->{A..C}            // zip of two ranges
+{{a<->A},{b<->B},{c<->C}}  // the same thing, written out
+{a<->A}[2]                 // 'aa', 'aA', 'Aa', 'AA'
+{{a..z}<->{A..Z}}[2]       // 'hh', 'hH', 'Hh', 'HH'; 'He' does not
+```
+
+> **Note:** Under `[count]`, repetition-equality is checked against the _position_, so the folded spellings count as the same value:
+
+### Rules
+
+- **Equal cardinality** -- `|L|` must equal `|R|` otherwise it is a compile error. E.g. `{a..z}<->{A..C}` (26 vs 3) is rejected.
+- **Distinct spellings** -- Every spelling must name exactly one position. `{a..c}<->{b..d}` reuses `b` and `c` across positions, so it is rejected.
+- **n-ary, per-position commutative** -- `{\n<->\r<->\r\n}` folds the three newline spellings into one position, so order within a position does not matter.
+
+---
+
+## Captures
+
+Every `{...}` creates a capture group, numbered left to right from **0**. Sub-captures use dot notation.
+
+| Reference  | Resolves to                  |
+| ---------- | ---------------------------- |
+| `{{.}}`    | Full matched text            |
+| `{{N}}`    | Group N                      |
+| `{{N.M}}`  | Sub-group M of group N       |
+| `{{N..M}}` | Groups N through M inclusive |
+| `{{#N}}`   | Repeat count of group N      |
+
+So, given the input string: `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..] {Sphinx}{of{black}{quartz}}`:
+
+| Reference  | Resolves to               | Explanation                     |
+| ---------- | ------------------------- | ------------------------------- |
+| `{{.}}`    | `### Sphinxofblackquartz` | The full matched text.          |
+| `{{0}}`    | `###`                     | Group 0                         |
+| `{{2}}`    | `ofblackquartz`           | Group 2                         |
+| `{{2.0}}`  | `black`                   | First sub-group inside group 2  |
+| `{{2.1}}`  | `quartz`                  | Second sub-group inside group 2 |
+| `{{1..2}}` | `Sphinxofblackquartz`     | Span from group 1 to group 2.   |
+| `{{#0}}`   | `3`                       | Repeat count of group 0         |
+
+---
+
+## Transformers
+
+`=>` applies a replacement template to a match: `pattern => template => pattern => template`. `{{.}}` in a chained template is deferred to the next match expression.
+
+- A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
+- A **deferred `{{.}}`** applies the remaining chain to the current match **in place** -- matched spans are replaced, surrounding text is preserved.
+
+```proto
+{**}{!**}{**} => <strong>{{1}}</strong>
+{*}{!*}{*} => <em>{{1}}</em>
 ```
 
 ---

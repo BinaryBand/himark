@@ -74,9 +74,10 @@ def test_template_ref_full_match():
     assert isinstance(node, t.FullMatchNode)
 
 
-def test_template_ref_numbered_rejected():
-    with pytest.raises(CompileError):
-        parse("{{0}}")
+def test_template_ref_numbered_group():
+    node = parse("{{0}}").children[0]
+    assert isinstance(node, t.GroupRefNode)
+    assert node.index == [0]
 
 
 def test_escape_newline():

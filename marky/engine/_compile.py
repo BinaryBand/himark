@@ -553,15 +553,29 @@ class GroupEl:
     matcher: Matcher
     min_reps: int
     max_reps: int | None
+    count_ref: int | None
 
 
-Element = LiteralEl | GroupEl
+@dataclass(slots=True)
+class SeqGroupEl:
+    """A grouping brace `{of{black}{quartz}}`: one capture group whose sub-element
+    brace groups become its sub-captures. Matched by the loop, not a Matcher."""
+
+    elements: "list[Element]"
+    min_reps: int
+    max_reps: int | None
+    count_ref: int | None
 
 
-def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
+Element = LiteralEl | GroupEl | SeqGroupEl
+
+
+def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
     if isinstance(count, t.CountRange):
-        return count.min, count.max
-    return 1, 1
+        return count.min, count.max, None
+    if isinstance(count, t.CountRef):
+        return 1, 1, count.index
+    return 1, 1, None
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
@@ -573,8 +587,14 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-            min_reps, max_reps = _count_config(child.count)
-            elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))
+            min_reps, max_reps, count_ref = _count_config(child.count)
+            if isinstance(child.semantic, t.SequenceNode):
+                sub = compile_pattern(t.RootNode(children=child.semantic.children))
+                elements.append(SeqGroupEl(sub, min_reps, max_reps, count_ref))
+            else:
+                elements.append(
+                    GroupEl(lower(child.semantic), min_reps, max_reps, count_ref)
+                )
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements
