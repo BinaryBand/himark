@@ -20,8 +20,18 @@ except ImportError:
 
 def test_macros_present():
     for name in (
-        "d", "l", "u", "s", "w", "x",
-        "hex", "b32", "b58", "b64", "ascii", "uni",
+        "d",
+        "l",
+        "u",
+        "s",
+        "w",
+        "x",
+        "hex",
+        "b32",
+        "b58",
+        "b64",
+        "ascii",
+        "uni",
     ):
         assert name in MACROS
 

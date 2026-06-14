@@ -1,7 +1,9 @@
 """Render a template step (the right-hand side of `=>`) against a match.
 
-Each template node is dispatched by class through a small registry.
-`full_match_override` carries the deferred `{{.}}` value when rendering mid-chain.
+Each template node is dispatched by class through a small registry. A chained
+template forwards its references through the rest of the chain in
+`engine/__init__.py` (the reference conveyor); rendering here is always a plain
+node-by-node concatenation against one `Match`.
 """
 
 from collections.abc import Callable
@@ -66,23 +68,13 @@ def is_template(tree: t.RootNode) -> bool:
     )
 
 
-def render(
-    template_tree: t.RootNode,
-    match: Match,
-    full_match_override: str | None = None,
-) -> str:
-    """Render a template against a match.
-
-    `full_match_override` supplies the deferred value for `{{.}}` in a chained
-    template — the result of applying the remaining chain to the current match.
-    When None, `{{.}}` resolves to the raw matched text.
-    """
+def render(template_tree: t.RootNode, match: Match) -> str:
+    """Render a template against a match: literal leaves verbatim, reference
+    nodes through their registered renderer, concatenated in order."""
     parts: list[str] = []
     for node in template_tree.children:
         if isinstance(node, t.LeafNode):
             parts.append(node.content)
-        elif isinstance(node, t.FullMatchNode) and full_match_override is not None:
-            parts.append(full_match_override)
         else:
             renderer = _RENDERERS.get(type(node))
             if renderer is not None:

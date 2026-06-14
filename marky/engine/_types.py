@@ -38,7 +38,3 @@ class Match:
     @property
     def sub_groups(self) -> list[list[str]]:
         return [[s.text for s in c.subs] for c in self.captures]
-
-    @property
-    def count_refs(self) -> dict[int, int]:
-        return {i: len(c.reps) for i, c in enumerate(self.captures)}

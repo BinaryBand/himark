@@ -12,7 +12,6 @@ def matches(pattern, text):
 # ── Macro expansion (text level) ──────────────────────────────────────────────
 
 
-
 def test_macro_simple_range():
     assert phase1.preprocess("{@d}") == "{0..9}"
     assert phase1.preprocess("{@l}") == "{a..z}"

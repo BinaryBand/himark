@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.7.2-experimental  
+**Version:** 0.7.3-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -194,13 +194,14 @@ The enumerated form is just this zip written out -- a union of singleton zips --
 
 Every `{...}` creates a capture group, numbered left to right from **0**. Sub-captures use dot notation.
 
-| Reference  | Resolves to                  |
-| ---------- | ---------------------------- |
-| `{{.}}`    | Full matched text            |
-| `{{N}}`    | Group N                      |
-| `{{N.M}}`  | Sub-group M of group N       |
-| `{{N..M}}` | Groups N through M inclusive |
-| `{{#N}}`   | Repeat count of group N      |
+| Reference  | Resolves to                            |
+| ---------- | -------------------------------------- |
+| `{{.}}`    | Full matched text                      |
+| `{{N}}`    | Group N                                |
+| `{{N.M}}`  | Sub-group M of group N                 |
+| `{{N..M}}` | Groups N through M inclusive           |
+| `{{#N}}`   | Repeat count of group N                |
+| `{{#N.M}}` | Repeat count of sub-group M of group N |
 
 So, given the input string: `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..] {Sphinx}{of{black}{quartz}}`:
 

@@ -276,9 +276,7 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 # Singleton {…} → literal match of its single value
                 return t.LiteralNode(content=sval)
             inner = _alpha(part)
-            if isinstance(
-                inner, (t.GroupClassNode, t.ZipNode, t.FullAlphaNode)
-            ):
+            if isinstance(inner, (t.GroupClassNode, t.ZipNode, t.FullAlphaNode)):
                 # Already a full class / run; wrapping would only restate its
                 # greedy-run semantics (and `{a..z}` now resolves to a full
                 # alpha on its own, so `{ {a..z} }` must not double-wrap).

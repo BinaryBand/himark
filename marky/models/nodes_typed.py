@@ -207,9 +207,7 @@ SemanticNode: TypeAlias = (
 
 TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
 
-Node: TypeAlias = (
-    RootNode | LeafNode | BraceGroupNode | SemanticNode | TemplateNode
-)
+Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode | TemplateNode
 
 SemanticClasses = (
     LiteralNode,

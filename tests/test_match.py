@@ -438,6 +438,20 @@ def test_count_ref_in_count_position():
     assert matches("{a}[2..5]{b}[{{#0}}]", "aabbb") == ["aabb"]
 
 
+def test_dotted_count_ref_resolves_sub_group():
+    # {{#N.M}} is the repeat count of sub-group M inside group N — here group 0's
+    # first sub-capture {a}[1..] matched three times.
+    assert execute(parser.parse("{{a}[1..]{b}} => {{#0.0}}"), "aaab") == ["3"]
+    # The same dotted path works in a [count] modifier: {c} repeats #0.0 times.
+    assert matches("{{a}[1..]{b}}{c}[{{#0.0}}]", "aaabccc") == ["aaabccc"]
+
+
+def test_congruence_with_whitespace_operand():
+    # Regression: a `<->` operand may be pure whitespace. `{a<-> }` folds 'a' and
+    # ' ' into one position (this previously raised "Unexpected whitespace").
+    assert matches("{a<-> }", "a a") == ["a a"]
+
+
 def test_span_ref_groups_inclusive():
     # {{0..2}} spans from group 0's start to group 2's end.
     assert execute(parser.parse("{@d}{@l}{@d} => [{{0..2}}]"), "1a2 3b4") == [

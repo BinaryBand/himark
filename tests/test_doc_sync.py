@@ -32,11 +32,7 @@ def test_doc_captures_example():
     pat = "{#}[1..]{Sphinx}{of{black}{quartz}}"
     tgt = "###Sphinxofblackquartz"
     out = execute(
-        parser.parse(
-            pat + " => 0={{0}} 2={{2}} 2.0={{2.0}} 2.1={{2.1}} #0={{#0}}"
-        ),
+        parser.parse(pat + " => 0={{0}} 2={{2}} 2.0={{2.0}} 2.1={{2.1}} #0={{#0}}"),
         tgt,
     )
     assert out == ["0=### 2=ofblackquartz 2.0=black 2.1=quartz #0=3"]
-
-

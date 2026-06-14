@@ -25,7 +25,9 @@ class Alphabet:
 
     __slots__ = ("groups", "base", "_index")
 
-    def __init__(self, groups: list[list[str]] | str, *, distinct: bool = False) -> None:
+    def __init__(
+        self, groups: list[list[str]] | str, *, distinct: bool = False
+    ) -> None:
         if isinstance(groups, str):
             groups = [[c] for c in groups]
         members = [m for grp in groups for m in grp]
