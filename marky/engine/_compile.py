@@ -470,11 +470,16 @@ class LiteralEl:
     text: str
 
 
+# A repeatable element's `count_ref` (when not None) is the group index of a
+# `[#i]` count: its min/max reps resolve to that group's rep count at match time.
+
+
 @dataclass(slots=True)
 class GroupEl:
     matcher: Matcher
     min_reps: int
     max_reps: int | None
+    count_ref: int | None = None
 
 
 @dataclass(slots=True)
@@ -485,6 +490,7 @@ class SeqGroupEl:
     elements: "list[Element]"
     min_reps: int
     max_reps: int | None
+    count_ref: int | None = None
 
 
 @dataclass(slots=True)
@@ -496,6 +502,7 @@ class BackRefEl:
     group: int
     min_reps: int
     max_reps: int | None
+    count_ref: int | None = None
 
 
 @dataclass(slots=True)
@@ -506,15 +513,21 @@ class CountRefEl:
     group: int
     min_reps: int
     max_reps: int | None
+    count_ref: int | None = None
 
 
 Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl
 
 
-def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
+def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
+    """Resolve a count into (min_reps, max_reps, count_ref). A `[#i]` reference
+    carries the group index in count_ref; its min/max are placeholders the loop
+    overrides with the referenced group's actual rep count."""
+    if isinstance(count, t.CountRefSpec):
+        return 1, 1, count.group
     if isinstance(count, t.CountRange):
-        return count.min, count.max
-    return 1, 1
+        return count.min, count.max, None
+    return 1, 1, None
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
@@ -526,20 +539,22 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-            min_reps, max_reps = _count_config(child.count)
+            min_reps, max_reps, count_ref = _count_config(child.count)
             if isinstance(child.semantic, t.SequenceNode):
                 sub = compile_pattern(t.RootNode(children=child.semantic.children))
-                elements.append(SeqGroupEl(sub, min_reps, max_reps))
+                elements.append(SeqGroupEl(sub, min_reps, max_reps, count_ref))
             elif isinstance(child.semantic, t.BackRefNode):
                 elements.append(
-                    BackRefEl(child.semantic.group, min_reps, max_reps)
+                    BackRefEl(child.semantic.group, min_reps, max_reps, count_ref)
                 )
             elif isinstance(child.semantic, t.CountRefNode):
                 elements.append(
-                    CountRefEl(child.semantic.group, min_reps, max_reps)
+                    CountRefEl(child.semantic.group, min_reps, max_reps, count_ref)
                 )
             else:
-                elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))
+                elements.append(
+                    GroupEl(lower(child.semantic), min_reps, max_reps, count_ref)
+                )
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements

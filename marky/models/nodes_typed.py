@@ -14,7 +14,16 @@ class CountRange:
     max: int | None
 
 
-CountSpec: TypeAlias = CountRange
+@dataclass(slots=True)
+class CountRefSpec:
+    """A count-position reference `[#i]`: repeat exactly as many times as capture
+    group `i` did. The bound is unknown until match time, when it resolves to
+    group `i`'s repetition count."""
+
+    group: int
+
+
+CountSpec: TypeAlias = CountRange | CountRefSpec
 
 
 # -----------------------------

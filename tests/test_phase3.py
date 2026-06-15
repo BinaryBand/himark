@@ -290,6 +290,14 @@ def test_count_ref_multi_digit_group():
     assert node.group == 7
 
 
+def test_count_position_ref_parses():
+    from marky.parser.phase3 import _parse_count
+
+    spec = _parse_count("#0")
+    assert spec.__class__.__name__ == "CountRefSpec"
+    assert spec.group == 0
+
+
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 

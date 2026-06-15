@@ -528,3 +528,26 @@ def test_count_ref_backs_off_to_satisfy():
 
 def test_count_ref_undefined_group_fails():
     assert matches("{#0}", "3") == []
+
+
+# ── Count-position reference [#i]: repeat exactly group i's repeat count ───────
+
+
+def test_count_position_ref_equal_counts():
+    # group 0 repeats 'a'; {b}[#0] then matches exactly that many 'b's.
+    assert matches("{a}[1..]-{b}[#0]", "aaa-bbb") == ["aaa-bbb"]
+
+
+def test_count_position_ref_adapts():
+    # A 2-rep group 0 demands exactly 2 b's.
+    assert matches("{a}[1..]-{b}[#0]", "aa-bb") == ["aa-bb"]
+
+
+def test_count_position_ref_caps_at_count():
+    # [#0] is an exact count, so a 4th 'b' is left unconsumed.
+    assert matches("{a}[1..]-{b}[#0]", "aaa-bbbb") == ["aaa-bbb"]
+
+
+def test_count_position_ref_backs_off_when_short():
+    # 3 a's would need 3 b's; with only 2 present the engine finds the 2=2 sub-match.
+    assert matches("{a}[1..]-{b}[#0]", "aaa-bb") == ["aa-bb"]

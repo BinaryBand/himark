@@ -74,6 +74,20 @@ def _match_elements(
     return current
 
 
+def _reps_bounds(el: Element, state: _State) -> tuple[int, int | None] | None:
+    """Effective (min_reps, max_reps) for a repeatable element. A `[#i]` count
+    (`count_ref` set) resolves to group i's exact repetition count at match time;
+    an undefined referenced group returns None, failing the element."""
+    ref = el.count_ref
+    if ref is None:
+        return el.min_reps, el.max_reps
+    caps = state.root.captures
+    if ref >= len(caps):
+        return None
+    k = len(caps[ref].reps)
+    return k, k
+
+
 def _match_element(el: Element, text: str, pos: int, state: _State) -> int | None:
     if isinstance(el, LiteralEl):
         s = el.text
@@ -121,24 +135,33 @@ def _match_referent(
 
 
 def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | None:
+    bounds = _reps_bounds(el, state)
+    if bounds is None:
+        return None
     # The referent is the text group i captured; an unrecorded group is undefined.
     root_caps = state.root.captures
     referent = root_caps[el.group].text if el.group < len(root_caps) else None
-    return _match_referent(referent, el.min_reps, el.max_reps, text, pos, state)
+    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
 
 
 def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State) -> int | None:
+    bounds = _reps_bounds(el, state)
+    if bounds is None:
+        return None
     # The referent is group i's decimal repetition count (len of its rep pieces).
     root_caps = state.root.captures
     referent = str(len(root_caps[el.group].reps)) if el.group < len(root_caps) else None
-    return _match_referent(referent, el.min_reps, el.max_reps, text, pos, state)
+    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────
 
 
 def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int | None:
-    min_reps, max_reps = el.min_reps, el.max_reps
+    bounds = _reps_bounds(el, state)
+    if bounds is None:
+        return None
+    min_reps, max_reps = bounds
 
     def once(p: int) -> tuple[int, list[Capture]] | None:
         sub = _State(root=state.root)
@@ -181,7 +204,10 @@ def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int 
 
 
 def _match_group(el: GroupEl, text: str, pos: int, state: _State) -> int | None:
-    min_reps, max_reps = el.min_reps, el.max_reps
+    bounds = _reps_bounds(el, state)
+    if bounds is None:
+        return None
+    min_reps, max_reps = bounds
 
     def record(end: int, reps: list[str]) -> int:
         state.captures.append(Capture(text[pos:end], (pos, end), reps))

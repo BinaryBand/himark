@@ -341,6 +341,10 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
 def _parse_count(src: str) -> t.CountSpec:
     """Parse a count modifier string into a count descriptor."""
     src = src.strip()
+    # `[#i]` — repeat exactly group i's repetition count (resolved at match time).
+    m = _COUNTREF_RE.fullmatch(src)
+    if m:
+        return t.CountRefSpec(group=int(m.group(1)))
     m = re.fullmatch(r"(\d*)(\.\.)?(\d*)", src)
     if m and (m.group(1) or m.group(2)):
         lo, dots, hi = m.groups()
