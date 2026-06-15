@@ -502,3 +502,29 @@ def test_back_ref_top_level_doubled_char():
 def test_back_ref_undefined_group_fails():
     # {$0} with no prior group has nothing to reference, so it cannot match.
     assert matches("{$0}", "anything") == []
+
+
+# ── Count-reference {#i}: match the decimal repeat count of an earlier group ───
+
+
+def test_count_ref_matches_repeat_count():
+    # group 0 repeats a 3-letter word [2..9]; {#0} is its repeat count rendered
+    # in decimal, so "abcabcabc repeated 3 times" matches as a whole.
+    pat = "{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}"
+    assert matches(pat, "abcabcabc repeated 3 times") == ["abcabcabc repeated 3 times"]
+
+
+def test_count_ref_wrong_count_fails():
+    # The trailing number must equal the actual repeat count.
+    pat = "{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}"
+    assert matches(pat, "abcabcabc repeated 4 times") == []
+
+
+def test_count_ref_backs_off_to_satisfy():
+    # Greedy "aaa" is 3 reps and would need "x3"; with "x2" present the value-equal
+    # backoff settles on "aa" (2 reps) so {#0} = 2 matches.
+    assert matches("{a..z}[1..]x{#0}", "aaax2") == ["aax2"]
+
+
+def test_count_ref_undefined_group_fails():
+    assert matches("{#0}", "3") == []

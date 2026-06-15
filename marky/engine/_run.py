@@ -8,7 +8,14 @@ interface, decided once at compile time in `_compile.py`.
 
 from __future__ import annotations
 
-from marky.engine._compile import BackRefEl, Element, GroupEl, LiteralEl, SeqGroupEl
+from marky.engine._compile import (
+    BackRefEl,
+    CountRefEl,
+    Element,
+    GroupEl,
+    LiteralEl,
+    SeqGroupEl,
+)
 from marky.engine._types import Capture, Match
 
 
@@ -75,25 +82,31 @@ def _match_element(el: Element, text: str, pos: int, state: _State) -> int | Non
         return _match_seq_group(el, text, pos, state)
     if isinstance(el, BackRefEl):
         return _match_back_ref(el, text, pos, state)
+    if isinstance(el, CountRefEl):
+        return _match_count_ref(el, text, pos, state)
     return _match_group(el, text, pos, state)
 
 
-# ── Self-reference `{$i}`: match the literal text group i captured ─────────────
+# ── Self-references `{$i}` / `{#i}`: match a value read from an earlier group ───
 
 
-def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | None:
-    min_reps, max_reps = el.min_reps, el.max_reps
+def _match_referent(
+    referent: str | None,
+    min_reps: int,
+    max_reps: int | None,
+    text: str,
+    pos: int,
+    state: _State,
+) -> int | None:
+    """Match `referent` (a value pulled from the running captures), repeated per
+    the count. `referent is None` means the referenced group is undefined."""
 
     def record(end: int, reps: list[str]) -> int:
         state.captures.append(Capture(text[pos:end], (pos, end), reps))
         return end
 
-    # The referent is read from the top-level captures recorded so far. A group
-    # not yet captured (forward/undefined reference) makes the back-ref fail.
-    root_caps = state.root.captures
-    if el.group >= len(root_caps):
+    if referent is None:
         return record(pos, []) if min_reps == 0 else None
-    referent = root_caps[el.group].text
 
     reps: list[str] = []
     current = pos
@@ -105,6 +118,20 @@ def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | 
     if len(reps) >= max(min_reps, 1):
         return record(current, reps)
     return record(pos, []) if min_reps == 0 else None
+
+
+def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | None:
+    # The referent is the text group i captured; an unrecorded group is undefined.
+    root_caps = state.root.captures
+    referent = root_caps[el.group].text if el.group < len(root_caps) else None
+    return _match_referent(referent, el.min_reps, el.max_reps, text, pos, state)
+
+
+def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State) -> int | None:
+    # The referent is group i's decimal repetition count (len of its rep pieces).
+    root_caps = state.root.captures
+    referent = str(len(root_caps[el.group].reps)) if el.group < len(root_caps) else None
+    return _match_referent(referent, el.min_reps, el.max_reps, text, pos, state)
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────

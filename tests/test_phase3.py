@@ -278,6 +278,18 @@ def test_escaped_dollar_is_literal():
     assert node.content == "$0"
 
 
+def test_count_ref_resolves():
+    node = first_semantic("{#0}")
+    assert node.type == "count_ref"
+    assert node.group == 0
+
+
+def test_count_ref_multi_digit_group():
+    node = first_semantic("{#7}")
+    assert node.type == "count_ref"
+    assert node.group == 7
+
+
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 

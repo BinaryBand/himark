@@ -498,7 +498,17 @@ class BackRefEl:
     max_reps: int | None
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl
+@dataclass(slots=True)
+class CountRefEl:
+    """A count-reference `{#i}`: matches the decimal repetition count of group
+    `i`, read from the running capture list at match time (like `BackRefEl`)."""
+
+    group: int
+    min_reps: int
+    max_reps: int | None
+
+
+Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl
 
 
 def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
@@ -523,6 +533,10 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
             elif isinstance(child.semantic, t.BackRefNode):
                 elements.append(
                     BackRefEl(child.semantic.group, min_reps, max_reps)
+                )
+            elif isinstance(child.semantic, t.CountRefNode):
+                elements.append(
+                    CountRefEl(child.semantic.group, min_reps, max_reps)
                 )
             else:
                 elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))

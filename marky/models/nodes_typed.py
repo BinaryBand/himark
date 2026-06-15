@@ -152,6 +152,17 @@ class BackRefNode:
     group: int = 0
 
 
+@dataclass(slots=True)
+class CountRefNode:
+    """A count-reference `{#i}`: matches the decimal *repetition count* of
+    capture group `i` (`{…}[2..9]` then `{ repeated {#0} times}`). Like a
+    back-reference, the value is read from the running capture list at match
+    time — here it is `len(reps)` rendered in base 10."""
+
+    type: Literal["count_ref"] = "count_ref"
+    group: int = 0
+
+
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
@@ -163,6 +174,7 @@ SemanticNode: TypeAlias = (
     | PaddedNode
     | SequenceNode
     | BackRefNode
+    | CountRefNode
 )
 
 Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
@@ -178,4 +190,5 @@ SemanticClasses = (
     PaddedNode,
     SequenceNode,
     BackRefNode,
+    CountRefNode,
 )
