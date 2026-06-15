@@ -18,14 +18,21 @@ def test_macro_simple_range():
     assert phase1.preprocess("{@u}") == "{A..Z}"
 
 
-def test_macro_w_zip():
-    # @w folds case with one <-> zip, plus '_'.
-    assert phase1.preprocess("{@w}") == "{{a..z}<->{A..Z},_}"
+# The expanded value of @w: 26 case-fold pairs in one brace, then ',_'.
+_W = (
+    "{" + ",".join(f"{{{c},{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz") + "},_"
+)
+
+
+def test_macro_w_case_fold_pairs():
+    # @w folds case by enumerating each letter and its capital as a congruence
+    # class ({a,A}, …), plus '_'.
+    assert phase1.preprocess("{@w}") == "{" + _W + "}"
 
 
 def test_macro_nested_expansion():
     # @hex references @d and @w; expansion repeats until stable.
-    assert phase1.preprocess("{@hex}") == "{{0..9},{{{a..z}<->{A..Z},_}..f}}"
+    assert phase1.preprocess("{@hex}") == "{{0..9},{{" + _W + "}..f}}"
 
 
 def test_macro_whitespace_set():

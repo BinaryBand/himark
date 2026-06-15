@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias, TypeGuard
+from typing import Literal, TypeAlias
 
 # -----------------------------
 # Shared value objects
@@ -14,12 +14,7 @@ class CountRange:
     max: int | None
 
 
-@dataclass(slots=True)
-class CountRef:
-    index: list[int]
-
-
-CountSpec: TypeAlias = CountRange | CountRef
+CountSpec: TypeAlias = CountRange
 
 
 # -----------------------------
@@ -34,8 +29,8 @@ class RootNode:
     # Statement-level output mode, set on the first step only: True (`=>+`)
     # splices rendered matches back into the source; False (`=>`) extracts them.
     replace: bool = False
-    # Inner-arrow `=>+` (pipe): this template's output is spliced at the
-    # preceding pattern's matches and the chain continues on the result.
+    # Inner-arrow `=>+` (pipe): this step's output is spliced at the preceding
+    # pattern's matches and the chain continues on the result.
     piped: bool = False
 
 
@@ -52,20 +47,6 @@ class BraceGroupNode:
     semantic: SemanticNode | None = None
     count: CountSpec | None = None
     count_src: str | None = None
-
-
-@dataclass(slots=True)
-class RunUntilNode:
-    """The `>>{expr}` half of an infix `{start}>>{expr}` run: a non-capturing
-    forward skip from the preceding (start) construct until the terminator
-    `{expr}` first matches ahead, stopping with the cursor *before* the
-    terminator (so the next construct matches it). The skipped text is part of
-    the overall match but the skip adds no capture group, so `{{N}}` indices
-    count only the real constructs. The start construct is the ordinary node to
-    its left; only the skip is modelled here."""
-
-    type: Literal["run_until"] = "run_until"
-    terminator: BraceGroupNode | None = None
 
 
 # -----------------------------
@@ -128,27 +109,18 @@ class ComplementNode:
 
 
 @dataclass(slots=True)
-class TokenSetNode:
-    type: Literal["token_set"] = "token_set"
-    tokens: list[str] = field(default_factory=list)
-    exclusions: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True)
 class GroupClassNode:
+    """The single congruence primitive: an ordered list of congruence groups,
+    each a set of interchangeable spellings of one position.
+
+    A bare comma-list `{a,A}` is one group (`[[a, A]]`) — its members are
+    interchangeable, so `[2]` folds case (`aa`, `aA`, `Aa`, `AA`). An ordered
+    alphabet of classes `{{a,A},{b,B},…}` is many groups (`[[a,A],[b,B],…]`),
+    built by a union of single-group classes. This is `~` in the `(Σ, ≤, ~)`
+    model; `..` builds `≤` (ordered ranges) instead."""
+
     type: Literal["group_class"] = "group_class"
     groups: list[list[str]] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class ZipNode:
-    """A congruence (`<->`): an n-ary position-wise zip of its tracks into one
-    folded alphabet. Each track is a $\\sigma$; the i-th position accepts the
-    i-th spelling of any track. Equal cardinality and distinct spellings are
-    checked when the zip is lowered (it needs each track's ordered groups)."""
-
-    type: Literal["zip"] = "zip"
-    tracks: list[SemanticNode] = field(default_factory=list)
 
 
 @dataclass(slots=True, kw_only=True)
@@ -168,40 +140,11 @@ class PaddedNode:
 class SequenceNode:
     """A grouping brace: a `{...}` whose interior is a concatenation of constructs
     (`{of{black}{quartz}}`) rather than one alphabet expression. It is a single
-    capture group whose nested brace children become its sub-captures (`{{N.M}}`).
+    capture group whose nested brace children become its sub-captures.
     `children` are the resolved phase-3 nodes of the interior."""
 
     type: Literal["sequence"] = "sequence"
     children: list[Node] = field(default_factory=list)
-
-
-# -----------------------------
-# Template/reference nodes
-# -----------------------------
-
-
-@dataclass(slots=True)
-class FullMatchNode:
-    type: Literal["full_match"] = "full_match"
-
-
-@dataclass(slots=True)
-class GroupRefNode:
-    type: Literal["group_ref"] = "group_ref"
-    index: list[int] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class SpanRefNode:
-    type: Literal["span_ref"] = "span_ref"
-    start: list[int] = field(default_factory=list)
-    end: list[int] = field(default_factory=list)
-
-
-@dataclass(slots=True)
-class CountRefNode:
-    type: Literal["count_ref"] = "count_ref"
-    index: list[int] = field(default_factory=list)
 
 
 SemanticNode: TypeAlias = (
@@ -212,18 +155,12 @@ SemanticNode: TypeAlias = (
     | ValueRangeNode
     | UnionNode
     | ComplementNode
-    | TokenSetNode
     | GroupClassNode
-    | ZipNode
     | PaddedNode
     | SequenceNode
 )
 
-TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
-
-Node: TypeAlias = (
-    RootNode | LeafNode | BraceGroupNode | RunUntilNode | SemanticNode | TemplateNode
-)
+Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
 
 SemanticClasses = (
     LiteralNode,
@@ -233,21 +170,7 @@ SemanticClasses = (
     ValueRangeNode,
     UnionNode,
     ComplementNode,
-    TokenSetNode,
     GroupClassNode,
-    ZipNode,
     PaddedNode,
     SequenceNode,
 )
-
-TemplateClasses = (
-    FullMatchNode,
-    GroupRefNode,
-    SpanRefNode,
-    CountRefNode,
-)
-
-
-def is_template(node: Node) -> TypeGuard[TemplateNode]:
-    """Runtime check + narrowing for the template-node union."""
-    return isinstance(node, TemplateClasses)

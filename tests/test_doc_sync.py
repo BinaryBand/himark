@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 
 from marky import parser
-from marky.engine import execute
 from marky.engine import find_matches
 from marky.macros import MACROS
 
@@ -22,17 +21,17 @@ def test_doc_macro_table_matches_macros_toml():
 
 
 def test_doc_congruence_pair_repetition():
-    # Spec headline: {a<->A}[2] accepts 'aa', 'aA', 'Aa', 'AA'.
-    assert matches("{a<->A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
+    # Spec headline: {a,A}[2] accepts 'aa', 'aA', 'Aa', 'AA' (comma folds a class).
+    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
 def test_doc_captures_example():
     # The Captures section: {#}[1..]{Sphinx}{of{black}{quartz}} numbers groups
     # 0,1,2 left-to-right, with {black}/{quartz} as sub-captures of group 2.
-    pat = "{#}[1..]{Sphinx}{of{black}{quartz}}"
-    tgt = "###Sphinxofblackquartz"
-    out = execute(
-        parser.parse(pat + " => 0={{0}} 2={{2}} 2.0={{2.0}} 2.1={{2.1}} #0={{#0}}"),
-        tgt,
+    ms = find_matches(
+        parser.parse("{#}[1..]{Sphinx}{of{black}{quartz}}")[0],
+        "###Sphinxofblackquartz",
     )
-    assert out == ["0=### 2=ofblackquartz 2.0=black 2.1=quartz #0=3"]
+    assert len(ms) == 1
+    assert ms[0].groups == ["###", "Sphinx", "ofblackquartz"]
+    assert ms[0].sub_groups[2] == ["black", "quartz"]

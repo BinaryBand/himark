@@ -3,7 +3,8 @@
 # Every entry is a plain text macro: `@name` expands to the Himark source on the
 # right, exactly as if the user had typed it. Macros may reference other macros;
 # expansion repeats until the text is stable. The engine has no built-in
-# alphabet knowledge; it only sees the ranges/unions/congruences these expand to.
+# alphabet knowledge; it only sees the ranges and congruence classes these
+# expand to (`..` is an ordered range, `,` a congruence class).
 #
 # A bare name (no `@`) is literal text — `{dec}` matches the string "dec",
 # `{@d}` matches a decimal digit.
@@ -17,10 +18,11 @@ u = "A..Z"
 # upper, then lower keeps the canonical Bitcoin ordering.
 b58 = "{@d},{@u},{@l},!{0,l,I,O}"
 
-# Character sets. @w folds case with one <-> zip (a..z paired to A..Z), so a
-# letter and its capital share a single position.
+# Character sets. @w folds case by enumerating each letter and its capital as one
+# congruence class ({a,A}, {b,B}, …), so a letter and its capital share a single
+# ordered position. The `,_` adds underscore as a final position.
 s = "\n,\r, ,\t"
-w = "{@l}<->{@u},_"
+w = "{{a,A},{b,B},{c,C},{d,D},{e,E},{f,F},{g,G},{h,H},{i,I},{j,J},{k,K},{l,L},{m,M},{n,N},{o,O},{p,P},{q,Q},{r,R},{s,S},{t,T},{u,U},{v,V},{w,W},{x,X},{y,Y},{z,Z}},_"
 x = "!@s"
 
 # Derived alphabets — @w sliced to f/v carries the fold along, so hex stays base

@@ -115,47 +115,15 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
         return [g for o in node.options for g in _groups(o)]
     if isinstance(node, t.LiteralNode):
         # One position whose single spelling is the whole literal — so a
-        # multi-char token (`bc` in `{a<->bc}`) folds as one unit, not per char.
+        # multi-char token (`bc` in `{a,bc}`) folds as one unit, not per char.
         return [[node.content]]
     if isinstance(node, t.GroupClassNode):
         return [list(grp) for grp in node.groups]
-    if isinstance(node, t.ZipNode):
-        return _zip_groups(node)
     if isinstance(node, t.FullAlphaNode):
         return _groups(node.inner)
     if isinstance(node, t.ValueRangeNode):
         return _sliced_groups(node)
     raise CompileError(f"Cannot use {type(node).__name__} as a value alphabet")
-
-
-def _zip_groups(node: t.ZipNode) -> list[list[str]]:
-    """Fold the tracks of a `<->` position-wise into one ordered alphabet.
-
-    Each track contributes its own ordered groups; position i collects the i-th
-    group of every track. The tracks must share one cardinality (an unequal zip
-    is an incoherent claim, not a request to truncate), and every spelling must
-    name exactly one position (so the folded value stays unambiguous)."""
-    track_groups = [_groups(tr) for tr in node.tracks]
-    card = len(track_groups[0])
-    for tg in track_groups:
-        if len(tg) != card:
-            raise CompileError(
-                f"<-> cardinality mismatch: tracks have lengths "
-                f"{[len(t) for t in track_groups]}"
-            )
-    zipped: list[list[str]] = []
-    seen: set[str] = set()
-    for i in range(card):
-        position = [spelling for tg in track_groups for spelling in tg[i]]
-        for spelling in position:
-            if spelling in seen:
-                raise CompileError(
-                    f"<-> reuses the spelling {spelling!r} across positions; "
-                    f"every spelling must name exactly one position"
-                )
-            seen.add(spelling)
-        zipped.append(position)
-    return zipped
 
 
 def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
@@ -374,20 +342,6 @@ class _Complement(_Base):
         return end if end > pos else None
 
 
-class _TokenSet(_Base):
-    __slots__ = ("tokens", "_excl")
-
-    def __init__(self, node: t.TokenSetNode):
-        self.tokens = sorted(node.tokens, key=len, reverse=True)
-        self._excl = set(node.exclusions)
-
-    def match(self, text: str, pos: int) -> int | None:
-        for tok in self.tokens:
-            if tok not in self._excl and text[pos : pos + len(tok)] == tok:
-                return pos + len(tok)
-        return None
-
-
 class _Group(_Base):
     """Equivalence-group class — the single congruence primitive. Members of a
     group are interchangeable; repetition-equality is checked against the group
@@ -524,10 +478,8 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.FullAlphaNode: _FullAlpha,
     t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
-    t.ZipNode: lambda n: _Group(_zip_groups(n)),
     t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
-    t.TokenSetNode: _TokenSet,
     t.PaddedNode: _lower_padded,
 }
 
@@ -553,7 +505,6 @@ class GroupEl:
     matcher: Matcher
     min_reps: int
     max_reps: int | None
-    count_ref: list[int] | None
 
 
 @dataclass(slots=True)
@@ -564,29 +515,15 @@ class SeqGroupEl:
     elements: "list[Element]"
     min_reps: int
     max_reps: int | None
-    count_ref: list[int] | None
 
 
-@dataclass(slots=True)
-class SkipUntilEl:
-    """A `>>{expr}` run-until: a non-capturing forward skip. `terminator` is the
-    compiled sub-pattern; the loop advances to the first position where it
-    matches and stops there, recording no capture."""
-
-    terminator: "list[Element]"
+Element = LiteralEl | GroupEl | SeqGroupEl
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl | SkipUntilEl
-
-
-def _count_config(
-    count: t.CountSpec | None,
-) -> tuple[int, int | None, list[int] | None]:
+def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
     if isinstance(count, t.CountRange):
-        return count.min, count.max, None
-    if isinstance(count, t.CountRef):
-        return 1, 1, count.index
-    return 1, 1, None
+        return count.min, count.max
+    return 1, 1
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
@@ -595,22 +532,15 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
     for child in root.children:
         if isinstance(child, t.LeafNode):
             elements.append(LiteralEl(child.content))
-        elif isinstance(child, t.RunUntilNode):
-            term = child.terminator
-            if term is None or term.semantic is None:
-                raise CompileError("`>>` is missing its `{…}` terminator")
-            elements.append(SkipUntilEl(compile_pattern(t.RootNode(children=[term]))))
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-            min_reps, max_reps, count_ref = _count_config(child.count)
+            min_reps, max_reps = _count_config(child.count)
             if isinstance(child.semantic, t.SequenceNode):
                 sub = compile_pattern(t.RootNode(children=child.semantic.children))
-                elements.append(SeqGroupEl(sub, min_reps, max_reps, count_ref))
+                elements.append(SeqGroupEl(sub, min_reps, max_reps))
             else:
-                elements.append(
-                    GroupEl(lower(child.semantic), min_reps, max_reps, count_ref)
-                )
+                elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements

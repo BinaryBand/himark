@@ -2,7 +2,7 @@
 
 Constructs recognized:
   {expr}[count]   — brace_group with optional count modifier
-  {{ref}}         — template reference, parsed immediately into a typed node
+  "..."           — quoted literal text (verbatim, with escapes)
   leaf text       — verbatim literal fragments
 """
 
@@ -10,14 +10,9 @@ import re
 
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
-from marky.parser._text import ESCAPES
-from marky.parser.templates import parse_template_expr
+from marky.parser._text import ESCAPES, unescape
 
-# Template refs: {{.}}, {{0}}, {{0.1}}, {{0..2}}, {{#0}} — double-brace, no braces
-# inside (so {{a..z}..{A..Z}} stays a brace group, not a template ref).
-_TEMPLATE_REF = re.compile(r"\{\{([^{}]*)\}\}")
-
-# Count suffix: [N], [N..], [..N], [N..M], [..]  (also allows {{#N}})
+# Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")
 
 
@@ -47,43 +42,8 @@ def _scan_string(text: str, pos: int) -> int:
     raise CompileError(f"Unclosed '\"' at position {pos}")
 
 
-def _emit_quoted(inner: str, nodes: list[t.Node]) -> None:
-    """Tokenize the body of a `"..."` literal: verbatim text with `{{...}}`
-    interpolation. Single braces are literal here, so a template can emit `{`
-    or `}`; only `{{ref}}` resolves to a reference."""
-    buf: list[str] = []
-
-    def flush() -> None:
-        if buf:
-            nodes.append(t.LeafNode(content="".join(buf)))
-            buf.clear()
-
-    i = 0
-    while i < len(inner):
-        if inner[i] == "\\" and i + 1 < len(inner):
-            esc = inner[i + 1]
-            buf.append(ESCAPES.get(esc, esc))
-            i += 2
-            continue
-        if inner[i : i + 2] == "{{":
-            m = _TEMPLATE_REF.match(inner, i)
-            if m:
-                flush()
-                nodes.append(parse_template_expr(m.group(1)))
-                i = m.end()
-                continue
-        buf.append(inner[i])
-        i += 1
-    flush()
-
-
-def parse(text: str, *, allow_leading_skip: bool = True) -> t.RootNode:
-    """Tokenize HMK pattern text into a typed node tree.
-
-    `allow_leading_skip` permits a `>>` run-until with nothing before it. The
-    top-level pattern parse sets it False (a bare leading `>>` needs a start
-    construct), but a grouping brace's interior — `{>>{\\n}}` — leaves it True,
-    so the brace boundary itself serves as the start."""
+def parse(text: str) -> t.RootNode:
+    """Tokenize HMK pattern text into a typed node tree."""
     nodes: list[t.Node] = []
     pos = 0
     leaf_buf: list[str] = []
@@ -110,52 +70,14 @@ def parse(text: str, *, allow_leading_skip: bool = True) -> t.RootNode:
             pos += 1
             continue
 
-        # Quoted literal text: verbatim output (or match), with {{...}}
-        # interpolation and \" / \\ / \n escapes. Single braces inside are
-        # literal, so it can carry brace characters unambiguously. A lone ' is
-        # an ordinary character — only " delimits.
+        # Quoted literal text: verbatim output (or match), with \" / \\ / \n
+        # escapes. A lone ' is an ordinary character — only " delimits.
         if ch == '"':
             flush_leaf()
             end = _scan_string(text, pos)
-            _emit_quoted(text[pos + 1 : end - 1], nodes)
+            nodes.append(t.LeafNode(content=unescape(text[pos + 1 : end - 1])))
             pos = end
             continue
-
-        # Run-until: `{start}>>{expr}` runs (non-capturing) from the preceding
-        # construct until its terminator `{expr}` first matches. It is infix —
-        # the `>>` binds a start construct on its left, so a bare leading `>>` is
-        # rejected. Only `>>` immediately followed by a single `{` is the
-        # operator — a bare `>>` (or `>>{{`) stays literal, so a template that
-        # happens to contain `>>` is left alone.
-        if (
-            text[pos : pos + 2] == ">>"
-            and text[pos + 2 : pos + 3] == "{"
-            and text[pos + 3 : pos + 4] != "{"
-        ):
-            flush_leaf()
-            if not nodes and not allow_leading_skip:
-                raise CompileError(
-                    "`>>` needs a start construct before it, e.g. `{start}>>{##}`"
-                )
-            bstart = pos + 2
-            end = _scan_braces(text, bstart)
-            term = t.BraceGroupNode(content=text[bstart + 1 : end - 1])
-            pos = end
-            cm = _COUNT_SRC.match(text, pos)
-            if cm:
-                term.count_src = cm.group(1)
-                pos = cm.end()
-            nodes.append(t.RunUntilNode(terminator=term))
-            continue
-
-        # Template refs {{...}} — parsed immediately; must check before single {
-        if text[pos : pos + 2] == "{{":
-            m = _TEMPLATE_REF.match(text, pos)
-            if m:
-                flush_leaf()
-                nodes.append(parse_template_expr(m.group(1)))
-                pos = m.end()
-                continue
 
         # Brace group {expr}[count?]
         if ch == "{":

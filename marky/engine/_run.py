@@ -8,33 +8,21 @@ interface, decided once at compile time in `_compile.py`.
 
 from __future__ import annotations
 
-from marky.engine._compile import Element, GroupEl, LiteralEl, SeqGroupEl, SkipUntilEl
+from marky.engine._compile import Element, GroupEl, LiteralEl, SeqGroupEl
 from marky.engine._types import Capture, Match
 
 
 class _State:
     """Captures accumulated during one match attempt, with absolute spans.
 
-    `root` is the top-level state shared by every nested sub-match, so a count
-    reference (`{{#N}}`) always resolves against the document-order top-level
-    groups — even when it is evaluated inside a grouping brace's own sub-state
-    (e.g. a table's per-row cell count `[{{#0}}]` referencing the first row)."""
+    `root` is the top-level state shared by every nested sub-match, kept so the
+    rebasing in `_finalize` can flatten the whole tree against the match start."""
 
     __slots__ = ("captures", "root")
 
     def __init__(self, root: "_State | None" = None) -> None:
         self.captures: list[Capture] = []
         self.root = root if root is not None else self
-
-    def count_of(self, index: list[int]) -> int:
-        caps = self.root.captures
-        cap = None
-        for i in index:
-            if i >= len(caps):
-                return 0
-            cap = caps[i]
-            caps = cap.subs
-        return len(cap.reps) if cap is not None else 0
 
 
 def find_matches(pattern: list[Element], text: str) -> list[Match]:
@@ -83,26 +71,9 @@ def _match_element(el: Element, text: str, pos: int, state: _State) -> int | Non
     if isinstance(el, LiteralEl):
         s = el.text
         return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if isinstance(el, SkipUntilEl):
-        return _match_skip_until(el, text, pos, state)
     if isinstance(el, SeqGroupEl):
         return _match_seq_group(el, text, pos, state)
     return _match_group(el, text, pos, state)
-
-
-def _match_skip_until(el: SkipUntilEl, text: str, pos: int, state: _State) -> int:
-    """Advance to the first position at or after `pos` where the terminator
-    matches, and stop there (cursor before the terminator). Non-capturing: the
-    terminator is probed in a throwaway sub-state, and nothing is recorded. The
-    end of input is an implicit terminator — if the terminator never matches
-    ahead, the skip runs to the end (so `{>>{\\n}}` keeps the last, unterminated
-    line). A construct *after* the skip still has to match, so a pattern that
-    needs the terminator present (`…>>{##}{##}`) fails when it is absent."""
-    n = len(text)
-    for i in range(pos, n + 1):
-        if _match_elements(el.terminator, text, i, _State(root=state.root)) is not None:
-            return i
-    return n
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────
@@ -110,8 +81,6 @@ def _match_skip_until(el: SkipUntilEl, text: str, pos: int, state: _State) -> in
 
 def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int | None:
     min_reps, max_reps = el.min_reps, el.max_reps
-    if el.count_ref is not None:
-        min_reps = max_reps = state.count_of(el.count_ref)
 
     def once(p: int) -> tuple[int, list[Capture]] | None:
         sub = _State(root=state.root)
@@ -155,8 +124,6 @@ def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int 
 
 def _match_group(el: GroupEl, text: str, pos: int, state: _State) -> int | None:
     min_reps, max_reps = el.min_reps, el.max_reps
-    if el.count_ref is not None:
-        min_reps = max_reps = state.count_of(el.count_ref)
 
     def record(end: int, reps: list[str]) -> int:
         state.captures.append(Capture(text[pos:end], (pos, end), reps))

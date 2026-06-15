@@ -55,7 +55,7 @@ def strip_unescaped(s: str) -> str:
     """Strip whitespace from both ends, keeping backslash-escaped whitespace.
 
     Arithmetic treats padding around operators as noise; `\\ ` makes a space a
-    literal part of the value (e.g. the `-\\ ` member of `{-\\ <->-}`).
+    literal part of the value (e.g. the `-\\ ` member of `{-\\ ,-}`).
     """
     start = 0
     while start < len(s) and s[start] in " \t":

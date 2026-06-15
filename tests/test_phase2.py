@@ -68,16 +68,15 @@ def test_brace_group_count_open():
     assert count_src_at(tree, 0) == ".."
 
 
-def test_template_ref_full_match():
-    tree = parse("{{.}}")
-    node = tree.children[0]
-    assert isinstance(node, t.FullMatchNode)
+def test_quoted_literal_is_leaf():
+    tree = parse('"hi {0}"')
+    assert tree.children[0].type == "leaf"
+    assert content_at(tree, 0) == "hi {0}"
 
 
-def test_template_ref_numbered_group():
-    node = parse("{{0}}").children[0]
-    assert isinstance(node, t.GroupRefNode)
-    assert node.index == [0]
+def test_nested_double_brace_is_one_group():
+    # {{a,A},{b,B}} is a single brace group (no template refs anymore).
+    assert children_types("{{a,A},{b,B}}") == ["brace_group"]
 
 
 def test_escape_newline():

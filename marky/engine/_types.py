@@ -1,10 +1,10 @@
 """Match results.
 
 A `Capture` is one captured group — its text, its span (relative to the match
-start), its per-repetition pieces (`reps`, for `{{#N}}`), and its nested
-sub-captures (`subs`, the brace groups written inside it, for `{{N.M}}`). A
-`Match` is the ordered list of top-level captures plus the matched slice. The
-parallel-array views are derived, so the renderer keeps a stable interface.
+start), its per-repetition pieces (`reps`), and its nested sub-captures (`subs`,
+the brace groups written inside a grouping brace). A `Match` is the ordered list
+of top-level captures plus the matched slice. The parallel-array views are
+derived, so consumers keep a stable interface.
 """
 
 from __future__ import annotations

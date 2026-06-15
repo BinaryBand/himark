@@ -3,7 +3,7 @@ positional value arithmetic.
 
 A range like `{aa..{a..z}..zz}` is positional numbering in base |alphabet|:
 each symbol contributes its index, most-significant first. A symbol may be a
-*group* of congruent surface forms (`f<->F`): every member maps to the same
+*group* of congruent surface forms (`{f,F}`): every member maps to the same
 index, so values fold across spellings. This object owns that arithmetic so
 matchers never re-derive it.
 """
@@ -39,7 +39,7 @@ class Alphabet:
         if distinct and len(set(members)) != len(members):
             raise CompileError(
                 "Alphabet has duplicate symbols — symbol values would be "
-                "ambiguous; use congruence (<->) for case-folding"
+                "ambiguous; enumerate a congruence class (e.g. {f,F}) instead"
             )
         self.groups = groups
         self.base = len(groups)

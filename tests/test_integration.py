@@ -65,30 +65,25 @@ def test_same_digit_twice():
     assert set(result) == {"11", "22", "33"}
 
 
-# ── Template rendering ────────────────────────────────────────────────────────
+# ── Output (`=>`): constant templates ────────────────────────────────────────
 
 
-def test_template_full_match():
-    # {a..z} is unbounded — each run is one match.
-    result = execute(parser.parse("{a..z} => <{{.}}>"), "ab cd")
-    assert result == ["<ab>", "<cd>"]
+def test_constant_template():
+    # References are gone; a `=>` step emits a constant for each match.
+    result = execute(parser.parse("{a..z} => <x>"), "ab cd")
+    assert result == ["<x>", "<x>"]
 
 
-# ── Chained transformers (alternating pattern => template) ────────────────────
+def test_chain_of_patterns_narrows():
+    # P => P feeds each match of the first pattern into the second.
+    result = execute(parser.parse("{x}[1..] => {x}"), "xx y xxx")
+    assert result == ["x", "x", "x", "x", "x"]
 
 
-def test_chain_deferred_full_match():
-    # P => T => P => T. {{.}} in the first template is deferred: it resolves to
-    # the result of applying the remaining chain (`{a} => #{{.}}`) to the match.
-    # Each 'a' run is one unit, so #-prefixing happens per run.
-    result = execute(parser.parse("{x}[1..] => <{{.}}> => {x} => #{{.}}"), "xx")
-    assert result == ["<#x#x>"]
+# ── Token class ──────────────────────────────────────────────────────────────
 
 
-# ── Token set ────────────────────────────────────────────────────────────────
-
-
-def test_http_token_set():
+def test_http_token_class():
     result = matches("{http,https}", "https://example.com http://example.org")
     assert result == ["https", "http"]
 

@@ -25,7 +25,7 @@ E.g. `{aaa..{a..z}..zzz}{-{$0}}[0..]` will match any three-letter, lowercase str
 
 Whereas `$i` accesses a capture's content, `#i` accesses it's repeat count.
 
-E.g. `{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}` would capture `aaabbbccc repeated 3 times` and skip `aaabbbccc repeated 4 times`. However, it would capture `aaabbbccc 2 times`, so watch out for unintended sub-matches.
+E.g. `{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}` would capture `abcabcabc repeated 3 times` and skip `abcabcabc repeated 4 times`. However, it would capture `abcabcabc 2 times`, so watch out for unintended sub-matches.
 
 Since `[...]` always expects base-10 integers, it will accept `#` arguments, assuming it is a lone index key or a range where the left-side argument does not exceed the right.
 
@@ -41,13 +41,13 @@ Mid-pipe template expressions only feed non-static values to the next link; e.g.
 
 ## Notes
 
-A class occupies a **single position** -- by default it matches exactly one symbol. Length is never implicit; it is always declared, by a `[\Delta]` count (`{a..z}[3]` $\to$ `aaa`), a padding width (`{3:{@d}..255}`), or the written width of a value-range endpoint (`{aaa..{a..z}..zzz}` $\to$ three symbols). So a bare `{a..z}` is one letter, and a run is the explicit `{a..z}[1..]`. Factoring length out of the class is what makes the equivalences below hold in any position, not only as `..` endpoints.
+A class occupies a **single position** -- by default it matches exactly one symbol.
 
-Assuming...
+### Assumptions
 
-- **{a}** -- `a` exists on the Unicode plain by default since an alphabet was never explicitly assigned to it. It's the equivalent of `{a..{@uni}..a}`.
-- **{a..z}** -- `a` and `z` both exist on the Unicode plain so they can meet -- one symbol from that range. `{a..{@uni}..z}` (a run is the explicit `{a..z}[1..]`).
+- **{a}** -- `a` exists on the Unicode plain by default since an alphabet was never explicitly assigned to it. It's the equivalent of `{a..{@uni}..a}`
+- **{a..z}** -- `a` and `z` both exist on the Unicode plain so they can meet. `{a..{@uni}..z}`
 - **{{a..z}..c}** -- Since `{a..z}` = `{a..{@uni}..z}` (a subset of Unicode) and `c` exists on the Unicode plain, the former becomes the limiting alphabet. `{a..{a..z}..c}`
 - **{{a..z}..cc}** -- `{a..z}` is the limiting alphabet since `cc`'s Unicode alphabet is a super-set. `{a..{a..z}..cc}`
-- **{{a,A},{b,B},...,{z,Z}}** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner.
-- **{{a..c}..zz}** -- Compile error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's.
+- **{{a,A},{b,B},...,{z,Z}}** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner
+- **{{a..c}..zz}** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's

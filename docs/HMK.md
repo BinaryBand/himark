@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.7.3-experimental  
+**Version:** 0.8.0-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -8,15 +8,18 @@
 
 ---
 
-Three constructs: `{...}` matches, `{{...}}` templates, and `[...]` repeats.
+Two constructs: `{...}` matches, and `[...]` repeats.
 
-| Construct  | Role                |
-| ---------- | ------------------- |
-| `{expr}`   | Match and class     |
-| `{{expr}}` | Template            |
-| `[count]`  | Repetition modifier |
+| Construct | Role                |
+| --------- | ------------------- |
+| `{expr}`  | Match and class     |
+| `[count]` | Repetition modifier |
 
 These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{expr}[1]`.
+
+This is the experimental algebra branch: the `<->`, `{{...}}`, and `>>`
+constructs have been removed, and congruence is now expressed through the brace
+grouping itself (see [Congruence](#congruence)).
 
 ---
 
@@ -28,7 +31,7 @@ These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{exp
 | `@l`     | `a..z`                      |
 | `@u`     | `A..Z`                      |
 | `@s`     | `\n,\r, ,\t`                |
-| `@w`     | `{@l}<->{@u},_`             |
+| `@w`     | `{a,A},{b,B},...,{z,Z},_`   |
 | `@x`     | `!@s`                       |
 | `@hex`   | `{@d},{{@w}..f}`            |
 | `@b32`   | `{@d},{{@w}..v}`            |
@@ -37,7 +40,7 @@ These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{exp
 | `@ascii` | U+0000-U+007F               |
 | `@uni`   | U+0000-U+10FFFF             |
 
-> **Note:** `@hex` and `@b32` (RFC 4648 $\S7$) fold case with `<->` (see [Congruence](#congruence)), so `a` and `A` share one position -- the alphabets stay base 16 and base 32, and either casing matches.
+> **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 $\S7$) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
 
 ---
 
@@ -45,40 +48,38 @@ These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{exp
 
 **$\Sigma$** represents an ordered alphabet. **$\sigma$** represents a singleton value (equivalently, a one-element alphabet).
 
-| Operator | Role                                         |
-| -------- | -------------------------------------------- |
-| `..`     | Range between endpoints                      |
-| `<->`    | Congruence -- zip two equal-length $\Sigma$s |
-| `,`      | Union of $\Sigma$s                           |
-| `!`      | Subtract a $\Sigma$ from the group           |
+| Operator | Role                                                   |
+| -------- | ------------------------------------------------------ |
+| `..`     | Ordered range between endpoints ($\leq$)               |
+| `,`      | Congruence class -- interchangeable spellings ($\sim$) |
+| `!`      | Subtract a $\Sigma$ from the group                     |
 
-A $\Sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton $\sigma$ contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
+The two axes are orthogonal: `..` builds an **ordered** range (distinct positions, a value axis), while `,` folds its members into **one** congruence class (interchangeable spellings of a single position). A $\Sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton $\sigma$ contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
 
-> **Note:** Precedence binds tightest to loosest: `..` then `<->` then `,`.
+> **Note:** Precedence binds tightest to loosest: `..` then `,`.
 
-| Written                | Alphabet               | Low   | High      |
-| ---------------------- | ---------------------- | ----- | --------- |
-| `{a}`                  | Unicode                | `a`   | `a`       |
-| `{abc}`                | Unicode                | `abc` | `abc`     |
-| `{a,b,c}`              | a,b,c                  | `a`   | `c`       |
-| `{a..z,!d..f}`         | a$\dots$z$\notin$d,e,f | `a`   | unbounded |
-| `{a..z}`               | a$\dots$z              | `a`   | unbounded |
-| `{m..{@l}}`            | $a\dots$z              | `m`   | unbounded |
-| `{{@l}..m}`            | $a\dots$z              | `a`   | `m`       |
-| `{cat..dog}`           | Unicode                | `cat` | `dog`     |
-| `{{@d}..255}`          | decimal                | `0`   | `255`     |
-| `{128..{@d}}`          | decimal                | `128` | unbounded |
-| `{aa..{@l}..zz}`       | a$\dots$z              | `aa`  | `zz`      |
-| `{a}[3]`               | Unicode                | `aaa` | `aaa`     |
-| `{a..z}[3]`            | a$\dots$z              | `aaa` | unbounded |
-| `{a}[2..4]`            | a$\dots$z              | `aa`  | `aaaa`    |
-| `{@d},{a..f}<->{A..F}` | hex (case-folded)      | `0`   | unbounded |
+| Written          | Alphabet               | Low   | High      |
+| ---------------- | ---------------------- | ----- | --------- |
+| `{a}`            | Unicode                | `a`   | `a`       |
+| `{abc}`          | Unicode                | `abc` | `abc`     |
+| `{a,b,c}`        | one class {a,b,c}      | --    | --        |
+| `{a..z,!d..f}`   | a$\dots$z$\notin$d,e,f | `a`   | unbounded |
+| `{a..z}`         | a$\dots$z              | `a`   | unbounded |
+| `{m..{@l}}`      | $a\dots$z              | `m`   | unbounded |
+| `{{@l}..m}`      | $a\dots$z              | `a`   | `m`       |
+| `{cat..dog}`     | Unicode                | `cat` | `dog`     |
+| `{{@d}..255}`    | decimal                | `0`   | `255`     |
+| `{128..{@d}}`    | decimal                | `128` | unbounded |
+| `{aa..{@l}..zz}` | a$\dots$z              | `aa`  | `zz`      |
+| `{a}[3]`         | Unicode                | `aaa` | `aaa`     |
+| `{a..z}[3]`      | a$\dots$z              | `aaa` | unbounded |
+| `{a}[2..4]`      | a$\dots$z              | `aa`  | `aaaa`    |
 
 > **Note:** `{a..z}[3]` can be any string of any length of lowercase triples including 'aaa', 'ababab', and 'barbarbar'.
 
 ### Value Exclusion
 
-Inside a union the positive arms set the universe and the `!` arms **subtract** from it, so `{...,!`$\Sigma$`}` is "everything written, minus $\Sigma$".
+Inside a range the positive arms set the universe and the `!` arms **subtract** from it, so `{...,!`$\Sigma$`}` is "everything written, minus $\Sigma$".
 
 ```proto
 {aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
@@ -91,23 +92,41 @@ Inside a union the positive arms set the universe and the `!` arms **subtract** 
 
 ---
 
-## String-Token Alphabets
+## Congruence
 
-Comma-separated items inside `{...}` can be multi-character. The class defines a string-token alphabet where each item is a discrete token (singleton $\sigma$).
-
-```proto
-{cat,dog}     // 'cat' or 'dog'
-{http,https}  // 'http' or 'https'
-```
-
-Token order matches write order. `..` between string tokens defines a lexicographic range. Any string between the two endpoints inclusive.
+`,` folds its members into one **congruence class** ($\sim$): a single position with several interchangeable spellings. This is the orthogonal partner of `..` -- where `..` is the ordered value axis, `,` is the equality axis.
 
 ```proto
-{cat,dog,fish}   // 'cat', 'dog', or 'fish'
-{cat..dog}       // 'cat', 'cau', through 'dog'
+{a,A}          // one position, two spellings: 'a' or 'A'
+{cat,dog}      // one position, two spellings: 'cat' or 'dog'
+{a,b,c}        // one position, three spellings
 ```
 
-> **Note:** Multi-character ranges without an explicitly declared $\Sigma$ use Unicode by default, so `{cat..dog}` can include 'c$\lambda$t'.
+To build an **ordered alphabet of folded positions**, enumerate the classes -- the outer braces order the positions, each inner `{...}` is one class:
+
+```proto
+{{a,A},{b,B},{c,C}}   // 3 ordered positions, each case-folded
+{{a,A},{b,B},...,{z,Z}}  // the 26-letter case-fold alphabet (this is @w)
+```
+
+Under `[count]`, repetition-equality is checked against the **class**, not the literal spelling, so congruent spellings count as the same unit:
+
+```proto
+{a,A}[2]              // 'aa', 'aA', 'Aa', 'AA'  (case folds)
+{{a,A},{b,B}}[2]      // 'ab', 'aB', 'Ab', 'AB', and the same for repeats of one letter
+                      // -- but 'a' then 'b' are different positions, so each rep is one class
+{a,bc}[2]             // 'a' and 'bc' share a class, so 'abc', 'aa', 'bcbc' all repeat equally
+```
+
+This is `(\Sigma, \leq, \sim)` realized with one primitive: `..` reads the order `\leq`, `,` reads the congruence `\sim`, and `[count]` is the `\sim`-congruent power. The literal-identity relation is the finest `\sim` (every spelling its own class); a comma-list coarsens it.
+
+> **Note:** A class-to-class **range** (`{a..z}..{A..Z}`) is rejected -- two classes have no shared ordering. Enumerate the folded pairs as a class of classes (`{{a,A},...,{z,Z}}`) instead.
+
+A class member may be an escaped whitespace spelling, which makes `[count]` an interleave (a separator that is optional between repetitions, never alone):
+
+```proto
+{{-\ ,-},{*\ ,*}}[3..]   // '---', '- - -', '-- -' (rule chars, optional spaces)
+```
 
 ---
 
@@ -125,7 +144,7 @@ Token order matches write order. `..` between string tokens defines a lexicograp
 
 What "repeats" means depends on what is repeated:
 
-- A **class** (an alphabet -- `{a..z}`, `{cat,dog}`, a value range) repeats **by value**: every repetition matches the same value as the first.
+- A **class** (an alphabet -- `{a..z}`, `{cat,dog}`, a value range) repeats **by value**: every repetition matches the same value (or congruence class) as the first.
 - A **grouping brace** (a `{...}` whose interior is a sequence of constructs) repeats **by shape**: each repetition re-matches the structure, and its content may differ between repetitions.
 
 ```proto
@@ -135,12 +154,7 @@ What "repeats" means depends on what is repeated:
 {{|}{!|,\n}}[3]   // grouping brace: three '|'+cell units, each a different cell
 ```
 
-The structural form is what lets a single pattern walk a homogeneous block. A
-table is `n` rows of the same `m` columns: row 0's cell repetition fixes `m` as
-its repeat count, and every later row repeats exactly `{{#0}}` cells -- so the
-match covers the whole table and stops at the first ragged row.
-
----
+The structural form is what lets a single pattern walk a homogeneous block -- e.g. the cells of a row, repeated by shape so each cell may hold different text.
 
 ### Padding
 
@@ -161,118 +175,48 @@ A plain value range matches only the **canonical** form of each value. `{{@d}..2
 
 ---
 
-## Congruence
-
-`<->` ($\leftrightarrow$) **zips** two $\Sigma$s position-wise into one folded alphabet. It pairs `L[i]` with `R[i]`, and the i-th position then accepts either spelling. Only the surface forms fold, never the value axis. So `a` and `A` are one _position_ (`value('a') = value('A')`), not two.
-
-```proto
-{a<->A}                // 1 position: 'a' or 'A'        (the cardinality-1 zip)
-{{a..z}<->{A..Z}}      // 26 positions: {a,A},{b,B},...,{z,Z}
-{cat,dog}<->{CAT,DOG}  // 2 positions: {cat,CAT},{dog,DOG}
-```
-
-The enumerated form is just this zip written out -- a union of singleton zips -- so both forms below denote the same 3-position alphabet:
-
-```proto
-{a..c}<->{A..C}            // zip of two ranges
-{{a<->A},{b<->B},{c<->C}}  // the same thing, written out
-{a<->A}[2]                 // 'aa', 'aA', 'Aa', 'AA'
-{{a..z}<->{A..Z}}[2]       // 'hh', 'hH', 'Hh', 'HH'; 'He' does not
-```
-
-> **Note:** Under `[count]`, repetition-equality is checked against the _position_, so the folded spellings count as the same value:
-
-### Rules
-
-- **Equal cardinality** -- `|L|` must equal `|R|` otherwise it is a compile error. E.g. `{a..z}<->{A..C}` (26 vs 3) is rejected.
-- **Distinct spellings** -- Every spelling must name exactly one position. `{a..c}<->{b..d}` reuses `b` and `c` across positions, so it is rejected.
-- **n-ary, per-position commutative** -- `{\n<->\r<->\r\n}` folds the three newline spellings into one position, so order within a position does not matter.
-
----
-
 ## Captures
 
-Every `{...}` creates a capture group, numbered left to right from **0**. Sub-captures use dot notation.
+Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**.
 
-| Reference  | Resolves to                            |
-| ---------- | -------------------------------------- |
-| `{{.}}`    | Full matched text                      |
-| `{{N}}`    | Group N                                |
-| `{{N.M}}`  | Sub-group M of group N                 |
-| `{{N..M}}` | Groups N through M inclusive           |
-| `{{#N}}`   | Repeat count of group N                |
-| `{{#N.M}}` | Repeat count of sub-group M of group N |
+Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{Sphinx}{of{black}{quartz}}`:
 
-So, given the input string: `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..] {Sphinx}{of{black}{quartz}}`:
+| Group     | Text                     | Explanation                     |
+| --------- | ------------------------ | ------------------------------- |
+| full      | `###Sphinxofblackquartz` | The full matched text.          |
+| 0         | `###`                    | Group 0                         |
+| 1         | `Sphinx`                 | Group 1                         |
+| 2         | `ofblackquartz`          | Group 2                         |
+| 2.0       | `black`                  | First sub-group inside group 2  |
+| 2.1       | `quartz`                 | Second sub-group inside group 2 |
 
-| Reference  | Resolves to               | Explanation                     |
-| ---------- | ------------------------- | ------------------------------- |
-| `{{.}}`    | `### Sphinxofblackquartz` | The full matched text.          |
-| `{{0}}`    | `###`                     | Group 0                         |
-| `{{2}}`    | `ofblackquartz`           | Group 2                         |
-| `{{2.0}}`  | `black`                   | First sub-group inside group 2  |
-| `{{2.1}}`  | `quartz`                  | Second sub-group inside group 2 |
-| `{{1..2}}` | `Sphinxofblackquartz`     | Span from group 1 to group 2.   |
-| `{{#0}}`   | `3`                       | Repeat count of group 0         |
-
----
-
-## Run-until
-
-`{start}>>{expr}` is an infix run: match the **start** construct, then keep
-running forward (a **non-capturing** skip) until the terminator `{expr}` first matches, stopping with the cursor _before_ it so the next construct matches it. The skipped text is part of the overall match (`{{.}}`), but the skip itself creates **no** capture group, so `{{N}}` indices count only the real constructs.
-
-```proto
-{start}>>{##}            // match 'start', then run until the next '##'
-{@l}[1..]>>{@d}{@d}      // match a word, run to the first digit, take the digits
-```
-
-`>>` is infix: it binds a start construct on its left, so a bare leading `>>`
-(no start) is rejected. The terminator may be any `{expr}` (a literal, a class,
-a macro). Only `>>` immediately followed by a single `{` is the operator; a bare
-`>>` is literal text.
-
-The **end of input** is an implicit terminator: if `{expr}` never matches ahead,
-the run goes to the end. A construct written _after_ the skip still has to match,
-so a pattern that needs the terminator present (`…>>{##}{##}`) fails when it is
-absent -- the end-stop only matters when the skip is the last thing to run.
-
-### Splitting
-
-Wrapping a run in a grouping brace turns it into a capturing token, so `>>` can
-lead there (the brace boundary is its start). `{>>{\n}}` is therefore "the text
-up to the next newline" -- a **line** -- and matching it repeatedly splits the
-input by newline (the end-of-input stop keeps the last, unterminated line):
-
-```proto
-{>>{\n}}        // one line; matched repeatedly, splits on '\n'
-{>>{, }}        // one comma-separated field
-```
+> **Note:** The capture structure is available on each `Match` (`groups`, `sub_groups`, spans); this branch has no reference sub-language for splicing them into output.
 
 ---
 
 ## Transformers
 
-`=>` applies a replacement template to a match: `pattern => template => pattern => template`.
+`=>` runs a chain of steps: `pattern => pattern => ... => template`.
 
-- A run of patterns (`pattern => pattern => ... => template`) narrows successively before the trailing template renders.
-- A chained template's **references** (`{{.}}`, `{{N}}`, `{{#N}}`, ...) are its **forward payload**: the remaining chain transforms their rendered text in place, and the template's **literal** text is chrome that wraps the result. The payload is the span from the first reference to the last (interior literals included); leading and trailing literals are the chrome. A `{{.}}`-only template is the special case where the payload is the whole match.
+- A run of patterns (`pattern => pattern`) narrows successively: each match of one pattern is fed to the next.
+- A trailing **template** step (text with no matchable `{...}`) emits its constant text once per match.
+- `=>` **extracts** -- the statement returns the list of rendered matches.
+- `=>+` **replaces** -- it splices each rendered match back into the source and returns the whole string, leaving the text between matches verbatim.
 
 ```proto
-{|}{!|,\n}{|}{!|,\n}{|} => "<row>"{{0}}{{2}}{{4}}"</row>" => {|}[3] => ...
-// the references render to '|||'; the rest of the chain transforms that,
-// and <row>...</row> wraps whatever comes back.
+{a..z}                 // extract: the list of lowercase runs
+{a..z} => <w>          // extract: '<w>' once per run
+{a..z} =>+ <w>         // replace: each run becomes '<w>' in place
+{@d} => {{@d}..9}      // narrow: digits, then single values 0-9
 ```
 
 ### Quoting static text
 
-Literal template text is written in double quotes. Inside `"..."`, characters are emitted verbatim except `{{...}}`, which interpolates a reference; `\"` and `\\` escape. **Single** braces inside quotes are literal, so a template can emit `{` and `}` unambiguously. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
+Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
 
 ```proto
-"<strong>"{{1}}"</strong>"   // chrome quoted, reference bare
-"<strong>{{1}}</strong>"     // same template -- references interpolate inside quotes
-"{lit}"                       // emits the literal text {lit}
-"it's {{.}}"                  // ' needs no escaping
+{a} => "<b>"   // emits the literal text <b>
+"it's fine"    // ' needs no escaping
 ```
 
 ---

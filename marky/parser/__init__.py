@@ -14,11 +14,7 @@ def parse(text: str) -> list[t.RootNode]:
     """
     steps, replace, piped = phase0.split_statement(text)
     trees = [
-        phase3.parse(
-            phase2.parse(
-                phase1.preprocess(step, first=i == 0), allow_leading_skip=False
-            )
-        )
+        phase3.parse(phase2.parse(phase1.preprocess(step, first=i == 0)))
         for i, step in enumerate(steps)
     ]
     if trees:

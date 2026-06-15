@@ -4,14 +4,18 @@ A pattern-matching and text-transformation language for people who find regex
 write-only.
 
 ```hmk
-{a..z}[1..] => <em>{{.}}</em>
+{a..z}[1..]
 {{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}
-{a..z} =>+ <p>{{.}}</p>
+{a..z} =>+ <p>
 ```
 
 Patterns are readable, composable, and compile to **direct execution** — no
 regex transpilation. The full language spec is [docs/HMK.md](docs/HMK.md); the
 implementation map is [docs/.ARCHITECTURE.md](docs/.ARCHITECTURE.md).
+
+> **Experimental algebra branch.** The `<->`, `{{…}}` (templates), and `>>`
+> (run-until) constructs are removed here. Congruence comes from the brace
+> grouping itself: `..` is the ordered axis, `,` the congruence axis.
 
 Requires Python 3.11+.
 
@@ -30,9 +34,9 @@ poetry install --no-root
 Two commands: `execute` (match and transform) and `find` (locate matches).
 
 ```sh
-poetry run marky execute '{a..z}[1..] => <em>{{.}}</em>' 'hi there'
-# <em>hi</em>
-# <em>there</em>
+poetry run marky execute '{a..z}[1..]' 'hi there'
+# hi
+# there
 
 poetry run marky find '{{@d}..255}' '192.168.1.1'
 # 0 3
@@ -43,7 +47,7 @@ poetry run marky execute pattern.hmk target.txt
 echo '{a..z}[1..]' | poetry run marky execute - 'hi there'
 
 # --json emits structured deltas / spans instead of lines
-poetry run marky execute '{a..z} =>+ <p>{{.}}</p>' 'a1b2c' --json
+poetry run marky execute '{a..z} =>+ <p>' 'a1b2c' --json
 ```
 
 You can also run it as a module: `python -m marky execute '<pattern>' '<target>'`.
@@ -52,23 +56,24 @@ You can also run it as a module: `python -m marky execute '<pattern>' '<target>'
 
 ## The language in one screen
 
-Three constructs: `{...}` matches, `{{...}}` templates, `[...]` repeats. They
-compose as `{expr}[count]`.
+Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]`.
 
 ### Classes and arithmetic
 
-| Pattern       | Matches                             |
-| ------------- | ----------------------------------- |
-| `{abc}`       | the literal string `abc`            |
-| `{a,b,c}`     | `a`, `b`, or `c`                    |
-| `{a..z}`      | a run of lowercase letters          |
-| `{{@d}..255}` | a decimal value from 0 to 255       |
-| `{cat,dog}`   | the token `cat` or `dog`            |
-| `{cat..dog}`  | any string between `cat` and `dog`  |
-| `{!\|,\n}`    | a run containing no pipe or newline |
+| Pattern         | Matches                                  |
+| --------------- | ---------------------------------------- |
+| `{abc}`         | the literal string `abc`                 |
+| `{a,A}`         | one congruence class: `a` or `A`         |
+| `{a..z}`        | a run of lowercase letters               |
+| `{{@d}..255}`   | a decimal value from 0 to 255            |
+| `{cat,dog}`     | one class: the token `cat` or `dog`      |
+| `{cat..dog}`    | any string between `cat` and `dog`       |
+| `{{a,A},{b,B}}` | ordered alphabet of case-folded letters  |
+| `{!\|,\n}`      | a run containing no pipe or newline      |
 
-Operators (tightest to loosest): `..` range · `<->` congruence (case-fold) ·
-`,` union · `!` subtract. Example: `{@d},{a..f}<->{A..F}` is case-folded hex.
+Operators (tightest to loosest): `..` ordered range · `,` congruence class ·
+`!` subtract. `..` and `,` are orthogonal axes — `{a,A}[2]` folds case
+(`aa`/`aA`/`Aa`/`AA`), while `{a..z}[2]` is the diagonal (`aa`/`bb`/…).
 
 ### Macros
 
@@ -82,33 +87,20 @@ HMK source before matching — see the [Macros table](docs/HMK.md#macros).
 A **class** repeats by *value* (`{a..z}[3]` is `aaa`, `ababab`, …); a **grouping
 brace** repeats by *shape*, so one pattern can walk a whole table.
 
-### Templates
-
-| Reference  | Resolves to                            |
-| ---------- | -------------------------------------- |
-| `{{.}}`    | the full matched text                  |
-| `{{N}}`    | capture group N (0-based)              |
-| `{{N.M}}`  | sub-group M of group N                 |
-| `{{N..M}}` | groups N through M inclusive           |
-| `{{#N}}`   | repeat count of group N                |
-| `{{#N.M}}` | repeat count of sub-group M of group N |
-
-Static template text can be quoted: `"<b>"{{1}}"</b>"`.
-
 ### Chaining and transformers
 
-`=>` *extracts* — the statement returns the list of rendered matches. `=>+`
-*splices* — each rendered match replaces its source span in place, returning the
-whole text.
+`=>` *extracts* — the statement returns the list of matches. `=>+` *splices* —
+each match's span is replaced in place, returning the whole text. A trailing
+template step is constant text (this branch has no reference sub-language), and
+a run of patterns narrows successively.
 
 ```hmk
-{a..z} => <p>{{.}}</p>     # ["<p>a</p>", "<p>b</p>", ...]
-{a..z} =>+ <p>{{.}}</p>    # "<p>a</p>1<p>b</p>2<p>c</p>"
+{a..z}                     # ["a", "b", "c", ...]
+{a..z} => <p>              # ["<p>", "<p>", ...]   (constant per match)
+{a..z} =>+ <p>             # "<p>1<p>2<p>"          (spliced in place)
 ```
 
-A run of patterns (`P => P => ... => T`) narrows successively before the
-trailing template renders. In a chained template the *references* are the
-forward payload and the *literal* text is chrome that wraps the result.
+Static text can be quoted to carry literal braces or spaces: `{a} => "<b>"`.
 
 ---
 

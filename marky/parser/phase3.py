@@ -2,13 +2,17 @@
 
 Transforms:
   brace_group  → literal | char_range | string_range | full_alpha |
-                 value_range | union | complement | token_set | zip | padded |
+                 value_range | union | complement | group_class | padded |
                  sequence (a grouping brace — a concatenation of constructs)
-  double_braces → template node (see parser/templates.py)
 
-A `{…}` brace is one σ (built from `..`, `<->`, `,`, `!`) unless its interior is
-a *concatenation* of constructs — then it is a grouping brace (a capture group
+A `{…}` brace is one σ (built from `..` and `,`) unless its interior is a
+*concatenation* of constructs — then it is a grouping brace (a capture group
 whose nested braces are sub-captures, `{of{black}{quartz}}`).
+
+The σ-grammar has two axes: `..` builds an ordered range (≤), and `,` builds a
+congruence class (~) whose members are interchangeable spellings of one
+position. `{a,A}` is one folded position; `{{a,A},{b,B},…}` is an ordered
+alphabet of folded positions.
 """
 
 import re
@@ -26,7 +30,6 @@ from marky.parser._text import (
 )
 
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
-_COUNT_SRC_REF_RE = re.compile(r"^\{\{#(\d+(?:\.\d+)*)\}\}$")
 
 
 _EXCLUDABLE = (
@@ -34,7 +37,6 @@ _EXCLUDABLE = (
     t.FullAlphaNode,
     t.ValueRangeNode,
     t.UnionNode,
-    t.TokenSetNode,
 )
 
 
@@ -59,13 +61,10 @@ def _resolve_brace_node(child: t.BraceGroupNode) -> None:
 
 
 def parse(node: t.RootNode) -> t.RootNode:
-    """Walk the phase2 tree and resolve each brace group in place. A `>>{…}`
-    run-until carries its terminator as a nested brace, resolved the same way."""
+    """Walk the phase2 tree and resolve each brace group in place."""
     for child in node.children:
         if isinstance(child, t.BraceGroupNode):
             _resolve_brace_node(child)
-        elif isinstance(child, t.RunUntilNode) and child.terminator is not None:
-            _resolve_brace_node(child.terminator)
     return node
 
 
@@ -83,18 +82,17 @@ def _is_sequence_brace(content: str) -> bool:
     """True if a brace's interior is a *concatenation* of constructs rather than a
     single alphabet expression.
 
-    The σ-grammar has no concatenation operator: every `,`/`..`/`<->`-separated
-    part is bare text or exactly one `{…}` atom. A part that glues a construct
-    onto adjacent text — or holds more than one construct — is a sub-pattern.
+    The σ-grammar has no concatenation operator: every `,`/`..`-separated part is
+    bare text or exactly one `{…}` atom. A part that glues a construct onto
+    adjacent text — or holds more than one construct — is a sub-pattern.
     """
     _, body = _parse_padding(content)
     if body.startswith("!"):
         body = body[1:]
     for arm in split_top(",", body):
         for part in split_top("..", arm):
-            for atom in split_top("<->", part):
-                if not _is_sigma_atom(atom):
-                    return True
+            if not _is_sigma_atom(part):
+                return True
     return False
 
 
@@ -108,8 +106,6 @@ def _is_sigma_atom(part: str) -> bool:
     if not part:
         return True
     children = phase2.parse(part).children
-    if any(isinstance(c, t.RunUntilNode) for c in children):
-        return False  # a `>>` run-until is a sub-pattern construct, never a σ atom
     constructs = [c for c in children if isinstance(c, t.BraceGroupNode)]
     if not constructs:
         return True  # bare token (a..z, cat, etc.)
@@ -160,8 +156,8 @@ def _resolve_brace(content: str) -> t.SemanticNode:
             if len(raw_arms) == 1:
                 # A single arm has no comma to pad. A leading-brace value keeps its
                 # disambiguation spacing stripped ({ {a..z} } → {a..z}); otherwise
-                # the surrounding whitespace may be a `<->`/`..` operand ({a<-> }),
-                # so keep it raw and let _resolve_arm apply whitespace significance.
+                # the surrounding whitespace may be a `..` operand ({a.. }), so keep
+                # it raw and let _resolve_arm apply whitespace significance.
                 arms.append(stripped if stripped.startswith("{") else a)
             else:
                 raise CompileError(
@@ -195,32 +191,43 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     return node
 
 
+def _member_value(arm: str) -> str:
+    """The concrete spelling of a bare congruence-class member (`a`, `cat`, a
+    literal space). Escapes are resolved (`\\ ` → space, `\\n` → newline)."""
+    sval = _singleton_value(arm)
+    return sval if sval is not None else unescape(arm)
+
+
+def _apply_member_exclusions(members: list[str], exclusions: list[str]) -> list[str]:
+    """Drop class members named by an exclusion (a single value or a `lo..hi`)."""
+    if not exclusions:
+        return members
+    singles = {e for e in exclusions if ".." not in e}
+    ranges = [tuple(e.split("..", 1)) for e in exclusions if ".." in e]
+    return [
+        m
+        for m in members
+        if m not in singles and not any(lo <= m <= hi for lo, hi in ranges)
+    ]
+
+
 def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
     """Build the appropriate node type for a list of union arms."""
     if len(arms) == 1:
         return _attach_exclusions(_resolve_arm(arms[0]), exclusions)
 
-    # Any brace arm → plain union of classes. A braced `<->` arm resolves to a
-    # ZipNode here, so the enumerated form `{{a<->A},{b<->B}}` is just a union
-    # of single-position zips — the same alphabet as `{a..b}<->{A..B}`.
-    if any(a.startswith("{") for a in arms):
+    # A brace or range arm → ordered union: each arm contributes its own
+    # position(s), concatenated. `{{a,A},{b,B}}` is an ordered alphabet of
+    # congruence classes; `{a..z,A..Z}` is two ranges placed in sequence.
+    if any(a.startswith("{") or ".." in a for a in arms):
         options = [_resolve_arm(a) for a in arms]
         return _attach_exclusions(t.UnionNode(options=options), exclusions)
 
-    # All bare. Any multi-char token (not a range, not a lone escaped char)
-    # makes this a string-token alphabet.
-    has_multi = any(
-        len(a) > 1
-        and ".." not in a
-        and not (len(a) == 2 and a.startswith("\\"))  # not an escaped char
-        for a in arms
-    )
-    if has_multi:
-        return _attach_exclusions(t.TokenSetNode(tokens=arms), exclusions)
-
-    # Single-char or single-char ranges → union
-    options = [_resolve_arm(a) for a in arms]
-    return _attach_exclusions(t.UnionNode(options=options), exclusions)
+    # All bare single symbols/tokens → one congruence class: the members are
+    # interchangeable spellings of a single position (`,` builds `~`), so `[N]`
+    # repetition folds them (`{a,A}[2]` accepts aa, aA, Aa, AA).
+    members = _apply_member_exclusions([_member_value(a) for a in arms], exclusions)
+    return t.GroupClassNode(groups=[members])
 
 
 def _singleton_value(expr: str) -> str | None:
@@ -228,9 +235,9 @@ def _singleton_value(expr: str) -> str | None:
 
     A singleton is τ: a bare literal, or a `{...}` (with an optional exact `[N]`
     count) whose inner expression is itself a singleton. `{a}` is implicitly
-    `{a}[1]`, so `{a}[3]` → 'aaa'. Named alphabets, unions, value ranges, and
-    range-counts all have cardinality > 1 and yield None. The value is returned
-    with escapes resolved (`\\ ` is a literal space, `\\n` a newline, …).
+    `{a}[1]`, so `{a}[3]` → 'aaa'. Named alphabets, unions, and value ranges all
+    have cardinality > 1 and yield None. The value is returned with escapes
+    resolved (`\\ ` is a literal space, `\\n` a newline, …).
     """
     expr = strip_unescaped(expr)
     if not expr:
@@ -249,11 +256,7 @@ def _singleton_value(expr: str) -> str | None:
             return inner_val
         m = re.fullmatch(r"\[(\d+)\]", rest)
         return inner_val * int(m.group(1)) if m else None
-    if (
-        len(split_top(",", expr)) > 1
-        or len(split_top("..", expr)) > 1
-        or len(split_top("<->", expr)) > 1
-    ):
+    if len(split_top(",", expr)) > 1 or len(split_top("..", expr)) > 1:
         return None
     return unescape(expr)
 
@@ -269,13 +272,6 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
     one concrete value; anything else is an abstract group (α).
     """
-    # `<->` (congruence) is looser than `..` and tighter than `,`: a top-level
-    # `<->` zips its operands position-wise into one folded alphabet. Each
-    # operand has no top-level `<->`, so the recursion resolves it as a range.
-    zip_parts = split_top("<->", arm)
-    if len(zip_parts) > 1:
-        return t.ZipNode(tracks=[_resolve_arm(p) for p in zip_parts])
-
     parts = strict_split("..", arm, arm)
     svals = [_singleton_value(p) for p in parts]
 
@@ -286,7 +282,7 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 # Singleton {…} → literal match of its single value
                 return t.LiteralNode(content=sval)
             inner = _alpha(part)
-            if isinstance(inner, (t.GroupClassNode, t.ZipNode, t.FullAlphaNode)):
+            if isinstance(inner, (t.GroupClassNode, t.FullAlphaNode)):
                 # Already a full class / run; wrapping would only restate its
                 # greedy-run semantics (and `{a..z}` now resolves to a full
                 # alpha on its own, so `{ {a..z} }` must not double-wrap).
@@ -312,10 +308,11 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         if av is not None and bv is None:
             return t.ValueRangeNode(alpha=_alpha(b), lower=av)  # τ..α
         # α..α — a class-to-class range has no ordering. To fold two classes
-        # position-wise, zip them with `<->` (e.g. {a..z}<->{A..Z}).
+        # position-wise, enumerate the pairs as a class of classes
+        # (e.g. {{a,A},{b,B},…}).
         raise CompileError(
-            f"A class-to-class range is not supported; zip the classes with "
-            f"'<->' instead (e.g. {{a..z}}<->{{A..Z}}): got {arm!r}"
+            f"A class-to-class range is not supported; enumerate the folded "
+            f"positions as a class of classes (e.g. {{{{a,A}},{{b,B}}}}): got {arm!r}"
         )
 
     if len(parts) == 3:
@@ -338,9 +335,6 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
 def _parse_count(src: str) -> t.CountSpec:
     """Parse a count modifier string into a count descriptor."""
     src = src.strip()
-    m = _COUNT_SRC_REF_RE.match(src)
-    if m:
-        return t.CountRef(index=[int(p) for p in m.group(1).split(".")])
     m = re.fullmatch(r"(\d*)(\.\.)?(\d*)", src)
     if m and (m.group(1) or m.group(2)):
         lo, dots, hi = m.groups()

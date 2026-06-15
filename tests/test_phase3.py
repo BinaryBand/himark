@@ -70,45 +70,47 @@ def test_bounded_range():
     assert node.alpha.inner.type == "char_range"
 
 
-def test_class_to_class_zip():
-    # {{a..z}<->{A..Z}} — zip two classes position-wise into one folded alphabet.
-    node = first_semantic("{{a..z}<->{A..Z}}")
-    assert node.type == "zip"
-    assert len(node.tracks) == 2
+def test_class_to_class_range_unsupported():
+    # {{a..z}..{A..Z}} — a class-to-class range has no ordering; enumerate the
+    # folded pairs as a class of classes instead.
+    with pytest.raises(CompileError):
+        resolve("{{a..z}..{A..Z}}")
 
 
 def test_congruence_single_pair():
-    # {a<->A} — the cardinality-1 zip: one position, two spellings.
-    node = first_semantic("{a<->A}")
-    assert node.type == "zip"
-    assert [tr.content for tr in node.tracks] == ["a", "A"]
+    # {a,A} — a congruence class: one position, two interchangeable spellings.
+    node = first_semantic("{a,A}")
+    assert node.type == "group_class"
+    assert node.groups == [["a", "A"]]
 
 
 def test_congruence_n_ary():
-    # {a<->A<->b} — an n-ary zip carries three tracks.
-    node = first_semantic("{a<->A<->b}")
-    assert node.type == "zip"
-    assert [tr.content for tr in node.tracks] == ["a", "A", "b"]
+    # {a,A,b} — one congruence class with three members.
+    node = first_semantic("{a,A,b}")
+    assert node.type == "group_class"
+    assert node.groups == [["a", "A", "b"]]
 
 
 def test_congruence_escaped_space_member():
-    # '\ ' is a literal space in a track; raw whitespace around '<->' is rejected.
-    node = first_semantic("{-\\ <->-}")
-    assert node.type == "zip"
-    assert [tr.content for tr in node.tracks] == ["- ", "-"]
+    # '\ ' is a literal space member; raw whitespace around ',' is rejected.
+    node = first_semantic("{-\\ ,-}")
+    assert node.type == "group_class"
+    assert node.groups == [["- ", "-"]]
     with pytest.raises(CompileError):
-        resolve("{- <->-}")
+        resolve("{- ,-}")
 
 
-def test_congruence_enumerated_is_union_of_zips():
-    # The enumerated form is a union of single-position zips.
-    node = first_semantic("{{a<->A},{b<->B}}")
+def test_congruence_enumerated_is_union_of_classes():
+    # The enumerated form is an ordered union of single-position congruence
+    # classes — an ordered alphabet of folded positions.
+    node = first_semantic("{{a,A},{b,B}}")
     assert node.type == "union"
-    assert [o.type for o in node.options] == ["zip", "zip"]
+    assert [o.type for o in node.options] == ["group_class", "group_class"]
 
 
 def test_full_alpha():
-    # {α} full range. Written with a space to avoid the {{...}} template-ref form.
+    # {α} full range. Written with a space to keep { {a..z} } from being read as
+    # one brace.
     node = first_semantic("{ {a..z} }")
     assert node.type == "full_alpha"
     assert node.inner.type == "char_range"
@@ -168,19 +170,19 @@ def test_singleton_single_part_is_literal():
     assert node.content == "abab"
 
 
-# ── Union / token_set / group_class ─────────────────────────────────────────
+# ── Congruence classes (comma folds to one class) ────────────────────────────
 
 
-def test_union_chars():
+def test_bare_chars_form_one_congruence_class():
     node = first_semantic("{a,b,c}")
-    assert node.type == "union"
-    assert len(node.options) == 3
+    assert node.type == "group_class"
+    assert node.groups == [["a", "b", "c"]]
 
 
-def test_token_set():
+def test_token_class():
     node = first_semantic("{cat,dog}")
-    assert node.type == "token_set"
-    assert node.tokens == ["cat", "dog"]
+    assert node.type == "group_class"
+    assert node.groups == [["cat", "dog"]]
 
 
 # ── Complement ───────────────────────────────────────────────────────────────
@@ -249,33 +251,10 @@ def types(pattern):
 def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
     assert first_semantic("{a..z}").type == "full_alpha"
-    assert first_semantic("{cat,dog}").type == "token_set"
+    assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "full_alpha"
-    assert first_semantic("{{a<->A},{b<->B}}").type == "union"
-
-
-def test_class_congruence_is_a_zip_not_a_sequence():
-    # {{a..z}<->{A..Z}} is σ (a zip of two classes), so it resolves to one
-    # folded alphabet.
-    assert first_semantic("{{a..z}<->{A..Z}}").type == "zip"
-
-
-# ── Template expressions ──────────────────────────────────────────────────────
-
-
-def test_template_full_match():
-    tree = resolve("{{.}}")
-    node = tree.children[0]
-    assert node.type == "full_match"
-
-
-def test_template_refs_resolve():
-    # The full capture vocabulary: numbered, sub, span, and count references.
-    assert resolve("{{0}}").children[0].type == "group_ref"
-    assert resolve("{{0.1}}").children[0].type == "group_ref"
-    assert resolve("{{0..2}}").children[0].type == "span_ref"
-    assert resolve("{{#0}}").children[0].type == "count_ref"
+    assert first_semantic("{{a,A},{b,B}}").type == "union"
 
 
 # ── Error cases ───────────────────────────────────────────────────────────────
@@ -338,8 +317,8 @@ def test_braced_class_arms_form_a_union():
 
 
 def test_full_alpha_disambiguation_space_allowed():
-    # { {a..z} } — surrounding space is syntactically necessary to prevent
-    # {{...}} being parsed as a template ref; it is stripped silently.
+    # { {a..z} } — surrounding space keeps the inner brace as its own α; it is
+    # stripped silently for a single nested-brace arm.
     node = first_semantic("{ {a..z} }")
     assert node.type == "full_alpha"
     assert node.inner.type == "char_range"

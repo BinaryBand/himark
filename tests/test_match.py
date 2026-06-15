@@ -1,8 +1,7 @@
-"""Tests for engine/_match.py — match semantics."""
+"""Tests for the match engine — match semantics."""
 
 from marky import parser
-from marky.engine import execute
-from marky.engine import find_matches
+from marky.engine import execute, find_matches
 
 
 def matches(pattern, text):
@@ -16,11 +15,11 @@ def match_one(pattern, text):
     return result[0]
 
 
-# The 26-letter case-fold class, written as enumerated congruence groups. (The
-# `{a<->A..z<->Z}` / `{{a..z}<->{A..Z}}` range sugar was dropped; this is what it
-# compiled to — a single group-class.)
+# The 26-letter case-fold class, written as enumerated congruence groups: each
+# letter and its capital are one interchangeable position (`{a,A}`), and the
+# outer braces order the 26 positions.
 CASE_FOLD = (
-    "{" + ",".join(f"{{{c}<->{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz") + "}"
+    "{" + ",".join(f"{{{c},{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz") + "}"
 )
 
 
@@ -190,7 +189,7 @@ def test_exclusion_named_alpha_units():
 
 
 def test_exclusion_full_alpha_stress():
-    # Stress Bug 1 on full_alpha: excluded chars should split greedy runs.
+    # Excluded chars should split greedy runs.
     text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
     result = matches("{{a..z},!m..p}", text)
 
@@ -209,7 +208,7 @@ def test_exclusion_full_alpha_stress():
     assert result == expected
 
 
-# ── Canonical form (spec 0.6.0) ───────────────────────────────────────────────
+# ── Canonical form ────────────────────────────────────────────────────────────
 
 
 def test_canonical_rejects_leading_zeros():
@@ -242,7 +241,6 @@ def test_duplicate_symbols_in_value_alphabet_raise():
 
 
 def test_fixed_padding_enforces_bound():
-    # {3: {@d}..255} matches exactly 3 digits whose value is ≤ 255
     result = matches("{3: {@d}..255}", "042 999 256 255")
     assert "042" in result
     assert "255" in result
@@ -251,12 +249,10 @@ def test_fixed_padding_enforces_bound():
 
 
 def test_fixed_padding_rejects_wrong_width():
-    # "12" is only 2 chars; with no leading zero it cannot satisfy width 3
     assert matches("{3: {@d}..255}", "12") == []
 
 
 def test_width_range_padding():
-    # {2..3:{@d}..255}: widths 2-3, leading zeros allowed, value bounded.
     result = matches("{2..3:{@d}..255}", "00 042 255")
     assert "00" in result
     assert "042" in result
@@ -265,7 +261,6 @@ def test_width_range_padding():
 
 
 def test_variable_padding_caps_width_at_len_max():
-    # {:{@d}..255} accepts widths 1 through len('255') = 3, never 4.
     result = matches("{:{@d}..255}", "0042")
     assert "0042" not in result
     assert "004" in result  # the 3-wide window is the greedy match
@@ -275,7 +270,6 @@ def test_variable_padding_caps_width_at_len_max():
 
 
 def test_string_range_equal_length():
-    # All 3-char strings between 'cat' and 'dog' inclusive.
     result = matches("{cat..dog}", "cat cau dof dog elk")
     assert result == ["cat", "cau", "dof", "dog"]
 
@@ -284,59 +278,52 @@ def test_string_range_excludes_out_of_range():
     assert matches("{cat..dog}", "aaa zzz") == []
 
 
-def test_string_range_equal_length_only():
-    # Endpoints are both len 3; 2-char substrings like "do" are never tried.
-    # "aaa" and "zzz" are outside the range, "do" is only 2 chars so no match.
-    result = matches("{cat..dog}", "aaa zzz")
-    assert result == []
+# ── Congruence classes (comma folds to one class) ────────────────────────────
 
 
-# ── token_set ─────────────────────────────────────────────────────────────────
-
-
-def test_token_set():
+def test_token_class():
     result = matches("{cat,dog}", "I have a cat and a dog and a bird")
     assert result == ["cat", "dog"]
 
 
-def test_token_set_order():
+def test_token_class_longest_first():
     result = matches("{http,https}", "https://x http://y")
     assert result == ["https", "http"]
 
 
-# ── union ─────────────────────────────────────────────────────────────────────
-
-
-def test_union_chars():
+def test_bare_chars_one_class():
     result = matches("{a,e,i,o,u}", "hello")
     assert result == ["e", "o"]
 
 
-# ── group_class ───────────────────────────────────────────────────────────────
+def test_congruence_pair_is_case_agnostic():
+    # The headline: `,` folds a class, so `[2]` accepts every casing.
+    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
-def test_group_class_single_char():
-    # Each position is one member of a group; any casing, any length.
-    result = matches("{{a<->A},{b<->B}}", "aBAb zz")
+def test_ordered_class_of_classes():
+    # {{a,A},{b,B}} is an ordered alphabet of folded positions: any casing of a
+    # run drawn from those two letters matches as one unit.
+    result = matches("{{a,A},{b,B}}", "aBAb zz")
     assert result == ["aBAb"]
 
 
-def test_group_class_multichar_tokens():
+def test_class_multichar_tokens():
     # Multi-char group members are matched as whole tokens, not loose chars.
-    result = matches("{{a<->bc},{def<->ghi}}", "bcghi")
+    result = matches("{{a,bc},{def,ghi}}", "bcghi")
     assert result == ["bcghi"]
 
 
-def test_group_class_rejects_partial_token():
+def test_class_rejects_partial_token():
     # 'b' alone is not a member ('bc' is); a lone 'b' must not start a match.
-    result = matches("{{a<->bc},{x<->yz}}", "byz")
+    result = matches("{{a,bc},{x,yz}}", "byz")
     assert result == ["yz"]  # no-anchor: 'yz' still matches as a sub-token
 
 
-def test_group_class_interleave():
+def test_class_interleave():
     # Congruence of "char + escaped space" and "char" spellings makes [count]
     # an interleave: separators optional between repetitions, never alone.
-    hr = "{{-\\ <->-},{*\\ <->*},{_\\ <->_}}[3..]"
+    hr = "{{-\\ ,-},{*\\ ,*},{_\\ ,_}}[3..]"
     assert matches(hr, "---") == ["---"]
     assert matches(hr, "- - -") == ["- - -"]
     assert matches(hr, "* * *") == ["* * *"]
@@ -344,6 +331,12 @@ def test_group_class_interleave():
     assert matches(hr, "--") == []  # too short
     assert matches(hr, "-*-") == []  # mixed rule chars are different groups
     assert matches(hr, "    ") == []  # a space is a spelling, not a unit
+
+
+def test_congruence_with_whitespace_member():
+    # A class member may be whitespace: `{a,\ }` folds 'a' and ' ' into one
+    # position (an escaped space; a raw space after ',' is rejected elsewhere).
+    assert matches("{a,\\ }", "a a") == ["a a"]
 
 
 # ── complement ────────────────────────────────────────────────────────────────
@@ -354,10 +347,20 @@ def test_complement_newline():
     assert result == ["line one", "line two"]
 
 
+def test_complement_char_range():
+    # {!a..z} greedily matches entire runs of non-lowercase chars.
+    result = matches("{!a..z}", "a1B2c3")
+    assert "1B2" in result
+    assert "3" in result
+    assert "a" not in result
+    assert "c" not in result
+
+
 # ── Repetition equality ───────────────────────────────────────────────────────
 
 
 def test_exact_count_same_char():
+    # An ordered range repeats by value: `[3]` is the diagonal (equal reps).
     result = matches("{a..z}[3]", "aaa bbb abc xyz")
     assert set(result) == {"aaa", "bbb"}
 
@@ -377,6 +380,8 @@ def test_token_repetition():
     result = matches("{cat,dog}[2]", "catcat dogdog catdog")
     assert "catcat" in result
     assert "dogdog" in result
+    # 'cat' and 'dog' share one class, so a mixed pair is congruent too.
+    assert "catdog" in result
 
 
 def test_variable_number_repetition():
@@ -385,19 +390,19 @@ def test_variable_number_repetition():
 
 
 def test_grouped_word_repetition_case_folded():
-    # Spec headline: same word twice, any casing. "Hello" then "HELLO".
+    # Same word twice, any casing. "Hello" then "HELLO".
     assert matches(CASE_FOLD + "[2]", "HelloHELLO") == ["HelloHELLO"]
 
 
 def test_grouped_word_repetition_mixed():
-    # "ab" and "AB" are group-equal (a<->A, b<->B).
+    # "ab" and "AB" are group-equal (a/A, b/B share classes).
     assert matches(CASE_FOLD + "[2]", "abAB") == ["abAB"]
 
 
-def test_multichar_group_repetition():
+def test_multichar_class_repetition():
     # Repetition-equality is group-based even for multi-char members:
-    # 'a' and 'bc' share a group, so repetitions may differ in surface length.
-    result = matches("{a<->bc}[2]", "abc aa bcbc bca xy")
+    # 'a' and 'bc' share a class, so repetitions may differ in surface length.
+    result = matches("{a,bc}[2]", "abc aa bcbc bca xy")
     assert "abc" in result
     assert "aa" in result
     assert "bcbc" in result
@@ -405,195 +410,10 @@ def test_multichar_group_repetition():
     assert "xy" not in result
 
 
-# ── Template rendering ────────────────────────────────────────────────────────
-
-
-def test_template_full_match():
-    result = execute(parser.parse("{hello} => <b>{{.}}</b>"), "say hello")
-    assert result == ["<b>hello</b>"]
-
-
-# ── Captures ──────────────────────────────────────────────────────────────────
-
-
-def test_capture_groups_numbered():
-    ms = find_matches(parser.parse("{@d}{@l}")[0], "1a 2b")
-    assert [m.groups for m in ms] == [["1", "a"], ["2", "b"]]
-
-
-def test_group_ref_in_template():
-    # {{1}} renders the second group — the doc's decorator idiom.
-    out = execute(parser.parse("{**}{!**}{**} => <strong>{{1}}</strong>"), "a **hi** b")
-    assert out == ["<strong>hi</strong>"]
-
-
-def test_count_ref_template():
-    # {{#0}} is the repeat count of group 0.
-    assert execute(parser.parse("{a}[1..] => {{#0}}"), "aaa") == ["3"]
-
-
-def test_count_ref_in_count_position():
-    # [b] repeats as many times as [a] matched.
-    assert matches("{a}[2..5]{b}[{{#0}}]", "aaabbb") == ["aaabbb"]
-    assert matches("{a}[2..5]{b}[{{#0}}]", "aabbb") == ["aabb"]
-
-
-def test_dotted_count_ref_resolves_sub_group():
-    # {{#N.M}} is the repeat count of sub-group M inside group N — here group 0's
-    # first sub-capture {a}[1..] matched three times.
-    assert execute(parser.parse("{{a}[1..]{b}} => {{#0.0}}"), "aaab") == ["3"]
-    # The same dotted path works in a [count] modifier: {c} repeats #0.0 times.
-    assert matches("{{a}[1..]{b}}{c}[{{#0.0}}]", "aaabccc") == ["aaabccc"]
-
-
-def test_congruence_with_whitespace_operand():
-    # Regression: a `<->` operand may be pure whitespace. `{a<-> }` folds 'a' and
-    # ' ' into one position (this previously raised "Unexpected whitespace").
-    assert matches("{a<-> }", "a a") == ["a a"]
-
-
-# ── Run-until: `{start}>>{expr}` infix non-capturing skip ────────────────────
-
-
-def test_run_until_skips_without_capturing():
-    # {abc}>>{@d}: match 'abc' (group 0), then skip (non-capturing) to the first
-    # digit. The skip adds no group, so the digit run is {{1}}, and the skipped
-    # gap is dropped from the captures.
-    assert execute(parser.parse(r"{abc}>>{@d}{@d} => {{1}}"), "abc -- 123") == ["123"]
-
-
-def test_run_until_leaves_terminator_for_next_construct():
-    # The skip stops *before* the terminator, so the following constructs match
-    # it. Here: match 'intro', skip to '##', then the marker, space, and line.
-    out = execute(
-        parser.parse(r"{intro}>>{##}{##}{ }{!\n} => {{3}}"), "intro\n## Heading\nx"
-    )
-    assert out == ["Heading"]
-
-
-def test_run_until_fails_when_terminator_absent():
-    # The skip runs to end-of-input when '##' is absent, but the `{##}` written
-    # *after* it then has nothing to match — so the whole pattern still fails.
-    assert matches(r"{intro}>>{##}{##}", "intro then nothing") == []
-
-
-def test_run_until_in_group_splits_on_newline():
-    # `{>>{\n}}` is a capturing line token; matched repeatedly it splits by '\n'.
-    # The end-of-input stop keeps the last line even without a trailing newline.
-    assert execute(parser.parse(r"{>>{\n}} => {{.}}"), "alpha\nbeta\ngamma") == [
-        "alpha",
-        "beta",
-        "gamma",
-    ]
-
-
-def test_run_until_requires_a_start_construct():
-    # `>>` is infix: a bare leading `>>` (no start construct) is a compile error.
-    import pytest
-
-    from marky.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        parser.parse(r">>{##}{##}")
-
-
-def test_bare_double_gt_stays_literal_in_template():
-    # Only `>>{` is the operator; a stray `>>` in a template is left verbatim.
-    assert execute(parser.parse(r"{a..z} => a >> b"), "x") == ["a >> b"]
-
-
-def test_span_ref_groups_inclusive():
-    # {{0..2}} spans from group 0's start to group 2's end.
-    assert execute(parser.parse("{@d}{@l}{@d} => [{{0..2}}]"), "1a2 3b4") == [
-        "[1a2]",
-        "[3b4]",
-    ]
-
-
-def test_grouping_brace_sub_captures():
-    # A grouping brace is one capture whose nested braces are sub-captures.
-    ms = find_matches(parser.parse("{of{black}{quartz}}")[0], "ofblackquartz")
-    assert len(ms) == 1
-    assert ms[0].groups == ["ofblackquartz"]
-    assert ms[0].sub_groups == [["black", "quartz"]]
-
-
-def test_sub_capture_refs():
-    out = execute(
-        parser.parse("{of{black}{quartz}} => {{0.0}}+{{0.1}}"), "ofblackquartz"
-    )
-    assert out == ["black+quartz"]
-
-
-# ── Structural repetition of grouping braces (tables) ────────────────────────
-
-
-def test_grouping_brace_repetition_is_structural():
-    # A grouping brace is a *shape*: each repetition re-matches the shape, with
-    # content free between reps — unlike an atomic class, which repeats by value.
-    # So a row of differing cells matches, where value-equal repetition would not.
-    row = r"{{|}{!|,\n}}[2]{|}"
-    assert matches(row, "| a | bb |") == ["| a | bb |"]
-    # The repeat count is that structural count: two cell units, so #0 == 2.
-    assert execute(parser.parse(row + " => {{#0}}"), "| a | bb |") == ["2"]
-
-
-def test_table_whole_match_via_structural_rep_and_count_ref():
-    # A table is n rows each with the same m columns. Row 0's cell repetition
-    # fixes m (group 0); every later row repeats exactly #0 cells. The count-ref
-    # crosses the grouping-brace sub-state to reach that outer group.
-    cells = r"{{|}{!|,\n}}"
-    table = cells + r"[1..]{|}{\n}" + "{" + cells + r"[{{#0}}]{|}{\n}}[0..]"
-    src = "| a | b |\n| --- | --- |\n| c | d |\n"
-    assert matches(table, src) == [src]
-    # A ragged row (different column count) is not absorbed into the table.
-    ragged = "| a | b |\n| c | d | e |\n"
-    assert matches(table, ragged)[0] == "| a | b |\n"
-    # The whole table wraps as one unit; row/cell wrapping chains from there.
-    # (=>+ splices in place and returns the whole document as a string.)
-    assert execute(parser.parse(table + r" =>+ <table>{{.}}</table>"), src) == (
-        "<table>" + src + "</table>"
-    )
-
-
-# ── Reference conveyor + quoted template literals ────────────────────────────
-
-
-def test_reference_conveyor_forwards_refs():
-    # A chained template's references form the forward payload; the literal
-    # chrome wraps the transformed result. {{0}}{{2}}{{4}} render to '|||',
-    # which the next step matches and replaces, then <row>…</row> wraps it.
-    p = r"{|}{!|,\n}{|}{!|,\n}{|} => <row>{{0}}{{2}}{{4}}</row> => {|}[3] => COLS"
-    assert execute(parser.parse(p), "| a | b |") == ["<row>COLS</row>"]
-
-
-def test_full_match_ref_still_defers():
-    # A {{.}}-only template keeps the classic deferral: the remainder transforms
-    # the whole match in place, inside the chrome.
-    p = (
-        r"{|}{!|,\n}{|}{!|,\n}{|} => <row>{{.}}</row>"
-        r" => {|}{!|,\n} => <col>{{1}}</col>"
-    )
-    assert execute(parser.parse(p), "| a | b |") == [
-        "<row><col> a </col><col> b </col>|</row>"
-    ]
-
-
-def test_quoted_template_literals():
-    # Static template text may be quoted; whole-quoted and chrome-quoted agree.
-    whole = execute(parser.parse('{a} => "<b>{{.}}</b>"'), "a")
-    split = execute(parser.parse('{a} => "<b>"{{.}}"</b>"'), "a")
-    assert whole == split == ["<b>a</b>"]
-    # Inside quotes single braces are literal, and a lone ' is an ordinary char.
-    assert execute(parser.parse('{a} => "{lit}"'), "a") == ["{lit}"]
-    assert execute(parser.parse('{a} => "it\'s {{.}}"'), "a") == ["it's a"]
-
-
-# ── enumerated case-fold class (replaces the dropped zip-range sugar) ─────────
+# ── enumerated case-fold class ────────────────────────────────────────────────
 
 
 def test_case_fold_class_matches_letter_sequence():
-    # The enumerated 26-pair class matches any [a-z, A-Z] run, case-insensitively.
     result = matches(CASE_FOLD, "Hello 123 World")
     assert "Hello" in result
     assert "World" in result
@@ -604,46 +424,55 @@ def test_case_fold_class_rejects_non_alpha():
     assert matches(CASE_FOLD, "123") == []
 
 
-def test_class_zip_matches_case_fold():
-    # {{a..z}<->{A..Z}} zips the two classes into one folded alphabet.
-    assert matches("{{a..z}<->{A..Z}}", "Hello 123") == ["Hello"]
-
-
-def test_zip_cardinality_mismatch_raises():
+def test_class_to_class_range_unsupported():
     import pytest
 
     from marky.models.exceptions import CompileError
 
-    # a(1) <-> A..z(58) <-> Z(1): unequal tracks cannot zip.
+    # The {a..z}..{A..Z} range sugar is gone; enumerate folded pairs instead.
     with pytest.raises(CompileError):
-        matches("{a<->A..z<->Z}", "x")
+        matches("{{a..z}..{A..Z}}", "x")
 
 
-# ── variable-width padding ────────────────────────────────────────────────────
+# ── Captures ──────────────────────────────────────────────────────────────────
 
 
-def test_variable_padding_matches_values_in_bound():
-    # {:{@d}..255} delegates to the inner upper_bound, accepting any valid width.
-    result = matches("{:{@d}..255}", "0 9 99 255 256 999")
-    assert "0" in result
-    assert "9" in result
-    assert "99" in result
-    assert "255" in result
-    assert "256" not in result
-    assert "999" not in result
+def test_capture_groups_numbered():
+    ms = find_matches(parser.parse("{@d}{@l}")[0], "1a 2b")
+    assert [m.groups for m in ms] == [["1", "a"], ["2", "b"]]
 
 
-# ── complement on char range ──────────────────────────────────────────────────
+def test_grouping_brace_sub_captures():
+    # A grouping brace is one capture whose nested braces are sub-captures.
+    ms = find_matches(parser.parse("{of{black}{quartz}}")[0], "ofblackquartz")
+    assert len(ms) == 1
+    assert ms[0].groups == ["ofblackquartz"]
+    assert ms[0].sub_groups == [["black", "quartz"]]
 
 
-def test_complement_char_range():
-    # {!a..z} greedily matches entire runs of non-lowercase chars.
-    # "a1B2c3" → "1B2" (between 'a' and 'c') and "3" (after 'c').
-    result = matches("{!a..z}", "a1B2c3")
-    assert "1B2" in result
-    assert "3" in result
-    assert "a" not in result
-    assert "c" not in result
+def test_grouping_brace_repetition_is_structural():
+    # A grouping brace is a *shape*: each repetition re-matches the shape, with
+    # content free between reps — unlike an atomic class, which repeats by value.
+    row = r"{{|}{!|,\n}}[2]{|}"
+    assert matches(row, "| a | bb |") == ["| a | bb |"]
+
+
+# ── Output (`=>`): constant templates only ───────────────────────────────────
+
+
+def test_constant_template_per_match():
+    # References are gone, so a `=>` step emits a constant for every match.
+    assert execute(parser.parse("{a..z} => X"), "ab cd") == ["X", "X"]
+
+
+def test_replace_mode_splices_constant():
+    # `=>+` splices the constant in place and returns the whole document.
+    assert execute(parser.parse("{a..z} =>+ X"), "ab-cd") == "X-X"
+
+
+def test_chained_patterns_narrow():
+    # A run of patterns feeds each match of the first into the second.
+    assert execute(parser.parse("{@d} => {{@d}..9}"), "1 23 4") == ["1", "2", "3", "4"]
 
 
 # ── named alphabets: b32, b64 ────────────────────────────────────────────────

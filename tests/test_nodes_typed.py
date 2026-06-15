@@ -2,13 +2,11 @@ from marky.models.nodes_typed import (
     BraceGroupNode,
     CharRangeNode,
     CountRange,
-    FullMatchNode,
+    GroupClassNode,
     LiteralNode,
     RootNode,
-    TokenSetNode,
     UnionNode,
     ValueRangeNode,
-    ZipNode,
 )
 
 
@@ -24,23 +22,22 @@ def test_typed_nodes_smoke():
     assert root.children[0].type == "union"
 
 
-def test_typed_count_and_template():
+def test_typed_count_and_group_class():
     group = BraceGroupNode(content="a", semantic=LiteralNode(content="a"))
     group.count = CountRange(min=1, max=3)
 
-    zip_node = ZipNode(tracks=[LiteralNode(content="a"), LiteralNode(content="A")])
+    gc = GroupClassNode(groups=[["a", "A"]])
 
     assert group.count is not None
-    assert FullMatchNode().type == "full_match"
-    assert zip_node.type == "zip"
+    assert gc.type == "group_class"
+    assert gc.groups == [["a", "A"]]
 
 
 def test_semantic_payload_fields():
     bounded = ValueRangeNode(
         lower="10", alpha=CharRangeNode(start="0", end="9"), upper="20"
     )
-    tokens = TokenSetNode(tokens=["cat", "dog"], exclusions=["dog"])
+    klass = GroupClassNode(groups=[["cat", "dog"]])
 
     assert bounded.type == "value_range"
-    assert tokens.tokens == ["cat", "dog"]
-    assert tokens.exclusions == ["dog"]
+    assert klass.groups == [["cat", "dog"]]
