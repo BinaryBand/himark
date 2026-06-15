@@ -19,8 +19,10 @@ Two fold behaviors compose a chain:
   computation.
 """
 
+from marky.engine._render import has_refs as _has_refs
 from marky.engine._render import is_template as _is_template
 from marky.engine._render import render as _render
+from marky.engine._render import render_parts as _render_parts
 from marky.engine._types import Match
 from marky.engine.backend import Engine, PythonEngine
 from marky.models import nodes_typed as t
@@ -148,13 +150,17 @@ def _render_chained(
     references (`{{ i$j }}`) interpolate stage values; its literal text is
     constant. `ancestors` plus the feeding match `m` form the addressable stages.
 
-    A trailing chain (`remaining`) re-matches the rendered text, so a mid-pipe
-    template feeds its rendered output to the next link."""
+    A trailing chain (`remaining`) re-matches the forwarded text. A mid-pipe
+    template with moustache references feeds only its interpolated payload to the
+    next link; its literal chrome wraps the result (line-39 conveyor). A constant
+    mid-pipe template has no payload to split, so its whole text is forwarded."""
     pipeline = [*ancestors, m]
-    rendered = _render(head, m, pipeline)
     if not remaining:
-        return rendered
-    return _transform(remaining, rendered, (*ancestors, m))
+        return _render(head, m, pipeline)
+    if not _has_refs(head):
+        return _transform(remaining, _render(head, m, pipeline), (*ancestors, m))
+    prefix, payload, suffix = _render_parts(head, m, pipeline)
+    return prefix + _transform(remaining, payload, (*ancestors, m)) + suffix
 
 
 def _transform(

@@ -52,6 +52,27 @@ def render(
     )
 
 
+def render_parts(
+    template_tree: t.RootNode, match: Match, pipeline: list[Match] | None = None
+) -> tuple[str, str, str]:
+    """Split a template into (prefix_chrome, interpolated_payload, suffix_chrome).
+
+    The payload is the interpolated span from the first `{{` to the last `}}`
+    (interior literals included); the chrome is the literal text outside it. A
+    mid-pipe template forwards only the payload to the next link, so its chrome
+    wraps the result rather than entering the pipeline scope (`<p>{{0$0}}</p>`
+    appends the tags to the document but feeds only the value forward)."""
+    stages = pipeline if pipeline is not None else [match]
+    text = "".join(
+        n.content for n in template_tree.children if isinstance(n, t.LeafNode)
+    )
+    first = text.find("{{")
+    last = text.rfind("}}")
+    if first == -1 or last == -1:
+        return text, "", ""
+    return text[:first], _expand(text[first : last + 2], stages), text[last + 2 :]
+
+
 def _expand(text: str, stages: list[Match]) -> str:
     return _MOUSTACHE_RE.sub(lambda mo: _resolve(mo.group(1), stages), text)
 

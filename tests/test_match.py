@@ -593,3 +593,26 @@ def test_moustache_capture_out_of_range_raises():
 
     with pytest.raises(CompileError):
         execute(parser.parse('{cat} => "{{0$5}}"'), "cat")
+
+
+# ── Mid-pipe conveyor (line 39): only the payload is fed to the next link ──────
+
+
+def test_conveyor_chrome_excluded_from_pipe_scope():
+    # The chrome's 'a' is NOT seen by the next link; only the payload "cat" is
+    # forwarded and transformed. Chrome wraps the result.
+    out = execute(parser.parse('{cat} => "<a>{{0$}}</a>" => {a} => "X"'), "cat")
+    assert out == ["<a>cXt</a>"]
+
+
+def test_conveyor_interior_literal_is_payload():
+    # Literal text between two references is part of the forwarded payload.
+    out = execute(
+        parser.parse('{cat}{dog} => "<p>{{0$0}}-{{0$1}}</p>" => {o} => "0"'), "catdog"
+    )
+    assert out == ["<p>cat-d0g</p>"]
+
+
+def test_conveyor_terminal_template_renders_fully():
+    # With no remaining chain, the whole template (chrome + payload) renders.
+    assert execute(parser.parse('{cat} => "<a>{{0$}}</a>"'), "cat") == ["<a>cat</a>"]
