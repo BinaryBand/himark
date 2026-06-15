@@ -27,8 +27,6 @@ Whereas `$i` accesses a capture's content, `#i` accesses it's repeat count.
 
 E.g. `{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}` would capture `abcabcabc repeated 3 times` and skip `abcabcabc repeated 4 times`. However, it would capture `abcabcabc 2 times`, so watch out for unintended sub-matches.
 
-Since `[...]` always expects base-10 integers, it will accept `#` arguments, assuming it is a lone index key or a range where the left-side argument does not exceed the right.
-
 Either `$` or `#` can be accessed within `{...}`, but only the latter can be accessed within `[...]`.
 
 ## Piping and transformations
@@ -37,11 +35,13 @@ Either `$` or `#` can be accessed within `{...}`, but only the latter can be acc
 
 `$` and `#` accessors assume they're accessing content on the same expression. `{{i$0}}` overrides the default scope assumption to access any expression in the pipeline by its index `i`.
 
-Mid-pipe template expressions only feed non-static values to the next link; e.g. `... => "<p>{{0$0}}</p>" => ...` drops "\<p>" and "\</p>".
+Mid-pipe template expressions only feed non-static values to the next link; e.g. `... => "<p>{{0$0}}</p>" => ...` drops "\<p>" and "\</p>" from the pipeline scope but appends it to the document.
 
 ## Notes
 
 A class occupies a **single position** -- by default it matches exactly one symbol.
+
+Every range normalizes to a three-part `{floor..A..ceiling}`: the middle `A` is the most-limiting (narrowest) alphabet among the operands -- ambient Unicode when none is named -- the floor is the left operand's minimum, and the ceiling is the right operand's maximum. So `{x}` is `{x..{@uni}..x}`, `{x..y}` is `{x..{@uni}..y}`, and an explicit middle (`{x..A..y}`) keeps `A`. It is a compile error when the ceiling cannot be spelled in `A` (`{{a..c}..zz}`).
 
 ### Assumptions
 
@@ -49,5 +49,6 @@ A class occupies a **single position** -- by default it matches exactly one symb
 - **{a..z}** -- `a` and `z` both exist on the Unicode plain so they can meet. `{a..{@uni}..z}`
 - **{{a..z}..c}** -- Since `{a..z}` = `{a..{@uni}..z}` (a subset of Unicode) and `c` exists on the Unicode plain, the former becomes the limiting alphabet. `{a..{a..z}..c}`
 - **{{a..z}..cc}** -- `{a..z}` is the limiting alphabet since `cc`'s Unicode alphabet is a super-set. `{a..{a..z}..cc}`
-- **{{a,A},{b,B},...,{z,Z}}** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner
-- **{{a..c}..zz}** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's
+- **{{a,A},{b,B},...,{z,Z}}** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner.
+- **{{a..c}..zz}** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's.
+- **{1}{{{1}[25]}..{@b58}..{{z}[34]}}** -- Any 20-byte string in base-58 with a leading '1'. AKA, a legacy Bitcoin address (ignoring the checksum).

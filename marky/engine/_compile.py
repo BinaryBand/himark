@@ -119,8 +119,6 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
         return [[node.content]]
     if isinstance(node, t.GroupClassNode):
         return [list(grp) for grp in node.groups]
-    if isinstance(node, t.FullAlphaNode):
-        return _groups(node.inner)
     if isinstance(node, t.ValueRangeNode):
         return _sliced_groups(node)
     raise CompileError(f"Cannot use {type(node).__name__} as a value alphabet")
@@ -173,9 +171,6 @@ def _value_view(node: t.SemanticNode) -> _ValueView | None:
         return _ValueView(
             alph, lo, hi, _ValueExcluder(node.exclusions, alph), min_width
         )
-    if isinstance(node, t.FullAlphaNode):
-        alph = _alphabet_of(node.inner, distinct=False)
-        return _ValueView(alph, None, None, _ValueExcluder(node.exclusions, alph), 1)
     if isinstance(node, (t.UnionNode, t.GroupClassNode)):
         # A union/group class of alphabet arms (e.g. @hex) is itself an
         # alphabet; arms that aren't (tokens, complements) fall back to None.
@@ -237,30 +232,6 @@ class _StringRange(_Base):
             if len(s) == length and self.start <= s <= self.end:
                 return pos + length
         return None
-
-
-class _FullAlpha(_Base):
-    """Greedy run of characters that each match the inner alphabet node."""
-
-    __slots__ = ("inner", "_excl")
-
-    def __init__(self, node: t.FullAlphaNode):
-        self.inner = lower(node.inner)
-        self._excl = _excluder(node.exclusions)
-
-    def match(self, text: str, pos: int) -> int | None:
-        excl = self._excl
-        inner = self.inner.match
-        n = len(text)
-        end = pos
-        while end < n:
-            if excl is not None and excl(text[end]):
-                break
-            nxt = inner(text, end)
-            if nxt is None or nxt == end:
-                break
-            end = nxt
-        return end if end > pos else None
 
 
 class _ValueRange(_Base):
@@ -475,7 +446,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.LiteralNode: lambda n: _Literal(n.content),
     t.CharRangeNode: _CharRange,
     t.StringRangeNode: _StringRange,
-    t.FullAlphaNode: _FullAlpha,
     t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,

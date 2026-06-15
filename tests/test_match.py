@@ -43,9 +43,9 @@ def test_literal_multiple():
 
 
 def test_char_range_matches():
-    # {a..z} is unbounded: it matches a whole lowercase string as one run.
+    # {a..z} is single-position: matches exactly one lowercase letter at a time.
     result = matches("{a..z}", "hello world")
-    assert result == ["hello", "world"]
+    assert result == list("helloworld")
 
 
 def test_char_range_no_match():
@@ -162,22 +162,12 @@ def test_exclusion_single_value():
 
 
 def test_exclusion_char_range_stress():
-    # {a..z,!d..f} is an unbounded alphabet minus d-f: excluded chars split the
-    # greedy lowercase run; they must never appear in a match.
+    # {a..z,!d..f} is a single-position class: each non-excluded lowercase char
+    # is an independent match; d, e, f are never matched.
     text = "abcdefghijklmnopqrstuvwxyz" * 50
     result = matches("{a..z,!d..f}", text)
 
-    expected = []
-    run = ""
-    for ch in text:
-        if "a" <= ch <= "z" and not ("d" <= ch <= "f"):
-            run += ch
-        else:
-            if run:
-                expected.append(run)
-                run = ""
-    if run:
-        expected.append(run)
+    expected = [ch for ch in text if "a" <= ch <= "z" and not ("d" <= ch <= "f")]
 
     assert result == expected
 
@@ -189,21 +179,11 @@ def test_exclusion_named_alpha_units():
 
 
 def test_exclusion_full_alpha_stress():
-    # Excluded chars should split greedy runs.
+    # {{a..z},!m..p} is single-position: each char in a-z except m-p is one match.
     text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
     result = matches("{{a..z},!m..p}", text)
 
-    expected = []
-    run = ""
-    for ch in text:
-        if "a" <= ch <= "z" and not ("m" <= ch <= "p"):
-            run += ch
-        else:
-            if run:
-                expected.append(run)
-                run = ""
-    if run:
-        expected.append(run)
+    expected = [ch for ch in text if "a" <= ch <= "z" and not ("m" <= ch <= "p")]
 
     assert result == expected
 
@@ -462,12 +442,13 @@ def test_grouping_brace_repetition_is_structural():
 
 def test_constant_template_per_match():
     # References are gone, so a `=>` step emits a constant for every match.
-    assert execute(parser.parse("{a..z} => X"), "ab cd") == ["X", "X"]
+    # {a..z,A..Z} is a union of two char-ranges, compiled to a _Group (greedy run).
+    assert execute(parser.parse("{a..z,A..Z} => X"), "ab cd") == ["X", "X"]
 
 
 def test_replace_mode_splices_constant():
     # `=>+` splices the constant in place and returns the whole document.
-    assert execute(parser.parse("{a..z} =>+ X"), "ab-cd") == "X-X"
+    assert execute(parser.parse("{a..z,A..Z} =>+ X"), "ab-cd") == "X-X"
 
 
 def test_chained_patterns_narrow():

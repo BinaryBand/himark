@@ -76,13 +76,6 @@ class StringRangeNode:
 
 
 @dataclass(slots=True, kw_only=True)
-class FullAlphaNode:
-    inner: SemanticNode
-    type: Literal["full_alpha"] = "full_alpha"
-    exclusions: list[str] = field(default_factory=list)
-
-
-@dataclass(slots=True, kw_only=True)
 class ValueRangeNode:
     """A value range over `alpha`. A `None` endpoint is open: no `lower` means a
     floor of zero (width 1); no `upper` means unbounded. The three written forms
@@ -151,7 +144,6 @@ SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
     | StringRangeNode
-    | FullAlphaNode
     | ValueRangeNode
     | UnionNode
     | ComplementNode
@@ -166,7 +158,6 @@ SemanticClasses = (
     LiteralNode,
     CharRangeNode,
     StringRangeNode,
-    FullAlphaNode,
     ValueRangeNode,
     UnionNode,
     ComplementNode,

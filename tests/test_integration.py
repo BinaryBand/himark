@@ -70,7 +70,8 @@ def test_same_digit_twice():
 
 def test_constant_template():
     # References are gone; a `=>` step emits a constant for each match.
-    result = execute(parser.parse("{a..z} => <x>"), "ab cd")
+    # {a..z,A..Z} is a union compiled to a _Group (greedy run of letters).
+    result = execute(parser.parse("{a..z,A..Z} => <x>"), "ab cd")
     assert result == ["<x>", "<x>"]
 
 

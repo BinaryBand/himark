@@ -32,14 +32,12 @@ def test_literal():
     assert node.content == "hello"
 
 
-def test_char_range_is_unbounded_full_alpha():
-    # {a..z} is an unbounded alphabet (any lowercase string), so it is a full
-    # alpha wrapping the char range.
+def test_char_range_single_position():
+    # {a..z} occupies exactly one position — it matches a single char a-z.
     node = first_semantic("{a..z}")
-    assert node.type == "full_alpha"
-    assert node.inner.type == "char_range"
-    assert node.inner.start == "a"
-    assert node.inner.end == "z"
+    assert node.type == "char_range"
+    assert node.start == "a"
+    assert node.end == "z"
 
 
 # ── α forms ──────────────────────────────────────────────────────────────────
@@ -51,7 +49,7 @@ def test_upper_bound():
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)
     assert node.upper == "255"
-    assert node.alpha.inner.type == "char_range"
+    assert node.alpha.type == "char_range"
 
 
 def test_lower_bound():
@@ -59,7 +57,7 @@ def test_lower_bound():
     assert node.type == "value_range"
     assert node.lower == "128"
     assert node.upper is None  # open above (unbounded)
-    assert node.alpha.inner.type == "char_range"
+    assert node.alpha.type == "char_range"
 
 
 def test_bounded_range():
@@ -67,7 +65,7 @@ def test_bounded_range():
     assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
-    assert node.alpha.inner.type == "char_range"
+    assert node.alpha.type == "char_range"
 
 
 def test_class_to_class_range_unsupported():
@@ -108,12 +106,13 @@ def test_congruence_enumerated_is_union_of_classes():
     assert [o.type for o in node.options] == ["group_class", "group_class"]
 
 
-def test_full_alpha():
-    # {α} full range. Written with a space to keep { {a..z} } from being read as
-    # one brace.
+def test_single_brace_collapse():
+    # { {a..z} } — the outer brace collapses transparently to the inner class.
+    # A brace around a single non-singleton class is identity: { {a..z} } = {a..z}.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "full_alpha"
-    assert node.inner.type == "char_range"
+    assert node.type == "char_range"
+    assert node.start == "a"
+    assert node.end == "z"
 
 
 # ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
@@ -145,7 +144,7 @@ def test_singleton_bounded_range_synonym():
     assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
-    assert node.alpha.inner.type == "char_range"
+    assert node.alpha.type == "char_range"
 
 
 def test_singleton_upper_bound():
@@ -250,10 +249,10 @@ def types(pattern):
 
 def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
-    assert first_semantic("{a..z}").type == "full_alpha"
+    assert first_semantic("{a..z}").type == "char_range"
     assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
-    assert first_semantic("{ {a..z} }").type == "full_alpha"
+    assert first_semantic("{ {a..z} }").type == "char_range"  # collapses to inner
     assert first_semantic("{{a,A},{b,B}}").type == "union"
 
 
@@ -316,9 +315,10 @@ def test_braced_class_arms_form_a_union():
     assert len(node.options) == 2
 
 
-def test_full_alpha_disambiguation_space_allowed():
-    # { {a..z} } — surrounding space keeps the inner brace as its own α; it is
-    # stripped silently for a single nested-brace arm.
+def test_single_brace_disambiguation_space_allowed():
+    # { {a..z} } — surrounding space is stripped; the outer brace collapses
+    # transparently to the inner class. { {a..z} } = {a..z} = char_range.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "full_alpha"
-    assert node.inner.type == "char_range"
+    assert node.type == "char_range"
+    assert node.start == "a"
+    assert node.end == "z"
