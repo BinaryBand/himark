@@ -551,3 +551,45 @@ def test_count_position_ref_caps_at_count():
 def test_count_position_ref_backs_off_when_short():
     # 3 a's would need 3 b's; with only 2 present the engine finds the 2=2 sub-match.
     assert matches("{a}[1..]-{b}[#0]", "aaa-bb") == ["aa-bb"]
+
+
+# ── Template moustache {{ i$j }}: interpolate pipeline stage values ────────────
+
+
+def test_moustache_whole_match():
+    # {{0$}} (and bare {{$}}) interpolate the whole feeding match.
+    assert execute(parser.parse('{@hex} => "<{{0$}}>"'), "0af 12") == ["<0af>", "<12>"]
+    assert execute(parser.parse('{@hex} => "<{{$}}>"'), "0af 12") == ["<0af>", "<12>"]
+
+
+def test_moustache_capture_indices():
+    # {{0$0}} / {{0$1}} address individual capture groups; {{0$}} the whole match.
+    out = execute(parser.parse('{cat}{dog} => "a={{0$0}} b={{0$1}} all={{0$}}"'), "catdog")
+    assert out == ["a=cat b=dog all=catdog"]
+
+
+def test_moustache_count_ref():
+    # {{0#0}} is the repetition count of group 0.
+    assert execute(parser.parse('{a..z}[1..] => "n={{0#0}}"'), "aaa b") == ["n=3", "n=1"]
+
+
+def test_moustache_multi_stage_index():
+    # An explicit stage index reaches earlier pipeline stages: stage 0 is the
+    # first pattern, stage 1 the one narrowed within it.
+    out = execute(
+        parser.parse('{@hex} => {@d}[1..] => "0={{0$}} 1={{1$}}"'), "1a 22"
+    )
+    assert out == ["0=1a 1=1", "0=22 1=22"]
+
+
+def test_moustache_replace_mode_splices():
+    assert execute(parser.parse('{@hex} =>+ "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
+
+
+def test_moustache_capture_out_of_range_raises():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        execute(parser.parse('{cat} => "{{0$5}}"'), "cat")

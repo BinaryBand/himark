@@ -92,23 +92,33 @@ def _piped_pair(steps: list[t.RootNode]) -> bool:
     return len(steps) >= 2 and steps[1].piped
 
 
-def _splice(pattern: t.RootNode, template: t.RootNode, text: str) -> str:
+def _splice(
+    pattern: t.RootNode,
+    template: t.RootNode,
+    text: str,
+    ancestors: tuple[Match, ...] = (),
+) -> str:
     """Replace each match of `pattern` in `text` with the rendered template."""
     out: list[str] = []
     last = 0
     for m in find_matches(pattern, text):
         out.append(text[last : m.start])
-        out.append(_render(template, m))
+        out.append(_render(template, m, [*ancestors, m]))
         last = m.end
     out.append(text[last:])
     return "".join(out)
 
 
-def _run(steps: list[t.RootNode], text: str) -> list[str]:
-    """Top-level extract: find matches of steps[0], transform each, flatten."""
+def _run(
+    steps: list[t.RootNode], text: str, ancestors: tuple[Match, ...] = ()
+) -> list[str]:
+    """Top-level extract: find matches of steps[0], transform each, flatten.
+
+    `ancestors` are the matches of earlier pipeline stages, kept so a template's
+    `{{ i$j }}` moustache can address any stage by index."""
     if _piped_pair(steps):
-        spliced = _splice(steps[0], steps[1], text)
-        return _run(steps[2:], spliced) if len(steps) > 2 else [spliced]
+        spliced = _splice(steps[0], steps[1], text, ancestors)
+        return _run(steps[2:], spliced, ancestors) if len(steps) > 2 else [spliced]
 
     matches = find_matches(steps[0], text)
     rest = steps[1:]
@@ -119,46 +129,47 @@ def _run(steps: list[t.RootNode], text: str) -> list[str]:
     head = rest[0]
     if _is_template(head):
         remaining = rest[1:]
-        return [_render_chained(head, m, remaining) for m in matches]
+        return [_render_chained(head, m, remaining, ancestors) for m in matches]
 
     # head is another pattern — feed each match forward and flatten.
     out: list[str] = []
     for m in matches:
-        out.extend(_run(rest, m.text))
+        out.extend(_run(rest, m.text, (*ancestors, m)))
     return out
 
 
-def _render_chained(head: t.RootNode, m: Match, remaining: list[t.RootNode]) -> str:
-    """Render a chained template. Its **references** (`{{.}}`, `{{N}}`, `{{#N}}`,
-    …) form the forward payload: the remaining chain transforms their rendered
-    text in order, and the template's **literal** text is chrome that wraps the
-    result. The payload is the contiguous span from the first reference to the
-    last (interior literals included); leading/trailing literals are the chrome.
+def _render_chained(
+    head: t.RootNode,
+    m: Match,
+    remaining: list[t.RootNode],
+    ancestors: tuple[Match, ...] = (),
+) -> str:
+    """Render a template against the pipeline. The template's moustache
+    references (`{{ i$j }}`) interpolate stage values; its literal text is
+    constant. `ancestors` plus the feeding match `m` form the addressable stages.
 
-    With no remaining chain, or a reference-free (constant) template, this is a
-    plain render. A `{{.}}`-only template reduces to the classic deferral, so
-    existing chains are unchanged."""
-    children = head.children
-    refs = [i for i, n in enumerate(children) if not isinstance(n, t.LeafNode)]
-    if not remaining or not refs:
-        return _render(head, m)
-    lo, hi = refs[0], refs[-1]
-    prefix = t.RootNode(children=children[:lo])
-    region = t.RootNode(children=children[lo : hi + 1])
-    suffix = t.RootNode(children=children[hi + 1 :])
-    payload = _transform(remaining, _render(region, m))
-    return _render(prefix, m) + payload + _render(suffix, m)
+    A trailing chain (`remaining`) re-matches the rendered text, so a mid-pipe
+    template feeds its rendered output to the next link."""
+    pipeline = [*ancestors, m]
+    rendered = _render(head, m, pipeline)
+    if not remaining:
+        return rendered
+    return _transform(remaining, rendered, (*ancestors, m))
 
 
-def _transform(steps: list[t.RootNode], text: str) -> str:
+def _transform(
+    steps: list[t.RootNode], text: str, ancestors: tuple[Match, ...] = ()
+) -> str:
     """In-place transform: replace each match of steps[0] with the rendered
-    remainder, leaving non-matched text untouched. Used for deferred `{{.}}`."""
+    remainder, leaving non-matched text untouched (used by `=>+` replace mode)."""
     if not steps:
         return text
 
     if _piped_pair(steps):
-        spliced = _splice(steps[0], steps[1], text)
-        return _transform(steps[2:], spliced) if len(steps) > 2 else spliced
+        spliced = _splice(steps[0], steps[1], text, ancestors)
+        return (
+            _transform(steps[2:], spliced, ancestors) if len(steps) > 2 else spliced
+        )
 
     matches = find_matches(steps[0], text)
     if not matches:
@@ -169,17 +180,19 @@ def _transform(steps: list[t.RootNode], text: str) -> str:
     last = 0
     for m in matches:
         out.append(text[last : m.start])
-        out.append(_render_match(rest, m))
+        out.append(_render_match(rest, m, ancestors))
         last = m.end
     out.append(text[last:])
     return "".join(out)
 
 
-def _render_match(rest: list[t.RootNode], m: Match) -> str:
+def _render_match(
+    rest: list[t.RootNode], m: Match, ancestors: tuple[Match, ...] = ()
+) -> str:
     """Render the chain remainder for a single match, in place."""
     if not rest:
         return m.text
     head = rest[0]
     if _is_template(head):
-        return _render_chained(head, m, rest[1:])
-    return _transform(rest, m.text)
+        return _render_chained(head, m, rest[1:], ancestors)
+    return _transform(rest, m.text, (*ancestors, m))
