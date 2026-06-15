@@ -469,3 +469,36 @@ def test_named_alpha_b64():
     # b64 = {@d},{@l},{@u},+,/ — case-sensitive (a != A), one 64-symbol alphabet,
     # so a run of base64 chars matches as a single unit.
     assert matches("{@b64}", "Az+/ !") == ["Az+/"]
+
+
+# ── Self-reference {$i}: match the text an earlier group captured ──────────────
+
+
+def test_back_ref_repeats_captured_word():
+    # group 0 is a 3-letter word; {-{$0}}[0..] then matches '-' + that same word,
+    # zero or more times. The whole "abc-abc-abc" is one match.
+    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    assert matches(pat, "abc-abc-abc") == ["abc-abc-abc"]
+
+
+def test_back_ref_mismatch_stops_repetition():
+    # A differing word does not satisfy the back-ref, so only the first word is
+    # part of the repeated run; the second matches on its own.
+    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    assert matches(pat, "abc-xyz") == ["abc", "xyz"]
+
+
+def test_back_ref_zero_reps():
+    # With no separator-word to follow, [0..] matches zero reps: just the word.
+    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    assert matches(pat, "abc") == ["abc"]
+
+
+def test_back_ref_top_level_doubled_char():
+    # {a..z}{$0} — a letter then the same letter. "aa" and "bb" double; "cd" does not.
+    assert matches("{a..z}{$0}", "aa bb cd") == ["aa", "bb"]
+
+
+def test_back_ref_undefined_group_fails():
+    # {$0} with no prior group has nothing to reference, so it cannot match.
+    assert matches("{$0}", "anything") == []

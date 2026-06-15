@@ -30,6 +30,7 @@ from marky.parser._text import (
 )
 
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
+_BACKREF_RE = re.compile(r"\$(\d+)")
 
 
 _EXCLUDABLE = (
@@ -137,6 +138,12 @@ def _parse_padding(content: str) -> tuple[tuple[int, int | None] | None, str]:
 
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
+    # Self-reference `{$i}` — match the literal text captured by group i. The
+    # whole brace is the reference; a literal '$' is written `\$`.
+    m = _BACKREF_RE.fullmatch(strip_unescaped(content))
+    if m:
+        return t.BackRefNode(group=int(m.group(1)))
+
     pad, content = _parse_padding(content)
 
     # Complement prefix: {!expr}

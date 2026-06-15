@@ -256,6 +256,28 @@ def test_pure_alphabet_braces_stay_arithmetic():
     assert first_semantic("{{a,A},{b,B}}").type == "union"
 
 
+# ── Self-reference {$i} ───────────────────────────────────────────────────────
+
+
+def test_back_ref_resolves():
+    node = first_semantic("{$0}")
+    assert node.type == "back_ref"
+    assert node.group == 0
+
+
+def test_back_ref_multi_digit_group():
+    node = first_semantic("{$12}")
+    assert node.type == "back_ref"
+    assert node.group == 12
+
+
+def test_escaped_dollar_is_literal():
+    # `\$0` is a literal "$0", not a back-reference.
+    node = first_semantic(r"{\$0}")
+    assert node.type == "literal"
+    assert node.content == "$0"
+
+
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 

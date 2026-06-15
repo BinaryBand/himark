@@ -487,7 +487,18 @@ class SeqGroupEl:
     max_reps: int | None
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl
+@dataclass(slots=True)
+class BackRefEl:
+    """A self-reference `{$i}`: matches the literal text captured by group `i`.
+    The referent is read from the running capture list at match time, so this is
+    handled by the loop (which holds that state), not by a compile-time Matcher."""
+
+    group: int
+    min_reps: int
+    max_reps: int | None
+
+
+Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl
 
 
 def _count_config(count: t.CountSpec | None) -> tuple[int, int | None]:
@@ -509,6 +520,10 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
             if isinstance(child.semantic, t.SequenceNode):
                 sub = compile_pattern(t.RootNode(children=child.semantic.children))
                 elements.append(SeqGroupEl(sub, min_reps, max_reps))
+            elif isinstance(child.semantic, t.BackRefNode):
+                elements.append(
+                    BackRefEl(child.semantic.group, min_reps, max_reps)
+                )
             else:
                 elements.append(GroupEl(lower(child.semantic), min_reps, max_reps))
         else:

@@ -140,6 +140,18 @@ class SequenceNode:
     children: list[Node] = field(default_factory=list)
 
 
+@dataclass(slots=True)
+class BackRefNode:
+    """A self-reference `{$i}`: matches the literal text that capture group `i`
+    captured earlier in the same match. Groups are numbered in document order,
+    the first `{...}` being group 0. Unlike a `LiteralNode`, the text to match
+    is not known at compile time — it is read from the running capture list, so
+    the engine lowers this to a dedicated element, not a `Matcher`."""
+
+    type: Literal["back_ref"] = "back_ref"
+    group: int = 0
+
+
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
@@ -150,6 +162,7 @@ SemanticNode: TypeAlias = (
     | GroupClassNode
     | PaddedNode
     | SequenceNode
+    | BackRefNode
 )
 
 Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
@@ -164,4 +177,5 @@ SemanticClasses = (
     GroupClassNode,
     PaddedNode,
     SequenceNode,
+    BackRefNode,
 )

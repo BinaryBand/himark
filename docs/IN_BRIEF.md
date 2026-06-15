@@ -37,11 +37,13 @@ Either `$` or `#` can be accessed within `{...}`, but only the latter can be acc
 
 Mid-pipe template expressions only feed non-static values to the next link; e.g. `... => "<p>{{0$0}}</p>" => ...` drops "\<p>" and "\</p>" from the pipeline scope but appends it to the document.
 
+Templates can concatenate string values when comma separated; e.g. `... => "{{0$0,2$1,1$2}}"`.
+
 ## Notes
 
 A class occupies a **single position** -- by default it matches exactly one symbol.
 
-Every range normalizes to a three-part `{floor..A..ceiling}`: the middle `A` is the most-limiting (narrowest) alphabet among the operands -- ambient Unicode when none is named -- the floor is the left operand's minimum, and the ceiling is the right operand's maximum. So `{x}` is `{x..{@uni}..x}`, `{x..y}` is `{x..{@uni}..y}`, and an explicit middle (`{x..A..y}`) keeps `A`. It is a compile error when the ceiling cannot be spelled in `A` (`{{a..c}..zz}`).
+Every range normalises to a three-part `{floor..A..ceiling}`: the middle `A` is the most-limiting (narrowest) alphabet among the operands -- ambient Unicode when none is named -- the floor is the left operand's minimum, and the ceiling is the right operand's maximum. So `{x}` is `{x..{@uni}..x}`, `{x..y}` is `{x..{@uni}..y}`, and an explicit middle (`{x..A..y}`) keeps `A`. It is a compile error when the ceiling cannot be spelled in `A` (`{{a..c}..zz}`).
 
 ### Assumptions
 
@@ -51,4 +53,5 @@ Every range normalizes to a three-part `{floor..A..ceiling}`: the middle `A` is 
 - **{{a..z}..cc}** -- `{a..z}` is the limiting alphabet since `cc`'s Unicode alphabet is a super-set. `{a..{a..z}..cc}`
 - **{{a,A},{b,B},...,{z,Z}}** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner.
 - **{{a..c}..zz}** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's.
-- **{1}{{{1}[25]}..{@b58}..{{z}[34]}}** -- Any 20-byte string in base-58 with a leading '1'. AKA, a legacy Bitcoin address (ignoring the checksum).
+- **{1}{24..33:{@b58}}** -- Any 20-byte string in base-58 with a leading '1'. AKA, a legacy Bitcoin address (ignoring checksums)
+- **{1}{24..33:{@b58}} => "{{0\$, £hash(0\$)}}"** -- A legacy Bitcoin address including the checksum (as pseudo-script).

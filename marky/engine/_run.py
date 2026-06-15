@@ -8,7 +8,7 @@ interface, decided once at compile time in `_compile.py`.
 
 from __future__ import annotations
 
-from marky.engine._compile import Element, GroupEl, LiteralEl, SeqGroupEl
+from marky.engine._compile import BackRefEl, Element, GroupEl, LiteralEl, SeqGroupEl
 from marky.engine._types import Capture, Match
 
 
@@ -73,7 +73,38 @@ def _match_element(el: Element, text: str, pos: int, state: _State) -> int | Non
         return pos + len(s) if text[pos : pos + len(s)] == s else None
     if isinstance(el, SeqGroupEl):
         return _match_seq_group(el, text, pos, state)
+    if isinstance(el, BackRefEl):
+        return _match_back_ref(el, text, pos, state)
     return _match_group(el, text, pos, state)
+
+
+# ── Self-reference `{$i}`: match the literal text group i captured ─────────────
+
+
+def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | None:
+    min_reps, max_reps = el.min_reps, el.max_reps
+
+    def record(end: int, reps: list[str]) -> int:
+        state.captures.append(Capture(text[pos:end], (pos, end), reps))
+        return end
+
+    # The referent is read from the top-level captures recorded so far. A group
+    # not yet captured (forward/undefined reference) makes the back-ref fail.
+    root_caps = state.root.captures
+    if el.group >= len(root_caps):
+        return record(pos, []) if min_reps == 0 else None
+    referent = root_caps[el.group].text
+
+    reps: list[str] = []
+    current = pos
+    while max_reps is None or len(reps) < max_reps:
+        if not (referent and text.startswith(referent, current)):
+            break
+        reps.append(referent)
+        current += len(referent)
+    if len(reps) >= max(min_reps, 1):
+        return record(current, reps)
+    return record(pos, []) if min_reps == 0 else None
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────
