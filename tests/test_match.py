@@ -452,6 +452,56 @@ def test_congruence_with_whitespace_operand():
     assert matches("{a<-> }", "a a") == ["a a"]
 
 
+# ── Run-until: `{start}>>{expr}` infix non-capturing skip ────────────────────
+
+
+def test_run_until_skips_without_capturing():
+    # {abc}>>{@d}: match 'abc' (group 0), then skip (non-capturing) to the first
+    # digit. The skip adds no group, so the digit run is {{1}}, and the skipped
+    # gap is dropped from the captures.
+    assert execute(parser.parse(r"{abc}>>{@d}{@d} => {{1}}"), "abc -- 123") == ["123"]
+
+
+def test_run_until_leaves_terminator_for_next_construct():
+    # The skip stops *before* the terminator, so the following constructs match
+    # it. Here: match 'intro', skip to '##', then the marker, space, and line.
+    out = execute(
+        parser.parse(r"{intro}>>{##}{##}{ }{!\n} => {{3}}"), "intro\n## Heading\nx"
+    )
+    assert out == ["Heading"]
+
+
+def test_run_until_fails_when_terminator_absent():
+    # The skip runs to end-of-input when '##' is absent, but the `{##}` written
+    # *after* it then has nothing to match — so the whole pattern still fails.
+    assert matches(r"{intro}>>{##}{##}", "intro then nothing") == []
+
+
+def test_run_until_in_group_splits_on_newline():
+    # `{>>{\n}}` is a capturing line token; matched repeatedly it splits by '\n'.
+    # The end-of-input stop keeps the last line even without a trailing newline.
+    assert execute(parser.parse(r"{>>{\n}} => {{.}}"), "alpha\nbeta\ngamma") == [
+        "alpha",
+        "beta",
+        "gamma",
+    ]
+
+
+def test_run_until_requires_a_start_construct():
+    # `>>` is infix: a bare leading `>>` (no start construct) is a compile error.
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        parser.parse(r">>{##}{##}")
+
+
+def test_bare_double_gt_stays_literal_in_template():
+    # Only `>>{` is the operator; a stray `>>` in a template is left verbatim.
+    assert execute(parser.parse(r"{a..z} => a >> b"), "x") == ["a >> b"]
+
+
 def test_span_ref_groups_inclusive():
     # {{0..2}} spans from group 0's start to group 2's end.
     assert execute(parser.parse("{@d}{@l}{@d} => [{{0..2}}]"), "1a2 3b4") == [

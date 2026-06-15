@@ -567,7 +567,16 @@ class SeqGroupEl:
     count_ref: list[int] | None
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl
+@dataclass(slots=True)
+class SkipUntilEl:
+    """A `>>{expr}` run-until: a non-capturing forward skip. `terminator` is the
+    compiled sub-pattern; the loop advances to the first position where it
+    matches and stops there, recording no capture."""
+
+    terminator: "list[Element]"
+
+
+Element = LiteralEl | GroupEl | SeqGroupEl | SkipUntilEl
 
 
 def _count_config(
@@ -586,6 +595,11 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
     for child in root.children:
         if isinstance(child, t.LeafNode):
             elements.append(LiteralEl(child.content))
+        elif isinstance(child, t.RunUntilNode):
+            term = child.terminator
+            if term is None or term.semantic is None:
+                raise CompileError("`>>` is missing its `{…}` terminator")
+            elements.append(SkipUntilEl(compile_pattern(t.RootNode(children=[term]))))
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")

@@ -45,19 +45,27 @@ def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.Semanti
     return node
 
 
+def _resolve_brace_node(child: t.BraceGroupNode) -> None:
+    """Resolve a brace group in place: a `{…}` is an alphabet expression unless
+    its interior concatenates constructs, in which case it is a grouping brace
+    (`SequenceNode`). Any `[count]` suffix is parsed too."""
+    if _is_sequence_brace(child.content):
+        child.semantic = _resolve_sequence_brace(child.content)
+    else:
+        child.semantic = _resolve_brace(child.content)
+    if child.count_src is not None:
+        child.count = _parse_count(child.count_src)
+        child.count_src = None
+
+
 def parse(node: t.RootNode) -> t.RootNode:
-    """Walk the phase2 tree and resolve each brace group in place. A `{…}` is an
-    alphabet expression unless its interior concatenates constructs, in which
-    case it is a grouping brace (`SequenceNode`)."""
+    """Walk the phase2 tree and resolve each brace group in place. A `>>{…}`
+    run-until carries its terminator as a nested brace, resolved the same way."""
     for child in node.children:
         if isinstance(child, t.BraceGroupNode):
-            if _is_sequence_brace(child.content):
-                child.semantic = _resolve_sequence_brace(child.content)
-            else:
-                child.semantic = _resolve_brace(child.content)
-            if child.count_src is not None:
-                child.count = _parse_count(child.count_src)
-                child.count_src = None
+            _resolve_brace_node(child)
+        elif isinstance(child, t.RunUntilNode) and child.terminator is not None:
+            _resolve_brace_node(child.terminator)
     return node
 
 
@@ -100,6 +108,8 @@ def _is_sigma_atom(part: str) -> bool:
     if not part:
         return True
     children = phase2.parse(part).children
+    if any(isinstance(c, t.RunUntilNode) for c in children):
+        return False  # a `>>` run-until is a sub-pattern construct, never a σ atom
     constructs = [c for c in children if isinstance(c, t.BraceGroupNode)]
     if not constructs:
         return True  # bare token (a..z, cat, etc.)

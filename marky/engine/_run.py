@@ -8,7 +8,7 @@ interface, decided once at compile time in `_compile.py`.
 
 from __future__ import annotations
 
-from marky.engine._compile import Element, GroupEl, LiteralEl, SeqGroupEl
+from marky.engine._compile import Element, GroupEl, LiteralEl, SeqGroupEl, SkipUntilEl
 from marky.engine._types import Capture, Match
 
 
@@ -83,9 +83,26 @@ def _match_element(el: Element, text: str, pos: int, state: _State) -> int | Non
     if isinstance(el, LiteralEl):
         s = el.text
         return pos + len(s) if text[pos : pos + len(s)] == s else None
+    if isinstance(el, SkipUntilEl):
+        return _match_skip_until(el, text, pos, state)
     if isinstance(el, SeqGroupEl):
         return _match_seq_group(el, text, pos, state)
     return _match_group(el, text, pos, state)
+
+
+def _match_skip_until(el: SkipUntilEl, text: str, pos: int, state: _State) -> int:
+    """Advance to the first position at or after `pos` where the terminator
+    matches, and stop there (cursor before the terminator). Non-capturing: the
+    terminator is probed in a throwaway sub-state, and nothing is recorded. The
+    end of input is an implicit terminator — if the terminator never matches
+    ahead, the skip runs to the end (so `{>>{\\n}}` keeps the last, unterminated
+    line). A construct *after* the skip still has to match, so a pattern that
+    needs the terminator present (`…>>{##}{##}`) fails when it is absent."""
+    n = len(text)
+    for i in range(pos, n + 1):
+        if _match_elements(el.terminator, text, i, _State(root=state.root)) is not None:
+            return i
+    return n
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────

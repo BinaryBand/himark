@@ -54,6 +54,20 @@ class BraceGroupNode:
     count_src: str | None = None
 
 
+@dataclass(slots=True)
+class RunUntilNode:
+    """The `>>{expr}` half of an infix `{start}>>{expr}` run: a non-capturing
+    forward skip from the preceding (start) construct until the terminator
+    `{expr}` first matches ahead, stopping with the cursor *before* the
+    terminator (so the next construct matches it). The skipped text is part of
+    the overall match but the skip adds no capture group, so `{{N}}` indices
+    count only the real constructs. The start construct is the ordinary node to
+    its left; only the skip is modelled here."""
+
+    type: Literal["run_until"] = "run_until"
+    terminator: BraceGroupNode | None = None
+
+
 # -----------------------------
 # Semantic nodes (phase3)
 # -----------------------------
@@ -207,7 +221,9 @@ SemanticNode: TypeAlias = (
 
 TemplateNode: TypeAlias = FullMatchNode | GroupRefNode | SpanRefNode | CountRefNode
 
-Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode | TemplateNode
+Node: TypeAlias = (
+    RootNode | LeafNode | BraceGroupNode | RunUntilNode | SemanticNode | TemplateNode
+)
 
 SemanticClasses = (
     LiteralNode,

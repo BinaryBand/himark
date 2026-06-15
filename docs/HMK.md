@@ -217,6 +217,40 @@ So, given the input string: `"### Sphinx of black quartz, judge my vow!"` and th
 
 ---
 
+## Run-until
+
+`{start}>>{expr}` is an infix run: match the **start** construct, then keep
+running forward (a **non-capturing** skip) until the terminator `{expr}` first matches, stopping with the cursor _before_ it so the next construct matches it. The skipped text is part of the overall match (`{{.}}`), but the skip itself creates **no** capture group, so `{{N}}` indices count only the real constructs.
+
+```proto
+{start}>>{##}            // match 'start', then run until the next '##'
+{@l}[1..]>>{@d}{@d}      // match a word, run to the first digit, take the digits
+```
+
+`>>` is infix: it binds a start construct on its left, so a bare leading `>>`
+(no start) is rejected. The terminator may be any `{expr}` (a literal, a class,
+a macro). Only `>>` immediately followed by a single `{` is the operator; a bare
+`>>` is literal text.
+
+The **end of input** is an implicit terminator: if `{expr}` never matches ahead,
+the run goes to the end. A construct written _after_ the skip still has to match,
+so a pattern that needs the terminator present (`…>>{##}{##}`) fails when it is
+absent -- the end-stop only matters when the skip is the last thing to run.
+
+### Splitting
+
+Wrapping a run in a grouping brace turns it into a capturing token, so `>>` can
+lead there (the brace boundary is its start). `{>>{\n}}` is therefore "the text
+up to the next newline" -- a **line** -- and matching it repeatedly splits the
+input by newline (the end-of-input stop keeps the last, unterminated line):
+
+```proto
+{>>{\n}}        // one line; matched repeatedly, splits on '\n'
+{>>{, }}        // one comma-separated field
+```
+
+---
+
 ## Transformers
 
 `=>` applies a replacement template to a match: `pattern => template => pattern => template`.

@@ -77,8 +77,13 @@ def _emit_quoted(inner: str, nodes: list[t.Node]) -> None:
     flush()
 
 
-def parse(text: str) -> t.RootNode:
-    """Tokenize HMK pattern text into a typed node tree."""
+def parse(text: str, *, allow_leading_skip: bool = True) -> t.RootNode:
+    """Tokenize HMK pattern text into a typed node tree.
+
+    `allow_leading_skip` permits a `>>` run-until with nothing before it. The
+    top-level pattern parse sets it False (a bare leading `>>` needs a start
+    construct), but a grouping brace's interior — `{>>{\\n}}` — leaves it True,
+    so the brace boundary itself serves as the start."""
     nodes: list[t.Node] = []
     pos = 0
     leaf_buf: list[str] = []
@@ -114,6 +119,33 @@ def parse(text: str) -> t.RootNode:
             end = _scan_string(text, pos)
             _emit_quoted(text[pos + 1 : end - 1], nodes)
             pos = end
+            continue
+
+        # Run-until: `{start}>>{expr}` runs (non-capturing) from the preceding
+        # construct until its terminator `{expr}` first matches. It is infix —
+        # the `>>` binds a start construct on its left, so a bare leading `>>` is
+        # rejected. Only `>>` immediately followed by a single `{` is the
+        # operator — a bare `>>` (or `>>{{`) stays literal, so a template that
+        # happens to contain `>>` is left alone.
+        if (
+            text[pos : pos + 2] == ">>"
+            and text[pos + 2 : pos + 3] == "{"
+            and text[pos + 3 : pos + 4] != "{"
+        ):
+            flush_leaf()
+            if not nodes and not allow_leading_skip:
+                raise CompileError(
+                    "`>>` needs a start construct before it, e.g. `{start}>>{##}`"
+                )
+            bstart = pos + 2
+            end = _scan_braces(text, bstart)
+            term = t.BraceGroupNode(content=text[bstart + 1 : end - 1])
+            pos = end
+            cm = _COUNT_SRC.match(text, pos)
+            if cm:
+                term.count_src = cm.group(1)
+                pos = cm.end()
+            nodes.append(t.RunUntilNode(terminator=term))
             continue
 
         # Template refs {{...}} — parsed immediately; must check before single {
