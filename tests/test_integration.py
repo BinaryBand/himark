@@ -89,16 +89,17 @@ def test_http_token_class():
     assert result == ["https", "http"]
 
 
-# ── Pipes (inner =>+) ─────────────────────────────────────────────────────────
+# ── Template placement ────────────────────────────────────────────────────────
 
 
-def test_pipe_requires_template():
+def test_template_must_be_final_step():
+    # A plain-text template is only valid as the last step of a => chain.
     import pytest
 
     from marky.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
-        execute(parser.parse("{a} => {b} =>+ {c}"), "x")
+        execute(parser.parse("{a} => out => {b}"), "a")
 
 
 def test_counted_group_open_ended():

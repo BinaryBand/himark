@@ -198,15 +198,17 @@ Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression
 
 `=>` runs a chain of steps: `pattern => pattern => ... => template`.
 
-- A run of patterns (`pattern => pattern`) narrows successively: each match of one pattern is fed to the next.
-- A trailing **template** step (text with no matchable `{...}`) emits its constant text once per match.
-- `=>` **extracts** -- the statement returns the list of rendered matches.
-- `=>+` **replaces** -- it splices each rendered match back into the source and returns the whole string, leaving the text between matches verbatim.
+- A run of patterns (`pattern => pattern`) narrows successively: each match of one pattern is fed to the next; a branch with no match drops out.
+- A trailing **template** step (text with no matchable `{...}`) renders once per surviving branch. A template may only be the **final** step.
+
+The first pattern's matches each start a **branch**; the chain transforms each branch independently. Because matches (and narrowed sub-matches) never overlap, the branches own disjoint spans and render two ways from the **same** result -- neither privileged:
+
+- **list** -- the rendered branches, in order (the matched text dropped from between them).
+- **splice** -- each branch laid back over its source span, the text between branches kept verbatim (the in-place transform).
 
 ```proto
-{a..z}                 // extract: the list of lowercase runs
-{a..z} => <w>          // extract: '<w>' once per run
-{a..z} =>+ <w>         // replace: each run becomes '<w>' in place
+{a..z}                 // the list of lowercase runs
+{a..z} => <w>          // list: '<w>' once per run  -- splice: each run becomes '<w>' in place
 {@d} => {{@d}..9}      // narrow: digits, then single values 0-9
 ```
 

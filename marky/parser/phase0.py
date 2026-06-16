@@ -1,44 +1,28 @@
 """Phase 0: Split a raw HMK statement into its ordered list of steps.
 
-The transform arrow has two forms. `=>` *extracts* — the statement returns the
-list of rendered matches. `=>+` *splices* — the template's output replaces the
-preceding pattern's matches in place. On the first arrow that makes the whole
-statement replace-mode; on an inner arrow it is a *pipe*: the chain continues
-on the spliced text. Every `+` is consumed so it never leaks into a step.
+A statement is a `=>` chain: `pattern => pattern => ... => template`. There is a
+single arrow — `=>`. The chain produces one **branch** per match of the first
+pattern; each branch is transformed independently and rendered either as a list
+(the rendered matches) or spliced back into the source (in-place transform). The
+two renderings come from the same branches, so there is no separate replace arrow.
 """
 
 
-def split_statement(text: str) -> tuple[list[str], bool, list[bool]]:
-    """Split 'P1 => P2 => ... => T' into (steps, replace, piped).
+def split_statement(text: str) -> list[str]:
+    """Split `'P1 => P2 => ... => T'` into its ordered list of step strings.
 
-    `replace` is the first arrow's `+` (statement-level replace mode). `piped`
-    has one flag per step: True when the arrow *before* that step carried a
-    `+` (inner arrows only — the first arrow's `+` is the replace flag).
-    Scans for => outside of any construct delimiters to avoid false splits.
+    Scans for `=>` outside of any construct delimiters to avoid false splits.
     """
-    steps = []
-    piped = [False]
+    steps: list[str] = []
     remaining = text
-    replace = False
-    first_arrow = True
     while True:
         idx = _find_arrow(remaining)
         if idx is None:
             steps.append(remaining.strip())
             break
         steps.append(remaining[:idx].strip())
-        after = idx + 2
-        plus = remaining[after : after + 1] == "+"
-        if plus:
-            after += 1
-        if first_arrow:
-            replace = plus
-            piped.append(False)
-            first_arrow = False
-        else:
-            piped.append(plus)
-        remaining = remaining[after:]
-    return steps, replace, piped
+        remaining = remaining[idx + 2 :]
+    return steps
 
 
 def _find_arrow(text: str) -> int | None:

@@ -2,7 +2,7 @@
 
 The engine exposes a coarse two-call seam — `compile` a resolved AST into an
 opaque handle, then `run` that handle against text. Only this hot path (compile
-+ scan) sits behind the seam; orchestration (chaining, rendering, `=>+`
++ scan) sits behind the seam; orchestration (chaining, rendering, branch
 splicing) stays in pure Python and calls `find_matches`.
 
 The seam is deliberately coarse: a native backend (e.g. Rust via PyO3) receives

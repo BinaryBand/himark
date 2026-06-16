@@ -1,7 +1,7 @@
 """Tests for the match engine — match semantics."""
 
 from marky import parser
-from marky.engine import execute, find_matches
+from marky.engine import execute, find_matches, splice
 
 
 def matches(pattern, text):
@@ -446,9 +446,10 @@ def test_constant_template_per_match():
     assert execute(parser.parse("{a..z,A..Z} => X"), "ab cd") == ["X", "X"]
 
 
-def test_replace_mode_splices_constant():
-    # `=>+` splices the constant in place and returns the whole document.
-    assert execute(parser.parse("{a..z,A..Z} =>+ X"), "ab-cd") == "X-X"
+def test_splice_constant_in_place():
+    # `splice` lays the rendered branches back over the source, keeping the text
+    # between matches verbatim.
+    assert splice(parser.parse("{a..z,A..Z} => X"), "ab-cd") == "X-X"
 
 
 def test_chained_patterns_narrow():
@@ -582,8 +583,8 @@ def test_moustache_multi_stage_index():
     assert out == ["0=1a 1=1", "0=22 1=22"]
 
 
-def test_moustache_replace_mode_splices():
-    assert execute(parser.parse('{@hex} =>+ "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
+def test_moustache_splices_in_place():
+    assert splice(parser.parse('{@hex} => "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
 
 
 def test_moustache_capture_out_of_range_raises():
@@ -595,26 +596,8 @@ def test_moustache_capture_out_of_range_raises():
         execute(parser.parse('{cat} => "{{0$5}}"'), "cat")
 
 
-# ── Mid-pipe conveyor (line 39): only the payload is fed to the next link ──────
-
-
-def test_conveyor_chrome_excluded_from_pipe_scope():
-    # The chrome's 'a' is NOT seen by the next link; only the payload "cat" is
-    # forwarded and transformed. Chrome wraps the result.
-    out = execute(parser.parse('{cat} => "<a>{{0$}}</a>" => {a} => "X"'), "cat")
-    assert out == ["<a>cXt</a>"]
-
-
-def test_conveyor_interior_literal_is_payload():
-    # Literal text between two references is part of the forwarded payload.
-    out = execute(
-        parser.parse('{cat}{dog} => "<p>{{0$0}}-{{0$1}}</p>" => {o} => "0"'), "catdog"
-    )
-    assert out == ["<p>cat-d0g</p>"]
-
-
-def test_conveyor_terminal_template_renders_fully():
-    # With no remaining chain, the whole template (chrome + payload) renders.
+def test_template_renders_chrome_and_refs():
+    # The trailing template's literal chrome and its {{…}} refs both render.
     assert execute(parser.parse('{cat} => "<a>{{0$}}</a>"'), "cat") == ["<a>cat</a>"]
 
 
@@ -652,35 +635,15 @@ def test_moustache_subcapture_out_of_range_raises():
         execute(parser.parse('{{cat}{dog}} => "{{0$0.5}}"'), "catdog")
 
 
-# ── Every => is an addressable stage (templates too, by index) ─────────────────
+# ── Pattern stages are addressable by => position from the trailing template ──
 
 
-def test_template_stage_addressable_by_index():
-    # stage 0 = {cat}, 1 = template, 2 = {a}, 3 = template referencing 1$ (the
-    # mid-pipe template's value).
-    out = execute(parser.parse('{cat} => "{{0$}}" => {a} => "[{{1$}}]"'), "cat")
-    assert out == ["c[cat]t"]
-
-
-def test_stage_index_counts_template_steps():
-    # Stage numbering follows => position: a pattern at position 2 is 2$, and
-    # stage 0 stays reachable past intervening template stages.
-    expr = (
-        '{cat}{dog} => "{{0$0}}{{0$1}}" => {a}{t} '
-        '=> "c0={{2$0}} c1={{2$1}} s0={{0$}}"'
+def test_template_addresses_each_pattern_stage():
+    # A narrowing chain: the trailing template reaches stage 0 and stage 1 by index.
+    out = execute(
+        parser.parse('{cat}{dog} => {a}{t} => "s0={{0$}} s1={{1$}}"'), "catdog"
     )
-    out = execute(parser.parse(expr), "catdog")
-    assert out == ["cc0=a c1=t s0=catdogdog"]
-
-
-def test_template_stage_has_no_captures():
-    import pytest
-
-    from marky.models.exceptions import CompileError
-
-    # A template stage is addressable as a whole (1$) but has no captures (1$0).
-    with pytest.raises(CompileError):
-        execute(parser.parse('{cat} => "{{0$}}" => {a} => "{{1$0}}"'), "cat")
+    assert out == ["s0=catdog s1=at"]
 
 
 # ── Cross-stage references {N$M} in pattern position ──────────────────────────

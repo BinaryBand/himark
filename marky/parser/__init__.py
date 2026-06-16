@@ -8,17 +8,9 @@ def parse(text: str) -> list[t.RootNode]:
     Single-step pattern  => [pattern_tree]
     Pattern + template   => [pattern_tree, template_tree]
     Chained              => [p1_tree, p2_tree, ..., template_tree]
-
-    The statement's replace-mode flag (`=>+`) rides on the first tree's
-    `replace` attribute, where `execute` reads it.
     """
-    steps, replace, piped = phase0.split_statement(text)
-    trees = [
+    steps = phase0.split_statement(text)
+    return [
         phase3.parse(phase2.parse(phase1.preprocess(step, first=i == 0)))
         for i, step in enumerate(steps)
     ]
-    if trees:
-        trees[0].replace = replace
-        for tree, p in zip(trees, piped):
-            tree.piped = p
-    return trees

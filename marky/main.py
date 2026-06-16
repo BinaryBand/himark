@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 
 from marky import parser
-from marky.engine import execute, find
+from marky.engine import deltas, execute, find
 from marky.models.exceptions import CompileError
 
 app = typer.Typer()
@@ -38,29 +38,24 @@ def execute_cmd(
     json_out: bool = typer.Option(
         False,
         "--json",
-        help="Emit per-match deltas as a JSON array of {start, end, text}.",
+        help="Emit per-branch deltas as a JSON array of {start, end, text}.",
     ),
 ) -> None:
-    """Match TARGET against PATTERN and print each transformed result.
+    """Match TARGET against PATTERN and print each rendered match, one per line.
 
-    With `=>` the matches are printed one per line; with `=>+` the whole
-    transformed text is printed as a single block. `--json` instead prints a
-    delta per match — {start, end, text} — where text is the engine's rendered
-    replacement for that match (the same per-match rendering `=>+` splices), so
-    chains and deferred `{{.}}` are honoured. Splicing the deltas back over the
-    input reproduces `=>+` exactly.
+    `--json` instead prints a delta per branch — {start, end, text} — where text
+    is the rendered replacement for that match. Splicing the deltas back over the
+    input gives the in-place transform.
     """
     try:
         trees = parser.parse(_resolve_pattern(pattern))
         tgt = _str_or_file(target)
         if json_out:
-            from marky.engine import _render_match, find_matches
-
-            deltas = [
-                {"start": m.start, "end": m.end, "text": _render_match(trees[1:], m)}
-                for m in find_matches(trees[0], tgt)
+            payload = [
+                {"start": s, "end": e, "text": txt}
+                for s, e, txt in deltas(trees, tgt)
             ]
-            typer.echo(json.dumps(deltas))
+            typer.echo(json.dumps(payload))
             return
         result = execute(trees, tgt)
     except CompileError as exc:
@@ -68,11 +63,8 @@ def execute_cmd(
             _emit_json_error(exc)
         raise
 
-    if isinstance(result, str):
-        typer.echo(result)
-    else:
-        for line in result:
-            typer.echo(line)
+    for line in result:
+        typer.echo(line)
 
 
 @app.command(name="find")
