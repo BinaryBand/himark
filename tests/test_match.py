@@ -616,3 +616,68 @@ def test_conveyor_interior_literal_is_payload():
 def test_conveyor_terminal_template_renders_fully():
     # With no remaining chain, the whole template (chrome + payload) renders.
     assert execute(parser.parse('{cat} => "<a>{{0$}}</a>"'), "cat") == ["<a>cat</a>"]
+
+
+# ── Moustache sub-capture paths {{ i$j.k }}: descend into nested captures ──────
+
+
+def test_moustache_subcapture_path():
+    # A grouping brace's nested groups are sub-captures: 0$0.0 / 0$0.1 address them.
+    out = execute(
+        parser.parse('{{cat}{dog}} => "whole={{0$0}} a={{0$0.0}} b={{0$0.1}}"'),
+        "catdog",
+    )
+    assert out == ["whole=catdog a=cat b=dog"]
+
+
+def test_moustache_subcapture_deep():
+    # A sub-capture that is itself a grouping brace descends further: 0$0.1.0/.1.
+    out = execute(
+        parser.parse('{{a}{{b}{c}}} => "x={{0$0.1.0}} y={{0$0.1.1}}"'), "abc"
+    )
+    assert out == ["x=b y=c"]
+
+
+def test_moustache_subcapture_count():
+    # {{ i#j.k }} is the repeat count of a nested sub-capture.
+    assert execute(parser.parse('{{cat}{dog}} => "n={{0#0.0}}"'), "catdog") == ["n=1"]
+
+
+def test_moustache_subcapture_out_of_range_raises():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        execute(parser.parse('{{cat}{dog}} => "{{0$0.5}}"'), "catdog")
+
+
+# ── Every => is an addressable stage (templates too, by index) ─────────────────
+
+
+def test_template_stage_addressable_by_index():
+    # stage 0 = {cat}, 1 = template, 2 = {a}, 3 = template referencing 1$ (the
+    # mid-pipe template's value).
+    out = execute(parser.parse('{cat} => "{{0$}}" => {a} => "[{{1$}}]"'), "cat")
+    assert out == ["c[cat]t"]
+
+
+def test_stage_index_counts_template_steps():
+    # Stage numbering follows => position: a pattern at position 2 is 2$, and
+    # stage 0 stays reachable past intervening template stages.
+    expr = (
+        '{cat}{dog} => "{{0$0}}{{0$1}}" => {a}{t} '
+        '=> "c0={{2$0}} c1={{2$1}} s0={{0$}}"'
+    )
+    out = execute(parser.parse(expr), "catdog")
+    assert out == ["cc0=a c1=t s0=catdogdog"]
+
+
+def test_template_stage_has_no_captures():
+    import pytest
+
+    from marky.models.exceptions import CompileError
+
+    # A template stage is addressable as a whole (1$) but has no captures (1$0).
+    with pytest.raises(CompileError):
+        execute(parser.parse('{cat} => "{{0$}}" => {a} => "{{1$0}}"'), "cat")

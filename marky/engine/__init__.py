@@ -153,14 +153,25 @@ def _render_chained(
     A trailing chain (`remaining`) re-matches the forwarded text. A mid-pipe
     template with moustache references feeds only its interpolated payload to the
     next link; its literal chrome wraps the result (line-39 conveyor). A constant
-    mid-pipe template has no payload to split, so its whole text is forwarded."""
+    mid-pipe template has no payload to split, so its whole text is forwarded.
+
+    A mid-pipe template is itself an addressable stage: it appends its result to
+    the ancestry (as a text-only stage with no captures) so a later template can
+    reference it by index. The feeding match `m` is appended first, then this
+    template — preserving one stage per `=>` step in document order."""
     pipeline = [*ancestors, m]
     if not remaining:
         return _render(head, m, pipeline)
+
+    def _stage(text: str) -> Match:
+        return Match(text, 0, len(text), [])
+
     if not _has_refs(head):
-        return _transform(remaining, _render(head, m, pipeline), (*ancestors, m))
+        flowed = _render(head, m, pipeline)
+        return _transform(remaining, flowed, (*ancestors, m, _stage(flowed)))
     prefix, payload, suffix = _render_parts(head, m, pipeline)
-    return prefix + _transform(remaining, payload, (*ancestors, m)) + suffix
+    onward = _transform(remaining, payload, (*ancestors, m, _stage(payload)))
+    return prefix + onward + suffix
 
 
 def _transform(
