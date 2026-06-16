@@ -1,8 +1,10 @@
-"""Loader for macros.toml — the single source of Himark macros.
+"""Loader for macros.toml — the single source of `@name` macros.
 
 Every named alphabet is a plain text macro: `@name` expands to Himark source.
 The engine holds no alphabet knowledge of its own; it only ever sees the
-ranges, unions, and congruences the macros expand into.
+ranges, unions, and congruences the macros expand into. (macros.toml's
+`[[rewrites]]` table — structural shortcuts — is read separately by
+`parser/rewrites.py`.)
 """
 
 import tomllib

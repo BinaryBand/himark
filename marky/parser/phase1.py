@@ -15,6 +15,7 @@ import re
 
 from marky.macros import MACROS
 from marky.models.exceptions import CompileError
+from marky.parser import rewrites
 
 # Only text macros are expanded here; @alphabet references pass through. Longest
 # names first so e.g. @hexi wins over @hex, and \b prevents partial-name hits.
@@ -46,13 +47,14 @@ def _needs_wrap(step: str) -> bool:
 
 
 def preprocess(step: str, *, first: bool = True) -> str:
-    """Expand text macros, then wrap a bare expression step in `{…}`.
+    """Expand text macros, apply advanced rewrites, then wrap a bare expression.
 
-    The wrap applies only to the first step (the pattern position): a bare
-    step after `=>` has no constructs to match with and is a constant
-    template, rendered as-is.
+    The rewrites (`marky/parser/rewrites.py`, configured in `macros.toml`) are
+    structural sugar that run before tokenizing, so the engine sees only plain
+    Himark source. The wrap applies only to the first step (the pattern
+    position): a bare step after `=>` is a constant template, rendered as-is.
     """
-    expanded = _expand_macros(step)
+    expanded = rewrites.apply(_expand_macros(step))
     if first and _needs_wrap(expanded):
         return "{" + expanded + "}"
     return expanded

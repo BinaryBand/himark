@@ -113,3 +113,36 @@ def test_b58_symbol_order_preserved():
     result = matches("{{@b58}..9}", "9 A")
     assert "9" in result
     assert "A" not in result
+
+
+# ── Advanced rewrites: the TOML-described [#] self-binding count ───────────────
+
+
+def test_self_binding_count_unrolls():
+    from marky.parser.rewrites import apply
+
+    # {ROW[#]}[1..] -> free first ROW ([#]->[..]) then repeats bound via [#0].
+    src = r"{{{|}{!|,\n}}[#]{|\n}}[1..]"
+    assert apply(src) == r"{{|}{!|,\n}}[..]{|\n}{{{|}{!|,\n}}[#0]{|\n}}[1..]"
+
+
+def test_self_binding_count_noop_without_hash():
+    from marky.parser.rewrites import apply
+
+    assert apply("{a..z}[1..]") == "{a..z}[1..]"
+
+
+def test_self_binding_count_group_offset():
+    from marky.parser.rewrites import apply
+
+    # A leading group shifts the bound index: the free copy's group is [#1].
+    assert apply(r"{x}{{a}[#]}[2..]") == r"{x}{a}[..]{{a}[#1]}[2..]"
+
+
+def test_rewrite_tool_is_parameterized():
+    # The tool is generic — marker/free/bound come from data, so a different
+    # marker drives the same unroll.
+    from marky.parser.rewrites import unroll_on_marker
+
+    out = unroll_on_marker(r"{{a}[~]}[1..]", marker="[~]", free="[..]", bound="[#@]")
+    assert out == r"{a}[..]{{a}[#0]}[1..]"
