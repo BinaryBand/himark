@@ -76,9 +76,10 @@ def test_constant_template():
 
 
 def test_chain_of_patterns_narrows():
-    # P => P feeds each match of the first pattern into the second.
+    # P => P keeps each first-query match whose text the second query also matches,
+    # transforming in place (here the inner {x} is identity, so the run is kept).
     result = execute(parser.parse("{x}[1..] => {x}"), "xx y xxx")
-    assert result == ["x", "x", "x", "x", "x"]
+    assert result == ["xx", "xxx"]
 
 
 # ── Token class ──────────────────────────────────────────────────────────────
@@ -89,17 +90,16 @@ def test_http_token_class():
     assert result == ["https", "http"]
 
 
-# ── Template placement ────────────────────────────────────────────────────────
+# ── Non-terminal templates ────────────────────────────────────────────────────
 
 
-def test_template_must_be_final_step():
-    # A plain-text template is only valid as the last step of a => chain.
-    import pytest
-
-    from marky.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        execute(parser.parse("{a} => out => {b}"), "a")
+def test_template_is_not_terminal():
+    # A template's render flows on: a later query matches it, a later template
+    # wraps it ({{.}} composes).
+    out = execute(
+        parser.parse('{cat} => "<a>{{.}}</a>" => "<b>{{.}}</b>"'), "cat"
+    )
+    assert out == ["<b><a>cat</a></b>"]
 
 
 def test_counted_group_open_ended():

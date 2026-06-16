@@ -575,12 +575,10 @@ def test_moustache_count_ref():
 
 
 def test_moustache_multi_stage_index():
-    # An explicit stage index reaches earlier pipeline stages: stage 0 is the
-    # first pattern, stage 1 the one narrowed within it.
-    out = execute(
-        parser.parse('{@hex} => {@d}[1..] => "0={{0$}} 1={{1$}}"'), "1a 22"
-    )
-    assert out == ["0=1a 1=1", "0=22 1=22"]
+    # Stages are numbered by => position, templates included: stage 0 is the
+    # query, stage 1 the template before this one (addressable by its render).
+    out = execute(parser.parse('{@d} => "<{{0$}}>" => "got {{1$}}"'), "1 2")
+    assert out == ["got <1>", "got <2>"]
 
 
 def test_moustache_splices_in_place():
@@ -635,30 +633,40 @@ def test_moustache_subcapture_out_of_range_raises():
         execute(parser.parse('{{cat}{dog}} => "{{0$0.5}}"'), "catdog")
 
 
-# ── Pattern stages are addressable by => position from the trailing template ──
+# ── Pattern stages are addressable by => position from a template ─────────────
 
 
-def test_template_addresses_each_pattern_stage():
-    # A narrowing chain: the trailing template reaches stage 0 and stage 1 by index.
+def test_template_addresses_each_stage():
+    # The template reaches stage 0 (the first query) and stage 1 (the narrowed
+    # match) by index; the {a}{t} match is transformed in place within "catdog".
     out = execute(
         parser.parse('{cat}{dog} => {a}{t} => "s0={{0$}} s1={{1$}}"'), "catdog"
     )
-    assert out == ["s0=catdog s1=at"]
+    assert out == ["cs0=catdog s1=atdog"]
 
 
 # ── Cross-stage references {N$M} in pattern position ──────────────────────────
 
 
 def test_stage_ref_matches_earlier_capture():
-    # {0$0} / {0$1} match stage 0's individual captures; {0$} its whole match.
-    assert execute(parser.parse("{cat}{dog} => {0$0}"), "catdog") == ["cat"]
-    assert execute(parser.parse("{cat}{dog} => {0$1}"), "catdog") == ["dog"]
-    assert execute(parser.parse("{cat}{dog} => {0$}"), "catdog") == ["catdog"]
+    # {0$0}/{0$1}/{0$} match stage 0's captures / whole match; wrapping the match
+    # shows which span each one found (the rest of the branch is kept in place).
+    assert execute(parser.parse('{cat}{dog} => {0$0} => "[{{.}}]"'), "catdog") == [
+        "[cat]dog"
+    ]
+    assert execute(parser.parse('{cat}{dog} => {0$1} => "[{{.}}]"'), "catdog") == [
+        "cat[dog]"
+    ]
+    assert execute(parser.parse('{cat}{dog} => {0$} => "[{{.}}]"'), "catdog") == [
+        "[catdog]"
+    ]
 
 
 def test_stage_ref_dotted_subcapture():
     # A pattern stage ref descends into sub-captures, like the moustache path.
-    assert execute(parser.parse("{{cat}{dog}} => {0$0.1}"), "catdog") == ["dog"]
+    assert execute(
+        parser.parse('{{cat}{dog}} => {0$0.1} => "[{{.}}]"'), "catdog"
+    ) == ["cat[dog]"]
 
 
 def test_stage_ref_unresolvable_drops_branch():
@@ -670,3 +678,27 @@ def test_stage_ref_unresolvable_drops_branch():
 def test_stage_ref_distinct_from_back_ref():
     # {$0} (within-pattern back-ref) and {0$0} (cross-stage ref) coexist.
     assert matches("{a..z}{$0}", "aa bb cd") == ["aa", "bb"]
+
+
+# ── Non-terminal templates: compose, nest, filter ─────────────────────────────
+
+
+def test_template_composes_via_flowing_text():
+    # {{.}} is the flowing text, so a later template wraps the earlier render.
+    out = execute(
+        parser.parse('{cat} => "<table>{{.}}</table>" => "<super>{{.}}</super>"'),
+        "cat",
+    )
+    assert out == ["<super><table>cat</table></super>"]
+
+
+def test_query_after_template_matches_the_render():
+    # A query after a template matches the rendered text and wraps each match.
+    out = execute(parser.parse('{x} => "a-b-c" => {a..z} => "<{{.}}>"'), "x")
+    assert out == ["<a>-<b>-<c>"]
+
+
+def test_query_filters_branch_on_no_match():
+    # A query that matches nothing in the branch drops it (filtering).
+    assert execute(parser.parse("{cat}{dog} => {0$0}"), "catdog") == ["catdog"]
+    assert execute(parser.parse("{cat}{dog} => {zzz}"), "catdog") == []

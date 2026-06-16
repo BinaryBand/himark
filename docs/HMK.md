@@ -190,26 +190,27 @@ Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression
 | 2.0       | `black`                  | First sub-group inside group 2  |
 | 2.1       | `quartz`                 | Second sub-group inside group 2 |
 
-> **Note:** The capture structure is available on each `Match` (`groups`, `sub_groups`, spans); this branch has no reference sub-language for splicing them into output.
+> **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
 
 ---
 
 ## Transformers
 
-`=>` runs a chain of steps: `pattern => pattern => ... => template`.
+`=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently:
 
-- A run of patterns (`pattern => pattern`) narrows successively: each match of one pattern is fed to the next; a branch with no match drops out.
-- A trailing **template** step (text with no matchable `{...}`) renders once per surviving branch. A template may only be the **final** step.
+- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops** the branch -- that is how a chain filters.
+- a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`… => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>…</b></i>`).
 
-The first pattern's matches each start a **branch**; the chain transforms each branch independently. Because matches (and narrowed sub-matches) never overlap, the branches own disjoint spans and render two ways from the **same** result -- neither privileged:
+Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result -- neither privileged:
 
-- **list** -- the rendered branches, in order (the matched text dropped from between them).
-- **splice** -- each branch laid back over its source span, the text between branches kept verbatim (the in-place transform).
+- **list** -- the branch results, in order.
+- **splice** -- each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
 
 ```proto
-{a..z}                 // the list of lowercase runs
-{a..z} => <w>          // list: '<w>' once per run  -- splice: each run becomes '<w>' in place
-{@d} => {{@d}..9}      // narrow: digits, then single values 0-9
+{a..z}                            // the list of lowercase letters
+{a..z} => <w>                     // list: '<w>' per letter -- splice: each letter becomes '<w>'
+{cat} => "<b>{{.}}</b>"           // wrap each match
+{table} => "<table>{{.}}</table>" => {!\n} => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
 
 ### Quoting static text

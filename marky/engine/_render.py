@@ -1,20 +1,22 @@
 """Render a template step (the right-hand side of `=>`) against the pipeline.
 
-A template step is literal text that may contain **moustache** references —
-`{{ i$j }}` interpolates a value from an earlier pipeline stage:
+A template step is literal text that may contain **moustache** references:
 
-  * `i$j` — capture group `j` of pipeline stage `i`
-  * `i$`  — the whole match of stage `i`
-  * `i#j` — the repetition count of group `j` of stage `i`
+  * `{{ . }}` — the whole text flowing into this step. After a query it is the
+    matched text; after a template it is that template's render — so `{{.}}`
+    composes through templates (each wraps the previous one's output).
+  * `{{ i$j }}` — capture group `j` of pipeline stage `i`
+  * `{{ i$ }}`  — the whole match of stage `i`
+  * `{{ i#j }}` — the repetition count of group `j` of stage `i`
 
 The capture part is a dotted **path**: `i$j.k.l` selects stage `i`'s capture
 `j`, then descends into its sub-captures (`.k`, `.l`, …) — the nested groups of
 a grouping brace `{…{a}{b}…}`. So `1$2.3` is stage 1, capture 2, sub-capture 3.
 
-The pipeline index `i` may be omitted to mean the current (feeding) stage, and
-the capture path may be omitted with `$` to mean the whole match. Stage 0 is the
-first pattern in the chain; the feeding stage is the one immediately before this
-template. Literal text (everything outside `{{ }}`) is constant.
+Stages are numbered by `=>` position from 0; a template stage carries its render
+but no captures. The pipeline index `i` may be omitted to mean the current stage,
+and the capture path may be omitted with `$` to mean the whole match. Literal text
+(everything outside `{{ }}`) is constant.
 """
 
 import re
@@ -33,23 +35,24 @@ def is_template(tree: t.RootNode) -> bool:
     return all(isinstance(n, t.LeafNode) for n in tree.children)
 
 
-def render(
-    template_tree: t.RootNode, match: Match, pipeline: list[Match] | None = None
-) -> str:
-    """Render a template against the pipeline: literal leaves concatenated in
-    order, with each `{{ … }}` reference resolved. `pipeline` is the ordered list
-    of stage matches (stage 0 first, the feeding match last); it defaults to the
-    single `match` when this template has no upstream stages to address."""
-    stages = pipeline if pipeline is not None else [match]
+def render(template_tree: t.RootNode, current: str, stages: list[Match]) -> str:
+    """Render a template: literal leaves concatenated in order, with each
+    `{{ … }}` resolved. `current` is the text flowing into this step (`{{.}}`);
+    `stages` is the ordered list of stage matches (`{{ i$j }}`)."""
     return "".join(
-        _expand(n.content, stages)
+        _expand(n.content, current, stages)
         for n in template_tree.children
         if isinstance(n, t.LeafNode)
     )
 
 
-def _expand(text: str, stages: list[Match]) -> str:
-    return _MOUSTACHE_RE.sub(lambda mo: _resolve(mo.group(1), stages), text)
+def _expand(text: str, current: str, stages: list[Match]) -> str:
+    def sub(mo: re.Match[str]) -> str:
+        if mo.group(1).strip() == ".":
+            return current
+        return _resolve(mo.group(1), stages)
+
+    return _MOUSTACHE_RE.sub(sub, text)
 
 
 def _resolve(expr: str, stages: list[Match]) -> str:
