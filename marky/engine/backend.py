@@ -31,7 +31,9 @@ class Engine(Protocol):
 
     def compile(self, tree: t.RootNode) -> object: ...
 
-    def run(self, compiled: object, text: str) -> list[Match]: ...
+    def run(
+        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
+    ) -> list[Match]: ...
 
 
 class PythonEngine:
@@ -42,5 +44,7 @@ class PythonEngine:
     def compile(self, tree: t.RootNode) -> object:
         return compile_pattern(tree)
 
-    def run(self, compiled: object, text: str) -> list[Match]:
-        return _run_find_matches(cast("list[Element]", compiled), text)
+    def run(
+        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
+    ) -> list[Match]:
+        return _run_find_matches(cast("list[Element]", compiled), text, stages)

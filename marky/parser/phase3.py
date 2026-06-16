@@ -32,6 +32,7 @@ from marky.parser._text import (
 _PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
 _BACKREF_RE = re.compile(r"\$(\d+)")
 _COUNTREF_RE = re.compile(r"#(\d+)")
+_STAGEREF_RE = re.compile(r"(\d+)\$(\d+(?:\.\d+)*)?")
 
 
 _EXCLUDABLE = (
@@ -149,6 +150,12 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     m = _COUNTREF_RE.fullmatch(stripped)
     if m:
         return t.CountRefNode(group=int(m.group(1)))
+    # Cross-stage reference `{N$M}` / `{N$}` / `{N$M.K}` — match the text of
+    # pipeline stage N's capture M (dotted into sub-captures), or its whole match.
+    m = _STAGEREF_RE.fullmatch(stripped)
+    if m:
+        path = tuple(int(i) for i in m.group(2).split(".")) if m.group(2) else ()
+        return t.StageRefNode(stage=int(m.group(1)), path=path)
 
     pad, content = _parse_padding(content)
 

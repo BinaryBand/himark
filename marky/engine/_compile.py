@@ -516,7 +516,20 @@ class CountRefEl:
     count_ref: int | None = None
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl
+@dataclass(slots=True)
+class StageRefEl:
+    """A cross-stage reference `{N$M.K…}`: matches the text of pipeline stage `N`'s
+    capture along `path` (empty path = whole match). The referent is read from the
+    stages threaded into the matcher, so the loop — not a Matcher — handles it."""
+
+    stage: int
+    path: tuple[int, ...]
+    min_reps: int
+    max_reps: int | None
+    count_ref: int | None = None
+
+
+Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl | StageRefEl
 
 
 def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
@@ -550,6 +563,16 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
             elif isinstance(child.semantic, t.CountRefNode):
                 elements.append(
                     CountRefEl(child.semantic.group, min_reps, max_reps, count_ref)
+                )
+            elif isinstance(child.semantic, t.StageRefNode):
+                elements.append(
+                    StageRefEl(
+                        child.semantic.stage,
+                        child.semantic.path,
+                        min_reps,
+                        max_reps,
+                        count_ref,
+                    )
                 )
             else:
                 elements.append(

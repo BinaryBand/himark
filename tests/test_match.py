@@ -681,3 +681,29 @@ def test_template_stage_has_no_captures():
     # A template stage is addressable as a whole (1$) but has no captures (1$0).
     with pytest.raises(CompileError):
         execute(parser.parse('{cat} => "{{0$}}" => {a} => "{{1$0}}"'), "cat")
+
+
+# ── Cross-stage references {N$M} in pattern position ──────────────────────────
+
+
+def test_stage_ref_matches_earlier_capture():
+    # {0$0} / {0$1} match stage 0's individual captures; {0$} its whole match.
+    assert execute(parser.parse("{cat}{dog} => {0$0}"), "catdog") == ["cat"]
+    assert execute(parser.parse("{cat}{dog} => {0$1}"), "catdog") == ["dog"]
+    assert execute(parser.parse("{cat}{dog} => {0$}"), "catdog") == ["catdog"]
+
+
+def test_stage_ref_dotted_subcapture():
+    # A pattern stage ref descends into sub-captures, like the moustache path.
+    assert execute(parser.parse("{{cat}{dog}} => {0$0.1}"), "catdog") == ["dog"]
+
+
+def test_stage_ref_unresolvable_drops_branch():
+    # A reference that can't resolve makes the query fail to match (branch drops),
+    # rather than raising — patterns filter, they don't error.
+    assert execute(parser.parse("{cat}{dog} => {0$5}"), "catdog") == []
+
+
+def test_stage_ref_distinct_from_back_ref():
+    # {$0} (within-pattern back-ref) and {0$0} (cross-stage ref) coexist.
+    assert matches("{a..z}{$0}", "aa bb cd") == ["aa", "bb"]

@@ -172,6 +172,20 @@ class CountRefNode:
     group: int = 0
 
 
+@dataclass(slots=True)
+class StageRefNode:
+    """A cross-stage reference `{N$M}`: matches the literal text of pipeline
+    stage `N`'s capture `M`. The capture part is a dotted path (`{N$M.K}`) into
+    sub-captures, like the moustache `i$j.k`; an empty path (`{N$}`) is the
+    stage's whole match. The referent is read from the pipeline stages threaded
+    into the matcher, so — like a back-reference — it lowers to a dedicated
+    element, not a `Matcher`."""
+
+    type: Literal["stage_ref"] = "stage_ref"
+    stage: int = 0
+    path: tuple[int, ...] = ()
+
+
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
@@ -184,6 +198,7 @@ SemanticNode: TypeAlias = (
     | SequenceNode
     | BackRefNode
     | CountRefNode
+    | StageRefNode
 )
 
 Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
@@ -200,4 +215,5 @@ SemanticClasses = (
     SequenceNode,
     BackRefNode,
     CountRefNode,
+    StageRefNode,
 )

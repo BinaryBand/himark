@@ -21,7 +21,7 @@ The above assumes that the `..` operator collapses the left-side argument into i
 
 Every `{...}` acts as a capture group that can be referenced via `$i` where `i` is the 'nth' captured, static string.
 
-E.g. `{aaa..{a..z}..zzz}{-{$0}}[0..]` will match any three-letter, lowercase string and any subsequent occurrences if separated by a '-'.
+E.g. `{{aaa..{a..z}..zzz}{-{$0}}}[0..]` will match any three-letter, lowercase string and any subsequent occurrences if separated by a '-'.
 
 Whereas `$i` accesses a capture's content, `#i` accesses it's repeat count.
 

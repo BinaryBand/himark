@@ -15,6 +15,7 @@ from marky.engine._compile import (
     GroupEl,
     LiteralEl,
     SeqGroupEl,
+    StageRefEl,
 )
 from marky.engine._types import Capture, Match
 
@@ -23,21 +24,28 @@ class _State:
     """Captures accumulated during one match attempt, with absolute spans.
 
     `root` is the top-level state shared by every nested sub-match, kept so the
-    rebasing in `_finalize` can flatten the whole tree against the match start."""
+    rebasing in `_finalize` can flatten the whole tree against the match start.
+    `stages` are the earlier pipeline matches, held on the root so a cross-stage
+    reference (`{N$M}`) can resolve stage N's capture during the match."""
 
-    __slots__ = ("captures", "root")
+    __slots__ = ("captures", "root", "stages")
 
-    def __init__(self, root: "_State | None" = None) -> None:
+    def __init__(
+        self, root: "_State | None" = None, stages: tuple[Match, ...] = ()
+    ) -> None:
         self.captures: list[Capture] = []
         self.root = root if root is not None else self
+        self.stages = stages
 
 
-def find_matches(pattern: list[Element], text: str) -> list[Match]:
+def find_matches(
+    pattern: list[Element], text: str, stages: tuple[Match, ...] = ()
+) -> list[Match]:
     matches: list[Match] = []
     n = len(text)
     pos = 0
     while pos < n:
-        state = _State()
+        state = _State(stages=stages)
         end = _match_elements(pattern, text, pos, state)
         if end is not None and end > pos:
             matches.append(_finalize(text, pos, end, state))
@@ -98,6 +106,8 @@ def _match_element(el: Element, text: str, pos: int, state: _State) -> int | Non
         return _match_back_ref(el, text, pos, state)
     if isinstance(el, CountRefEl):
         return _match_count_ref(el, text, pos, state)
+    if isinstance(el, StageRefEl):
+        return _match_stage_ref(el, text, pos, state)
     return _match_group(el, text, pos, state)
 
 
@@ -151,6 +161,32 @@ def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State) -> int 
     # The referent is group i's decimal repetition count (len of its rep pieces).
     root_caps = state.root.captures
     referent = str(len(root_caps[el.group].reps)) if el.group < len(root_caps) else None
+    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
+
+
+def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]):
+    """The text of pipeline `stage`'s capture along `path` (empty path = whole
+    match), or None if any index is out of range / the stage doesn't exist."""
+    if not 0 <= stage < len(stages):
+        return None
+    match = stages[stage]
+    if not path:
+        return match.text
+    captures = match.captures
+    cap = None
+    for idx in path:
+        if not 0 <= idx < len(captures):
+            return None
+        cap = captures[idx]
+        captures = cap.subs
+    return cap.text
+
+
+def _match_stage_ref(el: StageRefEl, text: str, pos: int, state: _State) -> int | None:
+    bounds = _reps_bounds(el, state)
+    if bounds is None:
+        return None
+    referent = _stage_referent(state.root.stages, el.stage, el.path)
     return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
 
 

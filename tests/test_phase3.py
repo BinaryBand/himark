@@ -298,6 +298,32 @@ def test_count_position_ref_parses():
     assert spec.group == 0
 
 
+def test_stage_ref_resolves():
+    node = first_semantic("{1$2}")
+    assert node.type == "stage_ref"
+    assert node.stage == 1
+    assert node.path == (2,)
+
+
+def test_stage_ref_whole_match():
+    node = first_semantic("{0$}")
+    assert node.type == "stage_ref"
+    assert node.stage == 0
+    assert node.path == ()
+
+
+def test_stage_ref_dotted_path():
+    node = first_semantic("{1$2.3}")
+    assert node.type == "stage_ref"
+    assert node.stage == 1
+    assert node.path == (2, 3)
+
+
+def test_back_ref_not_shadowed_by_stage_ref():
+    # `{$0}` (leading $) stays a within-pattern back-ref, not a stage ref.
+    assert first_semantic("{$0}").type == "back_ref"
+
+
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 

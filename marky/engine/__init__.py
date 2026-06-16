@@ -54,9 +54,12 @@ def get_backend() -> Engine:
     return _backend
 
 
-def find_matches(tree: t.RootNode, target: str) -> list[Match]:
-    """Compile a pattern tree and return all its matches in target."""
-    return _backend.run(_backend.compile(tree), target)
+def find_matches(
+    tree: t.RootNode, target: str, stages: tuple[Match, ...] = ()
+) -> list[Match]:
+    """Compile a pattern tree and return all its matches in target. `stages` are
+    the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve."""
+    return _backend.run(_backend.compile(tree), target, stages)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
@@ -103,7 +106,7 @@ def _splice(
     """Replace each match of `pattern` in `text` with the rendered template."""
     out: list[str] = []
     last = 0
-    for m in find_matches(pattern, text):
+    for m in find_matches(pattern, text, ancestors):
         out.append(text[last : m.start])
         out.append(_render(template, m, [*ancestors, m]))
         last = m.end
@@ -122,7 +125,7 @@ def _run(
         spliced = _splice(steps[0], steps[1], text, ancestors)
         return _run(steps[2:], spliced, ancestors) if len(steps) > 2 else [spliced]
 
-    matches = find_matches(steps[0], text)
+    matches = find_matches(steps[0], text, ancestors)
     rest = steps[1:]
 
     if not rest:
@@ -188,7 +191,7 @@ def _transform(
             _transform(steps[2:], spliced, ancestors) if len(steps) > 2 else spliced
         )
 
-    matches = find_matches(steps[0], text)
+    matches = find_matches(steps[0], text, ancestors)
     if not matches:
         return text
 
