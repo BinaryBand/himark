@@ -19,7 +19,7 @@ The above assumes that the `..` operator collapses the left-side argument into i
 
 ## Self-referencing
 
-Every `{...}` acts as a capture group that can be references via `$i` where `i` is the 'nth' captured, static string.
+Every `{...}` acts as a capture group that can be referenced via `$i` where `i` is the 'nth' captured, static string.
 
 E.g. `{aaa..{a..z}..zzz}{-{$0}}[0..]` will match any three-letter, lowercase string and any subsequent occurrences if separated by a '-'.
 
@@ -35,7 +35,9 @@ Either `$` or `#` can be accessed within `{...}`, but only the latter can be acc
 
 `$` and `#` accessors assume they're accessing content on the same expression. `{{ i$0 }}` overrides the default scope assumption to access any expression in the pipeline by its index `i`.
 
-Mid-pipe template expressions only feed non-static values to the next link; e.g. `... => "<p>{{ 0$0 }}</p>" => ...` drops "\<p>" and "\</p>" from the pipeline scope but appends it to the document.
+Mid-pipe template expressions only feed non-static values to the next link; e.g. `... => "<p>{{ 0$0 }}</p>" => ...` drops "&lt;p&gt;" and "&lt;/p&gt;" from the pipeline scope but appends it to the document.
+
+> **Note:** Every expression in a pipeline can be either a query or a template expression. If it's the former, it queries the previous expression as a Unicode string.
 
 ## Notes
 
@@ -51,14 +53,17 @@ Every range normalises to a three-part `{floor..A..ceiling}`: the middle `A` is 
 - **`{{a..z}..cc}`** -- `{a..z}` is the limiting alphabet since `cc`'s Unicode alphabet is a super-set. `{a..{a..z}..cc}`
 - **`{{a,A},{b,B},...,{z,Z}}`** -- Equivalent to `{a..{@uni}..z}` where every nested pair is functionally the same character as its partner.
 - **`{{a..c}..zz}`** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's.
-- **`{1}{24..33:{@b58}}`** -- Any 20-byte string in base-58 with a leading '1'. AKA, a legacy Bitcoin address (ignoring checksums)
-- **`{25..34:{@b58}} => "{{ sha256(sha256(0$0)) % 0xffffff }}" => {0$} => {1$}{!{@b58}} => "{{0$}} is valid!"`** -- A legacy Bitcoin address including the checksum (in pseudo-script).
-- **`{@b58}[25..34] => {{ sha256(sha256(b256(25:0$0)[0..20]))[0..3] == b256(25:0$0)[21..24] }} => "{{0$}} is valid!"`** -- A legacy Bitcoin address validated against its own checksum (in pseudo-script). Step by step:
-  - `{@b58}[25..34]` -- match a 25--34 char base-58 run (pipe `0`); `0$0` is its value, `0$` its rendered string.
-  - `b256(25:0$0)` -- pin that value to the full **25 bytes**. The width restores the leading `0x00` version byte the value alone would drop.
-  - `[0..20]` -- slice the 21-byte payload (`version ‖ hash160`); `sha256(sha256(...))[0..3]` is the **computed** 4-byte checksum.
-  - `== b256(25:0$0)[21..24]` -- compare it to the **embedded** last 4 bytes. The `{{ ... }}` window is a boolean, so `=>` keeps the match only when they agree.
-  - `=> "{{0$}} is valid!"` -- a surviving match renders its address string and the suffix.
-  - Pin (size) and slice (extract) are distinct: pin to the field's true width to recover leading zeros, then slice to carve payload from checksum. `sha256`/`b256` are host functions (tabled).
+- **`{1}{24..33:{@b58}}`** -- Any base-58 string with exactly 25-bytes. AKA, a legacy Bitcoin address (ignoring checksums)
 
-> **Note:** 0$0 returns a base-x value, 0$ returns a singleton.
+> **Note:** `0$0` returns a full variable with its respective alphabet and range values, whereas `0$` returns a raw string.
+
+### North star examples
+
+```proto
+{@b58}[25..34]
+  => "{{ b256(25:0$0) }}"
+  => {21:@b256}{4:@b256}
+  => "{{ 2$1 }}&&{{ sha256(sha256(2$0)) }}"
+  => {21:1$1}{&&}{2$1}
+  => "{{0$}} is valid!"
+```
