@@ -17,9 +17,7 @@ Two constructs: `{...}` matches, and `[...]` repeats.
 
 These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{expr}[1]`.
 
-This is the experimental algebra branch: the `<->`, `{{...}}`, and `>>`
-constructs have been removed, and congruence is now expressed through the brace
-grouping itself (see [Congruence](#congruence)).
+This is the experimental algebra branch: the `<->` and `>>` operators and the old `{{...}}` reference sublanguage have been removed, and congruence is now expressed through the brace grouping itself (see [Congruence](#congruence)). References return in two new forms: **moustache** template accessors (see [Captures](#captures) and [Transformers](#transformers)) and pattern [self-references](#self-references).
 
 ---
 
@@ -75,7 +73,7 @@ The two axes are orthogonal: `..` builds an **ordered** range (distinct position
 | `{a..z}[3]`      | a$\dots$z              | `aaa` | unbounded |
 | `{a}[2..4]`      | a$\dots$z              | `aa`  | `aaaa`    |
 
-> **Note:** `{a..z}[3]` can be any string of any length of lowercase triples including 'aaa', 'ababab', and 'barbarbar'.
+> **Note:** `{a..z}` is one position; `[3]` repeats it **by value**, so `{a..z}[3]` matches three of the _same_ letter ('aaa', 'bbb', ..., 'zzz') — not three arbitrary letters. A run of differing letters comes from a union (`{a..z,A..Z}`) or a complement (`{!\ }`).
 
 ### Value Exclusion
 
@@ -148,9 +146,9 @@ What "repeats" means depends on what is repeated:
 - A **grouping brace** (a `{...}` whose interior is a sequence of constructs) repeats **by shape**: each repetition re-matches the structure, and its content may differ between repetitions.
 
 ```proto
-{a..z}[3]     // class: same string three times -- 'aaa', 'ababab', through 'barbarbar'
-{a..z}[2..5]  // class: same string 2-5 times
-{0..9}[..]    // class: same string any number of times
+{a..z}[3]     // class: the same letter three times -- 'aaa', 'bbb', through 'zzz'
+{a..z}[2..5]  // class: the same letter 2-5 times
+{0..9}[..]    // class: the same digit any number of times
 {{|}{!|,\n}}[3]   // grouping brace: three '|'+cell units, each a different cell
 ```
 
@@ -181,16 +179,35 @@ Every `{...}` creates a capture group, numbered left to right from **0**. A grou
 
 Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{Sphinx}{of{black}{quartz}}`:
 
-| Group     | Text                     | Explanation                     |
-| --------- | ------------------------ | ------------------------------- |
-| full      | `###Sphinxofblackquartz` | The full matched text.          |
-| 0         | `###`                    | Group 0                         |
-| 1         | `Sphinx`                 | Group 1                         |
-| 2         | `ofblackquartz`          | Group 2                         |
-| 2.0       | `black`                  | First sub-group inside group 2  |
-| 2.1       | `quartz`                 | Second sub-group inside group 2 |
+| Group | Text                     | Explanation                     |
+| ----- | ------------------------ | ------------------------------- |
+| full  | `###Sphinxofblackquartz` | The full matched text.          |
+| 0     | `###`                    | Group 0                         |
+| 1     | `Sphinx`                 | Group 1                         |
+| 2     | `ofblackquartz`          | Group 2                         |
+| 2.0   | `black`                  | First sub-group inside group 2  |
+| 2.1   | `quartz`                 | Second sub-group inside group 2 |
 
 > **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
+
+### Self-references
+
+A pattern can refer back to what an earlier capture matched. Groups are numbered 0-based in document order (see [Captures](#captures)).
+
+| Form    | Written in | Matches                                                           |
+| ------- | ---------- | ----------------------------------------------------------------- |
+| `{$i}`  | `{...}`    | the literal **text** that group `i` captured                      |
+| `{#i}`  | `{...}`    | the decimal **repetition count** of group `i`                     |
+| `[#i]`  | `[count]`  | repeat exactly as many times as group `i` did                     |
+| `{N$M}` | `{...}`    | the text of pipeline stage `N`'s capture `M` (`{N$M.K}` descends) |
+
+```proto
+{a..z}{$0}        // a doubled letter: 'aa', 'bb' (not 'ab')
+{a}[1..]{x}{#0}   // an a-run, 'x', then its length: matches 'aaax3', not 'aax3'
+{a}[2..]{-}[#0]   // as many '-' as there were 'a': 'aaa---', 'aa--'
+```
+
+`{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` reads an earlier pipeline stage (`=>`-numbered, templates included) — the matching-side counterpart of the moustache `{{ i$j }}` accessor (see [Transformers](#transformers)).
 
 ---
 
@@ -226,4 +243,32 @@ Literal text may be written in double quotes, which is emitted verbatim with `\"
 
 ## North Star Examples
 
-TODO
+Worked patterns, each exercised verbatim by the suite ([tests/north_star/](tests/north_star/)).
+
+**IPv4 address** -- four dotted octets, each a decimal value 0-255:
+
+```proto
+{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}
+```
+
+**Bitcoin P2PKH address** -- a `1` prefix then a 24-33 character base58 body. The length is a **width** constraint (`{N..M:...}` padding), not a value bound -- `1` is base58's zero symbol, so a value range would admit shorter strings:
+
+```proto
+{1}{24..33:{@b58}}
+```
+
+**Ethereum address** -- `0x` then exactly 40 hex digits:
+
+```proto
+{0x}{40:{@hex}}
+```
+
+**Markdown -> HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
+
+```proto
+{#}[1..6]{ }[..]{!\n} => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
+```
+
+### Script files (.hmk)
+
+A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate -- all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
