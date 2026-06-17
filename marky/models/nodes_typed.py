@@ -35,6 +35,11 @@ CountSpec: TypeAlias = CountRange | CountRefSpec
 class RootNode:
     type: Literal["root"] = "root"
     children: list[Node] = field(default_factory=list)
+    # Engine compile cache: the lowered program and the backend that produced it
+    # (so a swapped backend recompiles). Excluded from equality/repr — pure
+    # memoization, tied to this tree's lifetime. Populated lazily by the engine.
+    _compiled: object = field(default=None, repr=False, compare=False)
+    _compiled_by: object = field(default=None, repr=False, compare=False)
 
 
 @dataclass(slots=True)

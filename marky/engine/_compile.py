@@ -319,7 +319,7 @@ class _Group(_Base):
     sequence, so 'a' and 'bc' count as the same unit when grouped, and 'a'/'A'
     fold together for case-insensitive repetition."""
 
-    __slots__ = ("members",)
+    __slots__ = ("members", "_singles")
 
     def __init__(self, groups: list[list[str]]):
         # (member, group_index) longest-first so multi-char members win.
@@ -328,10 +328,23 @@ class _Group(_Base):
             key=lambda pair: len(pair[0]),
             reverse=True,
         )
+        # Fast path for the common all-single-char group (alphabets, char
+        # classes): a frozenset of chars, or None when any member is multi-char
+        # (then longest-first member order matters and we keep the general loop).
+        self._singles = (
+            frozenset(m for m, _ in self.members)
+            if all(len(m) == 1 for m, _ in self.members)
+            else None
+        )
 
     def match(self, text: str, pos: int) -> int | None:
         n = len(text)
         end = pos
+        singles = self._singles
+        if singles is not None:
+            while end < n and text[end] in singles:
+                end += 1
+            return end if end > pos else None
         while end < n:
             for m, _ in self.members:
                 if text.startswith(m, end):

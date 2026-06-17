@@ -56,15 +56,17 @@ def find_matches(
 
 
 def _finalize(text: str, start: int, end: int, state: _State) -> Match:
-    def rebase(c: Capture) -> Capture:
-        return Capture(
-            c.text,
-            (c.span[0] - start, c.span[1] - start),
-            c.reps,
-            [rebase(s) for s in c.subs],
-        )
+    # Spans are accumulated absolute; shift them to be match-relative. The
+    # captures belong to this match alone, so rebase in place rather than
+    # allocating a parallel tree.
+    def rebase(c: Capture) -> None:
+        c.span = (c.span[0] - start, c.span[1] - start)
+        for s in c.subs:
+            rebase(s)
 
-    return Match(text[start:end], start, end, [rebase(c) for c in state.captures])
+    for c in state.captures:
+        rebase(c)
+    return Match(text[start:end], start, end, state.captures)
 
 
 # ── Sequence matching ─────────────────────────────────────────────────────────
@@ -97,18 +99,12 @@ def _reps_bounds(el: Element, state: _State) -> tuple[int, int | None] | None:
 
 
 def _match_element(el: Element, text: str, pos: int, state: _State) -> int | None:
-    if isinstance(el, LiteralEl):
+    # LiteralEl is by far the most common element, so keep it inline; everything
+    # else dispatches on exact type through _DISPATCH (built at module load).
+    if type(el) is LiteralEl:
         s = el.text
         return pos + len(s) if text[pos : pos + len(s)] == s else None
-    if isinstance(el, SeqGroupEl):
-        return _match_seq_group(el, text, pos, state)
-    if isinstance(el, BackRefEl):
-        return _match_back_ref(el, text, pos, state)
-    if isinstance(el, CountRefEl):
-        return _match_count_ref(el, text, pos, state)
-    if isinstance(el, StageRefEl):
-        return _match_stage_ref(el, text, pos, state)
-    return _match_group(el, text, pos, state)
+    return _DISPATCH[type(el)](el, text, pos, state)
 
 
 # ── Self-references `{$i}` / `{#i}`: match a value read from an earlier group ───
@@ -271,3 +267,13 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State) -> int | None:
             return record(current, reps)
 
     return record(pos, []) if min_reps == 0 else None
+
+
+# Exact-type dispatch for _match_element; GroupEl is the generic fall-through.
+_DISPATCH = {
+    SeqGroupEl: _match_seq_group,
+    BackRefEl: _match_back_ref,
+    CountRefEl: _match_count_ref,
+    StageRefEl: _match_stage_ref,
+    GroupEl: _match_group,
+}

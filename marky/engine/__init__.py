@@ -57,12 +57,22 @@ def get_backend() -> Engine:
     return _backend
 
 
+def _compiled(tree: t.RootNode) -> object:
+    """The tree's lowered program, compiled once per backend and cached on the
+    node — `_transform` re-runs the same nested query across every branch, so
+    recompiling each time is pure waste."""
+    if tree._compiled is None or tree._compiled_by is not _backend:
+        tree._compiled = _backend.compile(tree)
+        tree._compiled_by = _backend
+    return tree._compiled
+
+
 def find_matches(
     tree: t.RootNode, target: str, stages: tuple[Match, ...] = ()
 ) -> list[Match]:
     """Compile a pattern tree and return all its matches in target. `stages` are
     the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve."""
-    return _backend.run(_backend.compile(tree), target, stages)
+    return _backend.run(_compiled(tree), target, stages)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
