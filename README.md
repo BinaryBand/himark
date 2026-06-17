@@ -3,9 +3,9 @@
 A pattern-matching and text-transformation language for people who find regex write-only.
 
 ```hmk
-{a..z,A..Z}                                            # a word: a run of letters
+{!\ }[1..]                                             # a word: a run of non-spaces
 {{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}  # an IPv4 address
-{a..z,A..Z} => "<p>{{.}}</p>"                          # wrap each word in <p>
+{!\ }[1..] => "<p>{{.}}</p>"                           # wrap each word in <p>
 ```
 
 Patterns are readable, composable, and compile to **direct execution** — no regex transpilation. The full language spec is [docs/HMK.md](docs/HMK.md); the implementation map is [docs/.ARCHITECTURE.md](docs/.ARCHITECTURE.md).
@@ -29,7 +29,7 @@ poetry install --no-root
 Commands: `execute` (match and transform), `find` (locate matches), `transpile` (run a `.hmk` script over a document), and `pipeline` (pre-compile scripts).
 
 ```sh
-poetry run marky execute '{a..z,A..Z}' 'hi there'
+poetry run marky execute '{!\ }[1..]' 'hi there'
 # hi
 # there
 
@@ -39,10 +39,10 @@ poetry run marky find '{{@d}..255}' '192.168.1.1'
 
 # pattern and target may each be a file path or '-' for stdin
 poetry run marky execute pattern.hmk target.txt
-echo '{a..z,A..Z}' | poetry run marky execute - 'hi there'
+echo '{!\ }[1..]' | poetry run marky execute - 'hi there'
 
 # --json emits structured deltas / spans instead of lines
-poetry run marky execute '{a..z,A..Z} => "<p>{{.}}</p>"' 'a hi b' --json
+poetry run marky execute '{!\ }[1..] => "<p>{{.}}</p>"' 'a hi b' --json
 
 # run a multi-statement .hmk script over a document (HTML to stdout, or --out file)
 poetry run marky transpile doc.md --script marky/scripts/md_html.hmk
@@ -63,14 +63,14 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 | `{abc}`         | the literal string `abc`                      |
 | `{a,A}`         | one congruence class: `a` or `A`              |
 | `{a..z}`        | **one** lowercase letter (a single position)  |
-| `{a..z,A..Z}`   | a run of letters (a union is greedy)          |
+| `{a,A}`         | one congruence class: `a` or `A`              |
+| `{!\ }[1..]`    | a run of non-spaces (a word)                  |
 | `{{@d}..255}`   | a decimal value from 0 to 255                 |
 | `{cat,dog}`     | one class: the token `cat` or `dog`           |
 | `{cat..dog}`    | any string between `cat` and `dog`            |
-| `{{a,A},{b,B}}` | ordered alphabet of case-folded letters       |
-| `{!\|,\n}`      | a run containing no pipe or newline           |
+| `{:{@hex}}`     | a hex value of any width                      |
 
-A bare class is **one position** — `{a..z}` matches a single letter; runs come from a union (`{a..z,A..Z}`) or a complement (`{!\ }`). Operators, tightest to loosest: `..` ordered range · `,` congruence class · `!` subtract. `..` and `,` are orthogonal axes — `{a,A}[2]` folds case (`aa`/`aA`/`Aa`/`AA`), while `{a..z}[2]` is the diagonal (`aa`/`bb`/…).
+**Every `{…}` matches one position** — one symbol or one value. A *run* comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A heterogeneous run of an ordered alphabet is a **value** of a width — padding: `{:{@hex}}`, `{40:{@hex}}`. Operators, tightest to loosest: `..` ordered range · `,` congruence class · `!` subtract.
 
 ### Macros
 
@@ -85,8 +85,8 @@ A bare class is **one position** — `{a..z}` matches a single letter; runs come
 `=>` chains steps. The first step is a query; each of its matches starts a **branch** the rest of the chain transforms. A later query splices its matches (matching nothing **drops** the branch — that is how a chain filters); a **template** renders and the chain continues on its render, so templates compose. `{{.}}` is the text flowing into the step; `{{ i$j }}` reaches an earlier stage's capture `j`.
 
 ```hmk
-{a..z,A..Z}                       # ["hi", "there"]   (the list of matches)
-{a..z,A..Z} => "<p>{{.}}</p>"     # ["<p>hi</p>", "<p>there</p>"]
+{!\ }[1..]                       # ["hi", "there"]   (the list of matches)
+{!\ }[1..] => "<p>{{.}}</p>"     # ["<p>hi</p>", "<p>there</p>"]
 ```
 
 The same branches render two ways: a **list** of results, or **spliced** back over the source in place (`--json` emits the spliceable `{start, end, text}` deltas). Static text is quoted to carry literal braces or spaces and to hold moustache references: `{a} => "<b>{{.}}</b>"`.

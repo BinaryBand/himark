@@ -297,7 +297,9 @@ def _lower_union(node: t.UnionNode) -> Matcher:
 
 
 class _Complement(_Base):
-    """Greedy run of characters that do NOT match the inner node."""
+    """A single character the inner node does NOT match (one position). A run is
+    `[count]`, and it repeats heterogeneously -- each rep is any such character --
+    so `{!a}[1..]` is a run of non-`a` characters."""
 
     __slots__ = ("inner",)
 
@@ -305,12 +307,15 @@ class _Complement(_Base):
         self.inner = lower(node.inner)
 
     def match(self, text: str, pos: int) -> int | None:
-        inner = self.inner.match
-        n = len(text)
-        end = pos
-        while end < n and inner(text, end) is None:
-            end += 1
-        return end if end > pos else None
+        if pos >= len(text) or self.inner.match(text, pos) is not None:
+            return None
+        return pos + 1
+
+    def accepts(self, s: str) -> bool:
+        return len(s) == 1 and self.inner.match(s, 0) is None
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        return self.match(text, pos)  # any non-inner character, not just `first`
 
 
 class _Group(_Base):
@@ -338,21 +343,18 @@ class _Group(_Base):
         )
 
     def match(self, text: str, pos: int) -> int | None:
-        n = len(text)
-        end = pos
+        # One member (single position). A run is `[count]`: repetition is
+        # heterogeneous within a congruence group (see `equal_unit`), so
+        # `{a,A}[2]` is aa/aA/Aa/AA and `{a,b,c}[1..]` is any run of a/b/c.
+        if pos >= len(text):
+            return None
         singles = self._singles
-        if singles is not None:
-            while end < n and text[end] in singles:
-                end += 1
-            return end if end > pos else None
-        while end < n:
-            for m, _ in self.members:
-                if text.startswith(m, end):
-                    end += len(m)
-                    break
-            else:
-                break
-        return end if end > pos else None
+        if singles is not None:  # all members single-char
+            return pos + 1 if text[pos] in singles else None
+        for m, _ in self.members:
+            if text.startswith(m, pos):
+                return pos + len(m)
+        return None
 
     def _seq(self, s: str) -> list[int] | None:
         seq: list[int] = []

@@ -15,7 +15,7 @@ Two constructs: `{...}` matches, and `[...]` repeats.
 | `{expr}`  | Match and class     |
 | `[count]` | Repetition modifier |
 
-These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{expr}[1]`.
+These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{expr}[1]`. Every `{...}` matches exactly one position.
 
 This is the experimental algebra branch: the `<->` and `>>` operators and the old `{{...}}` reference sublanguage have been removed, and congruence is now expressed through the brace grouping itself (see [Congruence](#congruence)). References return in two new forms: **moustache** template accessors (see [Captures](#captures) and [Transformers](#transformers)) and pattern [self-references](#self-references).
 
@@ -73,7 +73,7 @@ The two axes are orthogonal: `..` builds an **ordered** range (distinct position
 | `{a..z}[3]`      | a$\dots$z              | `aaa` | unbounded |
 | `{a}[2..4]`      | a$\dots$z              | `aa`  | `aaaa`    |
 
-> **Note:** `{a..z}` is one position; `[3]` repeats it **by value**, so `{a..z}[3]` matches three of the _same_ letter ('aaa', 'bbb', ..., 'zzz') — not three arbitrary letters. A run of differing letters comes from a union (`{a..z,A..Z}`) or a complement (`{!\ }`).
+> **Note:** `{a..z}` is one position; `[3]` repeats it **by value**, so `{a..z}[3]` matches three of the _same_ letter ('aaa', 'bbb', ..., 'zzz') — not three arbitrary letters. A run of differing letters comes from `[count]` over a complement (`{!\ }[1..]`) or a congruence class, or — for an ordered alphabet — from its padded value (`{:{@l}}` is any lowercase string).
 
 ### Value Exclusion
 
@@ -86,7 +86,7 @@ Inside a range the positive arms set the universe and the `!` arms **subtract** 
 {@d,@l,@u,!{0,l,I,O}}      // base58: digits and letters minus the four ambiguous glyphs
 ```
 
-> **Note:** With no positive arm the universe defaults to the ambient alphabet, so `{!x}` is "any Unicode value except `x`" -- e.g. `{!**}` matches a run up to the next `**`.
+> **Note:** With no positive arm the universe defaults to the ambient alphabet, so `{!x}` is one character that is not `x`. A _run_ is `[count]`: `{!**}[1..]` matches a run up to the next `**`.
 
 ---
 
@@ -149,7 +149,7 @@ What "repeats" means depends on what is repeated:
 {a..z}[3]     // class: the same letter three times -- 'aaa', 'bbb', through 'zzz'
 {a..z}[2..5]  // class: the same letter 2-5 times
 {0..9}[..]    // class: the same digit any number of times
-{{|}{!|,\n}}[3]   // grouping brace: three '|'+cell units, each a different cell
+{|{!|,\n}[1..]}[3]   // grouping brace: three '|'+cell units, each a different cell
 ```
 
 The structural form is what lets a single pattern walk a homogeneous block -- e.g. the cells of a row, repeated by shape so each cell may hold different text.
@@ -227,7 +227,7 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 {a..z}                            // the list of lowercase letters
 {a..z} => <w>                     // list: '<w>' per letter -- splice: each letter becomes '<w>'
 {cat} => "<b>{{.}}</b>"           // wrap each match
-{table} => "<table>{{.}}</table>" => {!\n} => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
+{table} => "<table>{{.}}</table>" => {!\n}[1..] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
 
 ### Quoting static text
@@ -266,7 +266,7 @@ Worked patterns, each exercised verbatim by the suite ([tests/north_star/](tests
 **Markdown -> HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
-{#}[1..6]{ }[..]{!\n} => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
+{#}[1..6]{ }[..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
 ```
 
 ### Script files (.hmk)

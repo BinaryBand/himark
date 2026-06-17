@@ -61,16 +61,16 @@ def test_named_alpha_dec():
 
 
 def test_named_alpha_hex():
-    # hex = {@d},{{@w}..f}: one folded base-16 alphabet, so a mixed hex run
-    # like "0af" matches as a single unit.
-    result = matches("{@hex}", "xyz0af")
+    # @hex is one position (a single hex digit); a hex *string* is a value, so a
+    # heterogeneous run is the padded form {:{@hex}} (a value of any width).
+    result = matches("{:{@hex}}", "xyz0af")
     assert result == ["0af"]
 
 
 def test_named_alpha_hex_case_insensitive():
-    # @w carries the case fold, so 'a' and 'F' are hex digits in one alphabet
-    # and "0aF" is a single contiguous run.
-    result = matches("{@hex}", "0aF g9C")
+    # @w carries the case fold, so 'a' and 'F' are one hex value; "0aF" is a
+    # single value of width 3.
+    result = matches("{:{@hex}}", "0aF g9C")
     assert result == ["0aF", "9C"]
 
 
@@ -173,9 +173,9 @@ def test_exclusion_char_range_stress():
 
 
 def test_exclusion_named_alpha_units():
-    # Exclusions filter whole matched units of the union: a lone 'f' run is
-    # dropped, while a longer run like 'af' is not the excluded value.
-    assert matches("{@hex,!f}", "f a 12") == ["a", "12"]
+    # Exclusions filter whole matched values: the value 'f' is dropped, while a
+    # wider value like '12' is not the excluded value.
+    assert matches("{:{@hex,!f}}", "f a 12") == ["a", "12"]
 
 
 def test_exclusion_full_alpha_stress():
@@ -282,16 +282,10 @@ def test_congruence_pair_is_case_agnostic():
 
 
 def test_ordered_class_of_classes():
-    # {{a,A},{b,B}} is an ordered alphabet of folded positions: any casing of a
-    # run drawn from those two letters matches as one unit.
-    result = matches("{{a,A},{b,B}}", "aBAb zz")
+    # {{a,A},{b,B}} is an ordered (two-symbol) alphabet of folded positions: one
+    # position matches one symbol, so a heterogeneous run is its padded value.
+    result = matches("{:{{a,A},{b,B}}}", "aBAb zz")
     assert result == ["aBAb"]
-
-
-def test_class_multichar_tokens():
-    # Multi-char group members are matched as whole tokens, not loose chars.
-    result = matches("{{a,bc},{def,ghi}}", "bcghi")
-    assert result == ["bcghi"]
 
 
 def test_class_rejects_partial_token():
@@ -315,21 +309,22 @@ def test_class_interleave():
 
 def test_congruence_with_whitespace_member():
     # A class member may be whitespace: `{a,\ }` folds 'a' and ' ' into one
-    # position (an escaped space; a raw space after ',' is rejected elsewhere).
-    assert matches("{a,\\ }", "a a") == ["a a"]
+    # position; a run `[1..]` repeats it heterogeneously over the class.
+    assert matches("{a,\\ }[1..]", "a a") == ["a a"]
 
 
 # ── complement ────────────────────────────────────────────────────────────────
 
 
 def test_complement_newline():
-    result = matches("{!\n}", "line one\nline two")
+    # {!\n} is one non-newline char; a run is [1..], repeated heterogeneously.
+    result = matches("{!\n}[1..]", "line one\nline two")
     assert result == ["line one", "line two"]
 
 
 def test_complement_char_range():
-    # {!a..z} greedily matches entire runs of non-lowercase chars.
-    result = matches("{!a..z}", "a1B2c3")
+    # {!a..z}[1..] matches entire runs of non-lowercase chars (heterogeneous).
+    result = matches("{!a..z}[1..]", "a1B2c3")
     assert "1B2" in result
     assert "3" in result
     assert "a" not in result
@@ -369,14 +364,10 @@ def test_variable_number_repetition():
     assert matches("{{@d}..255}[2]", "2525") == ["2525"]
 
 
-def test_grouped_word_repetition_case_folded():
-    # Same word twice, any casing. "Hello" then "HELLO".
-    assert matches(CASE_FOLD + "[2]", "HelloHELLO") == ["HelloHELLO"]
-
-
-def test_grouped_word_repetition_mixed():
-    # "ab" and "AB" are group-equal (a/A, b/B share classes).
-    assert matches(CASE_FOLD + "[2]", "abAB") == ["abAB"]
+# Note: word-level congruent repetition (CASE_FOLD[2] = "same word, any casing,
+# twice") has no single-position form — `{:CASE_FOLD}` matches one case-folded
+# word, but its `[count]` repeats the *value*, not the word — so those cases are
+# intentionally dropped under the single-position model.
 
 
 def test_multichar_class_repetition():
@@ -394,14 +385,15 @@ def test_multichar_class_repetition():
 
 
 def test_case_fold_class_matches_letter_sequence():
-    result = matches(CASE_FOLD, "Hello 123 World")
+    # A case-folded word is a value over the 26-symbol alphabet: {:CASE_FOLD}.
+    result = matches("{:" + CASE_FOLD + "}", "Hello 123 World")
     assert "Hello" in result
     assert "World" in result
     assert "123" not in result
 
 
 def test_case_fold_class_rejects_non_alpha():
-    assert matches(CASE_FOLD, "123") == []
+    assert matches("{:" + CASE_FOLD + "}", "123") == []
 
 
 def test_class_to_class_range_unsupported():
@@ -433,7 +425,7 @@ def test_grouping_brace_sub_captures():
 def test_grouping_brace_repetition_is_structural():
     # A grouping brace is a *shape*: each repetition re-matches the shape, with
     # content free between reps — unlike an atomic class, which repeats by value.
-    row = r"{{|}{!|,\n}}[2]{|}"
+    row = r"{{|}{!|,\n}[1..]}[2]{|}"
     assert matches(row, "| a | bb |") == ["| a | bb |"]
 
 
@@ -441,15 +433,15 @@ def test_grouping_brace_repetition_is_structural():
 
 
 def test_constant_template_per_match():
-    # References are gone, so a `=>` step emits a constant for every match.
-    # {a..z,A..Z} is a union of two char-ranges, compiled to a _Group (greedy run).
-    assert execute(parser.parse("{a..z,A..Z} => X"), "ab cd") == ["X", "X"]
+    # A `=>` step emits a constant for every match. A word is a non-space run
+    # {!\ }[1..] (heterogeneous), since a bare class is one position.
+    assert execute(parser.parse(r"{!\ }[1..] => X"), "ab cd") == ["X", "X"]
 
 
 def test_splice_constant_in_place():
     # `splice` lays the rendered branches back over the source, keeping the text
     # between matches verbatim.
-    assert splice(parser.parse("{a..z,A..Z} => X"), "ab-cd") == "X-X"
+    assert splice(parser.parse(r"{!-}[1..] => X"), "ab-cd") == "X-X"
 
 
 def test_chained_patterns_narrow():
@@ -461,15 +453,15 @@ def test_chained_patterns_narrow():
 
 
 def test_named_alpha_b32():
-    # b32 = {@d},{{@w}..v} (RFC 4648 §7), one folded alphabet. Letters w-z are
-    # outside the bound, so "01v" is one run and "wxyz" matches nothing.
-    assert matches("{@b32}", "01v wxyz") == ["01v"]
+    # b32 = {@d},{{@w}..v} (RFC 4648 §7). One position is one base32 symbol, so a
+    # base32 *string* is the padded value {:{@b32}}; w-z are outside the alphabet.
+    assert matches("{:{@b32}}", "01v wxyz") == ["01v"]
 
 
 def test_named_alpha_b64():
-    # b64 = {@d},{@l},{@u},+,/ — case-sensitive (a != A), one 64-symbol alphabet,
-    # so a run of base64 chars matches as a single unit.
-    assert matches("{@b64}", "Az+/ !") == ["Az+/"]
+    # b64 = {@d},{@l},{@u},+,/ — case-sensitive, a 64-symbol alphabet; a base64
+    # string is the padded value {:{@b64}}.
+    assert matches("{:{@b64}}", "Az+/ !") == ["Az+/"]
 
 
 # ── Self-reference {$i}: match the text an earlier group captured ──────────────
@@ -559,8 +551,8 @@ def test_count_position_ref_backs_off_when_short():
 
 def test_moustache_whole_match():
     # {{0$}} (and bare {{$}}) interpolate the whole feeding match.
-    assert execute(parser.parse('{@hex} => "<{{0$}}>"'), "0af 12") == ["<0af>", "<12>"]
-    assert execute(parser.parse('{@hex} => "<{{$}}>"'), "0af 12") == ["<0af>", "<12>"]
+    assert execute(parser.parse('{:{@hex}} => "<{{0$}}>"'), "0af 12") == ["<0af>", "<12>"]
+    assert execute(parser.parse('{:{@hex}} => "<{{$}}>"'), "0af 12") == ["<0af>", "<12>"]
 
 
 def test_moustache_capture_indices():
@@ -582,7 +574,7 @@ def test_moustache_multi_stage_index():
 
 
 def test_moustache_splices_in_place():
-    assert splice(parser.parse('{@hex} => "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
+    assert splice(parser.parse('{:{@hex}} => "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
 
 
 def test_moustache_capture_out_of_range_raises():

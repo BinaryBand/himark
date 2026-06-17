@@ -83,17 +83,17 @@ def test_macro_dec_value_bound():
 
 
 def test_macro_w_case_insensitive_word():
-    # @w is one folded alphabet (case-fold letters plus '_'), so a word matches
-    # as a single contiguous run; digits are not word chars.
-    assert matches("{@w}", "Ab9") == ["Ab"]
-    assert matches("{@w}", "xyz") == ["xyz"]
-    assert matches("{@w}", "a_b") == ["a_b"]
-    assert matches("{@w}", "!.?") == []
+    # @w is an ordered folded alphabet (case-fold letters plus '_'), so a word is
+    # a value over it: {:{@w}}. Digits are not word symbols.
+    assert matches("{:{@w}}", "Ab9") == ["Ab"]
+    assert matches("{:{@w}}", "xyz") == ["xyz"]
+    assert matches("{:{@w}}", "a_b") == ["a_b"]
+    assert matches("{:{@w}}", "!.?") == []
 
 
 def test_macro_x_matches_non_whitespace():
-    # @x is the complement of @s: greedy runs of non-whitespace.
-    assert matches("{@x}", "ab cd\tef") == ["ab", "cd", "ef"]
+    # @x is the complement of @s; a run of non-whitespace is [1..] (heterogeneous).
+    assert matches("{@x}[1..]", "ab cd\tef") == ["ab", "cd", "ef"]
 
 
 def test_macro_s_matches_whitespace():

@@ -69,9 +69,9 @@ def test_same_digit_twice():
 
 
 def test_constant_template():
-    # References are gone; a `=>` step emits a constant for each match.
-    # {a..z,A..Z} is a union compiled to a _Group (greedy run of letters).
-    result = execute(parser.parse("{a..z,A..Z} => <x>"), "ab cd")
+    # A `=>` step emits a constant for each match. A word is a non-space run
+    # {!\ }[1..] — a bare class is one position.
+    result = execute(parser.parse(r"{!\ }[1..] => <x>"), "ab cd")
     assert result == ["<x>", "<x>"]
 
 
