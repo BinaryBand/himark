@@ -41,12 +41,15 @@ uni = "\u0000..\U0010FFFF"
 # rule names a generic tool (marky/parser/rewrites.py) and supplies its
 # parameters -- the specifics live here in data, the mechanics in code.
 
-# A lone `[#]` count binds the repeat count on the first instance and enforces it
-# on the rest: `{ROW[#]}[1..]` unrolls to a free first ROW plus repeats bound to
-# it. `free` is what `[#]` becomes in the establishing copy; `bound` what it
-# becomes in the repeats, where `@` is the establishing copy's group index.
+# A self-binding count `[#]` binds the repeat count on the first instance and
+# enforces it on the rest: `{ROW[#]}[1..]` unrolls to a free first ROW plus
+# repeats bound to it. Bounds around the `#` constrain that count, collapsing
+# into the free copy: `[x..#]` (>= x), `[#..y]` (<= y), `[x..#..y]` (in x..y).
 [[rewrites]]
-tool = "unroll_on_marker"
-marker = "[#]"
-free = "[..]"
-bound = "[#@]"
+tool = "bind_count"
+
+# `{|..}` is concise sugar for "a pipe, repeated any number of times".
+[[rewrites]]
+tool = "substitute"
+find = "{|..}"
+into = "{|}[..]"

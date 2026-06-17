@@ -71,14 +71,8 @@ def _resolve(expr: str, stages: list[Match]) -> str:
     if not path_src:
         raise CompileError("A '#' moustache reference needs a capture index")
 
-    # Walk the dotted path: the first index selects a top-level capture, each
-    # further index descends into that capture's sub-captures (grouping braces).
-    captures = stage.captures
-    capture = None
-    for depth, idx in enumerate(int(i) for i in path_src.split(".")):
-        if not 0 <= idx < len(captures):
-            where = f"stage {pipe_idx}" if depth == 0 else f"depth {depth} of {path_src!r}"
-            raise CompileError(f"Moustache index {idx} is out of range for {where}")
-        capture = captures[idx]
-        captures = capture.subs
+    path = tuple(int(i) for i in path_src.split("."))
+    capture = stage.capture_at(path)
+    if capture is None:
+        raise CompileError(f"Moustache index out of range in {{{{{expr}}}}}")
     return capture.text if sigil == "$" else str(len(capture.reps))

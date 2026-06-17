@@ -172,14 +172,8 @@ def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]
     match = stages[stage]
     if not path:
         return match.text
-    captures = match.captures
-    cap = None
-    for idx in path:
-        if not 0 <= idx < len(captures):
-            return None
-        cap = captures[idx]
-        captures = cap.subs
-    return cap.text
+    cap = match.capture_at(path)
+    return cap.text if cap is not None else None
 
 
 def _match_stage_ref(el: StageRefEl, text: str, pos: int, state: _State) -> int | None:

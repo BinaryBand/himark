@@ -21,9 +21,19 @@ from pathlib import Path
 from marky.parser._text import brace_end
 
 _COUNT = re.compile(r"\[[^\]]*\]")
+# A self-binding count token: a `[…]` count holding a lone `#` (not `#N`, which is
+# a count-reference) — `[#]`, `[x..#]`, `[#..y]`, `[x..#..y]`.
+_HASH_COUNT = re.compile(r"\[[^\]#]*#(?![0-9])[^\]#]*\]")
+_HASH_BOUNDS = re.compile(r"(\.\.)?#(\.\.)?")
 
 
 # ── Tools (generic interpreters) ──────────────────────────────────────────────
+
+
+def substitute(src: str, *, find: str, into: str) -> str:
+    """Replace every literal occurrence of `find` with `into` — the simplest
+    rewrite, for fixed sugar like `{|..}` → `{|}[..]`."""
+    return src.replace(find, into)
 
 
 def unroll_on_marker(src: str, *, marker: str, free: str, bound: str) -> str:
@@ -35,24 +45,56 @@ def unroll_on_marker(src: str, *, marker: str, free: str, bound: str) -> str:
         h = src.find(marker)
         if h == -1:
             return src
-        open_idx = _enclosing_brace(src, h)
-        if open_idx is None:
-            return src  # malformed; let the engine report it
-        span = brace_end(src[open_idx:])
-        if span is None:
+        out = _unroll(src, h, marker, free, bound)
+        if out is None:
             return src
-        end = open_idx + span
-        count = _COUNT.match(src, end)
-        if count is None:
-            return src
-        body = src[open_idx + 1 : end - 1]
-        g = _count_top_groups(src[:open_idx])
-        first = body.replace(marker, free, 1)
-        rest = "{" + body.replace(marker, bound.replace("@", str(g)), 1) + "}"
-        src = src[:open_idx] + first + rest + count.group(0) + src[count.end() :]
+        src = out
 
 
-_TOOLS = {"unroll_on_marker": unroll_on_marker}
+def bind_count(src: str) -> str:
+    """The self-binding count `[…#…]`, with optional bounds. The `#` count binds on
+    the first repeat and is enforced on the rest; bounds around it constrain that
+    count, collapsing into the free copy's range:
+    `[#]`→`[..]`, `[x..#]`→`[x..]`, `[#..y]`→`[..y]`, `[x..#..y]`→`[x..y]`. So
+    `{ROW[x..#..y]}[N]` → `ROW[x..y]… {ROW[#G]…}[N]`."""
+    while True:
+        m = _HASH_COUNT.search(src)
+        if m is None:
+            return src
+        marker = m.group(0)
+        free = "[" + _HASH_BOUNDS.sub("..", marker[1:-1]) + "]"
+        out = _unroll(src, m.start(), marker, free, "[#@]")
+        if out is None:
+            return src
+        src = out
+
+
+def _unroll(src: str, marker_at: int, marker: str, free: str, bound: str) -> str | None:
+    """Unroll the repeated grouping brace enclosing `marker` (at `marker_at`):
+    a free first copy (marker→`free`) then the repeats (marker→`bound`, with `@`
+    the establishing copy's group index). None if there's no such brace+count."""
+    open_idx = _enclosing_brace(src, marker_at)
+    if open_idx is None:
+        return None
+    span = brace_end(src[open_idx:])
+    if span is None:
+        return None
+    end = open_idx + span
+    count = _COUNT.match(src, end)
+    if count is None:
+        return None
+    body = src[open_idx + 1 : end - 1]
+    g = _count_top_groups(src[:open_idx])
+    first = body.replace(marker, free, 1)
+    rest = "{" + body.replace(marker, bound.replace("@", str(g)), 1) + "}"
+    return src[:open_idx] + first + rest + count.group(0) + src[count.end() :]
+
+
+_TOOLS = {
+    "substitute": substitute,
+    "unroll_on_marker": unroll_on_marker,
+    "bind_count": bind_count,
+}
 
 
 # ── Brace helpers ─────────────────────────────────────────────────────────────

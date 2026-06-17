@@ -138,24 +138,34 @@ def _parse_padding(content: str) -> tuple[tuple[int, int | None] | None, str]:
     return (int(spec), int(spec)), rest
 
 
-def _resolve_brace(content: str) -> t.SemanticNode:
-    """Resolve the inner text of a {…} brace group into a typed semantic node."""
-    # Self-reference `{$i}` — match the literal text captured by group i. The
-    # whole brace is the reference; a literal '$' is written `\$`.
+def _resolve_reference(content: str) -> t.SemanticNode | None:
+    """A whole-brace reference node, or None if the brace is an alphabet expression.
+
+    Three forms, each consuming the entire brace:
+      `{$i}`    back-ref — the literal text captured by group i (`\\$` is a literal).
+      `{#i}`    count-ref — group i's decimal repetition count.
+      `{N$M.K}` cross-stage ref — stage N's capture M (dotted into sub-captures),
+                or its whole match for `{N$}`.
+    """
     stripped = strip_unescaped(content)
     m = _BACKREF_RE.fullmatch(stripped)
     if m:
         return t.BackRefNode(group=int(m.group(1)))
-    # Count-reference `{#i}` — match group i's decimal repetition count.
     m = _COUNTREF_RE.fullmatch(stripped)
     if m:
         return t.CountRefNode(group=int(m.group(1)))
-    # Cross-stage reference `{N$M}` / `{N$}` / `{N$M.K}` — match the text of
-    # pipeline stage N's capture M (dotted into sub-captures), or its whole match.
     m = _STAGEREF_RE.fullmatch(stripped)
     if m:
         path = tuple(int(i) for i in m.group(2).split(".")) if m.group(2) else ()
         return t.StageRefNode(stage=int(m.group(1)), path=path)
+    return None
+
+
+def _resolve_brace(content: str) -> t.SemanticNode:
+    """Resolve the inner text of a {…} brace group into a typed semantic node."""
+    ref = _resolve_reference(content)
+    if ref is not None:
+        return ref
 
     pad, content = _parse_padding(content)
 

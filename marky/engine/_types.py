@@ -38,3 +38,17 @@ class Match:
     @property
     def sub_groups(self) -> list[list[str]]:
         return [[s.text for s in c.subs] for c in self.captures]
+
+    def capture_at(self, path: tuple[int, ...]) -> Capture | None:
+        """Walk a dotted capture path: the first index selects a top-level
+        capture, each further index descends into that capture's sub-captures
+        (the nested grouping braces). None if any index is out of range, or if
+        `path` is empty (callers handle the whole-match case themselves)."""
+        captures = self.captures
+        cap = None
+        for idx in path:
+            if not 0 <= idx < len(captures):
+                return None
+            cap = captures[idx]
+            captures = cap.subs
+        return cap
