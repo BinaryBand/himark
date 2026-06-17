@@ -8,7 +8,8 @@ from marky.models.exceptions import CompileError
 
 # The single escape table for HMK source. Named control characters plus the
 # metacharacters that need escaping to appear literally; any other escaped
-# character resolves to itself (so `\!` -> `!`).
+# character resolves to itself (so `\!` -> `!`). `\r` matches a carriage return,
+# so `@s` whitespace and the `phase2` tokenizer handle CRLF target text.
 ESCAPES = {
     "n": "\n",
     "t": "\t",
@@ -16,8 +17,6 @@ ESCAPES = {
     "\\": "\\",
     "{": "{",
     "}": "}",
-    "<": "<",
-    ">": ">",
     '"': '"',
 }
 

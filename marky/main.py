@@ -1,96 +1,20 @@
-import json
-import sys
-from pathlib import Path
+"""The `marky` CLI — thin Typer wiring over the tools in `marky.tools`.
+
+No command logic lives here: each tool module owns its commands (and is runnable
+standalone), and this file only assembles them into one app. Add a command by
+writing the tool, then registering it below.
+"""
 
 import typer
 
-from marky import parser
-from marky.engine import deltas, execute, find
-from marky.models.exceptions import CompileError
+from marky.tools import markdown_transpiler, precompiled, query
 
-app = typer.Typer()
+app = typer.Typer(help="HMK pattern matching and text transformation.")
 
-
-def _str_or_file(value: str) -> str:
-    p = Path(value)
-    return p.read_text().strip() if p.is_file() else value
-
-
-def _resolve_pattern(pattern: str) -> str:
-    if pattern == "-":
-        return sys.stdin.read().strip()
-    return _str_or_file(pattern)
-
-
-def _emit_json_error(exc: CompileError) -> None:
-    """In `--json` mode a compile error is structured JSON on stderr, exit 1, so
-    callers never have to scrape a traceback."""
-    typer.echo(json.dumps({"error": str(exc)}), err=True)
-    raise typer.Exit(code=1)
-
-
-@app.command(name="execute")
-def execute_cmd(
-    pattern: str = typer.Argument(
-        help="HMK pattern with template (e.g. '{a..z}[1..] => <b>{{.}}</b>'), file path, or '-' for stdin"
-    ),
-    target: str = typer.Argument(help="String to match against, or a file path"),
-    json_out: bool = typer.Option(
-        False,
-        "--json",
-        help="Emit per-branch deltas as a JSON array of {start, end, text}.",
-    ),
-) -> None:
-    """Match TARGET against PATTERN and print each rendered match, one per line.
-
-    `--json` instead prints a delta per branch — {start, end, text} — where text
-    is the rendered replacement for that match. Splicing the deltas back over the
-    input gives the in-place transform.
-    """
-    try:
-        trees = parser.parse(_resolve_pattern(pattern))
-        tgt = _str_or_file(target)
-        if json_out:
-            payload = [
-                {"start": s, "end": e, "text": txt}
-                for s, e, txt in deltas(trees, tgt)
-            ]
-            typer.echo(json.dumps(payload))
-            return
-        result = execute(trees, tgt)
-    except CompileError as exc:
-        if json_out:
-            _emit_json_error(exc)
-        raise
-
-    for line in result:
-        typer.echo(line)
-
-
-@app.command(name="find")
-def find_cmd(
-    pattern: str = typer.Argument(
-        help="HMK pattern (e.g. '{a..z}[1..]'), file path, or '-' for stdin"
-    ),
-    target: str = typer.Argument(help="String to search in, or a file path"),
-    json_out: bool = typer.Option(
-        False, "--json", help="Emit matches as a JSON array of {start, end}."
-    ),
-) -> None:
-    """Find all matches of PATTERN in TARGET and print their start and end positions."""
-    try:
-        trees = parser.parse(_resolve_pattern(pattern))
-        spans = find(trees, _str_or_file(target))
-    except CompileError as exc:
-        if json_out:
-            _emit_json_error(exc)
-        raise
-
-    if json_out:
-        typer.echo(json.dumps([{"start": s, "end": e} for s, e in spans]))
-    else:
-        for start, end in spans:
-            typer.echo(f"{start} {end}")
+app.command(name="execute")(query.execute_cmd)
+app.command(name="find")(query.find_cmd)
+app.command(name="transpile")(markdown_transpiler.transpile_cmd)
+app.add_typer(precompiled.app, name="pipeline")
 
 
 def main() -> None:
