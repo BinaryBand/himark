@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.8.0-experimental  
+**Version:** 0.9.0-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -8,16 +8,29 @@
 
 ---
 
-Two constructs: `{...}` matches, and `[...]` repeats.
+A pattern is built from **universes** and a small set of operators over them. A universe `{…}` is a virtual set of strings or characters; as a pattern it matches **exactly one** of its elements — one position.
 
-| Construct | Role                |
-| --------- | ------------------- |
-| `{expr}`  | Match and class     |
-| `[count]` | Repetition modifier |
+| Operator  | Role                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| `{…}`     | **Universe** — a set of strings/characters; matches one element                                  |
+| `,`       | **Union** — combine universes (`{a,b}` is `a` or `b`)                                            |
+| `..`      | **Range** — ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)                            |
+| `{X}{Y}`  | **Adjacency** — concatenation; the Cartesian product of universes (`{a..z}{A..Z}` → `aA`…`zZ`)   |
+| `!{…}`    | **Subtractive universe** — everything _not_ in `{…}`                                             |
+| `{x:…:y}` | **Bounds** — the inner universe, restricted to values `x`–`y` inclusive (`{x::y}` = ambient)     |
+| `[x:y:z]` | **Repetition** — minimum `x`, maximum `y`, step `z`                                              |
+| `=>`      | **Pipe** — feed each match into the next transformation                                          |
 
-These compose as `{expr}[count]` where `{expr}` is implicitly identical to `{expr}[1]`. Every `{...}` matches exactly one position.
+**Every `{…}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** — the _same_ matched value, `n` times. To repeat **heterogeneously** — a fresh match each time — nest the universe in a group: `{{U}}[n]`.
 
-This is the experimental algebra branch: the `<->` and `>>` operators and the old `{{...}}` reference sublanguage have been removed, and congruence is now expressed through the brace grouping itself (see [Congruence](#congruence)). References return in two new forms: **moustache** template accessors (see [Captures](#captures) and [Transformers](#transformers)) and pattern [self-references](#self-references).
+```proto
+{a,A}[2]     // homogeneous: 'aa', 'AA'
+{{a,A}}[2]   // heterogeneous: 'aa', 'aA', 'Aa', 'AA'
+{a..z}[3]    // homogeneous: 'aaa', 'bbb'
+{{a..z}}[3]  // heterogeneous: any three letters, 'abc'
+```
+
+This is the experimental algebra branch: the `<->` and `>>` operators and the old `{{...}}` reference sublanguage have been removed. References return as **moustache** template accessors (see [Captures](#captures), [Transformers](#transformers)) and pattern [self-references](#self-references).
 
 ---
 
@@ -30,7 +43,7 @@ This is the experimental algebra branch: the `<->` and `>>` operators and the ol
 | `@u`     | `A..Z`                      |
 | `@s`     | `\n,\r, ,\t`                |
 | `@w`     | `{a,A},{b,B},...,{z,Z},_`   |
-| `@x`     | `!@s`                       |
+| `@x`     | `!{@s}`                     |
 | `@hex`   | `{@d},{{@w}..f}`            |
 | `@b32`   | `{@d},{{@w}..v}`            |
 | `@b58`   | `{@d},{@u},{@l},!{0,I,O,l}` |
@@ -38,137 +51,87 @@ This is the experimental algebra branch: the `<->` and `>>` operators and the ol
 | `@ascii` | U+0000-U+007F               |
 | `@uni`   | U+0000-U+10FFFF             |
 
-> **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 $\S7$) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
+> **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 §7) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
 
 ---
 
-## Arithmetic
+## Universes
 
-**$\Sigma$** represents an ordered alphabet. **$\sigma$** represents a singleton value (equivalently, a one-element alphabet).
-
-| Operator | Role                                                   |
-| -------- | ------------------------------------------------------ |
-| `..`     | Ordered range between endpoints ($\leq$)               |
-| `,`      | Congruence class -- interchangeable spellings ($\sim$) |
-| `!`      | Subtract a $\Sigma$ from the group                     |
-
-The two axes are orthogonal: `..` builds an **ordered** range (distinct positions, a value axis), while `,` folds its members into **one** congruence class (interchangeable spellings of a single position). A $\Sigma$ used as a `..` endpoint contributes an **alphabet** and an **extreme**. A singleton $\sigma$ contributes its concrete value (alphabet = ambient Unicode). A class contributes its own alphabet, standing in for the natural extreme in its direction -- floor on the left, unbounded on the right.
-
-> **Note:** Precedence binds tightest to loosest: `..` then `,`.
-
-| Written          | Alphabet               | Low   | High      |
-| ---------------- | ---------------------- | ----- | --------- |
-| `{a}`            | Unicode                | `a`   | `a`       |
-| `{abc}`          | Unicode                | `abc` | `abc`     |
-| `{a,b,c}`        | one class {a,b,c}      | --    | --        |
-| `{a..z,!d..f}`   | a$\dots$z$\notin$d,e,f | `a`   | unbounded |
-| `{a..z}`         | a$\dots$z              | `a`   | unbounded |
-| `{m..{@l}}`      | $a\dots$z              | `m`   | unbounded |
-| `{{@l}..m}`      | $a\dots$z              | `a`   | `m`       |
-| `{cat..dog}`     | Unicode                | `cat` | `dog`     |
-| `{{@d}..255}`    | decimal                | `0`   | `255`     |
-| `{128..{@d}}`    | decimal                | `128` | unbounded |
-| `{aa..{@l}..zz}` | a$\dots$z              | `aa`  | `zz`      |
-| `{a}[3]`         | Unicode                | `aaa` | `aaa`     |
-| `{a..z}[3]`      | a$\dots$z              | `aaa` | unbounded |
-| `{a}[2..4]`      | a$\dots$z              | `aa`  | `aaaa`    |
-
-> **Note:** `{a..z}` is one position; `[3]` repeats it **by value**, so `{a..z}[3]` matches three of the _same_ letter ('aaa', 'bbb', ..., 'zzz') — not three arbitrary letters. A run of differing letters comes from `[count]` over a complement (`{!\ }[1..]`) or a congruence class, or — for an ordered alphabet — from its padded value (`{:{@l}}` is any lowercase string).
-
-### Value Exclusion
-
-Inside a range the positive arms set the universe and the `!` arms **subtract** from it, so `{...,!`$\Sigma$`}` is "everything written, minus $\Sigma$".
+A universe is a set. Its atoms are characters and strings; `,` unions them, `..` bounds them into an ordered range, and **adjacency** — writing universes side by side — concatenates them into their Cartesian product.
 
 ```proto
-{aa..{a..z}..zz,!ff}       // 2-char lowercase, excluding 'ff'
-{aa..{a..z}..zz,!ee..ff}   // 2-char lowercase, excluding 'ee', 'ef', 'fe', and 'ff'
-{{@d}..255,!128..191}      // decimal 0, 1, through '255', excluding '128', '129', through '191'
-{@d,@l,@u,!{0,l,I,O}}      // base58: digits and letters minus the four ambiguous glyphs
+{a}               // the one-element universe {a}
+{abc}             // the one-element universe {abc} (one string)
+{a,b,c}           // union: a or b or c
+{cat,dog}         // union of two strings
+{a..z}            // range: the single characters a through z
+{aa..zz}          // range over a two-symbol value space (here, all of aa through zz)
+{a..z}{A..Z}      // adjacency: a lowercase then an uppercase — the product aA, aB, ..., zZ
+{a..b}{cd}{e..f}  // adjacency of three universes: {acde, acdf, bcde, bcdf}
 ```
 
-> **Note:** With no positive arm the universe defaults to the ambient alphabet, so `{!x}` is one character that is not `x`. A _run_ is `[count]`: `{!**}[1..]` matches a run up to the next `**`.
+> **Note:** the Cartesian product comes from **adjacency**, not from `..`. `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected — write `{a..z}{A..Z}` for the product, `{a..z,A..Z}` for either case, or `{{a,A},…,{z,Z}}` for case-folded positions.
+
+A universe always matches **one** of its elements (one position). `{a..z}` matches one letter; `{cat,dog}` matches one of the two words. A run is an explicit `[count]` (see [Repetition](#repetition)).
+
+### Congruence
+
+`,` makes its members **interchangeable** — one position with several spellings. This matters under bounds and references, where congruent spellings share a value:
+
+```proto
+{a,A}            // one position, two spellings: 'a' or 'A'
+{{a,A},{b,B}}    // an ordered alphabet of folded positions (a < b, each case-folded)
+```
 
 ---
 
-## Congruence
+## Bounds
 
-`,` folds its members into one **congruence class** ($\sim$): a single position with several interchangeable spellings. This is the orthogonal partner of `..` -- where `..` is the ordered value axis, `,` is the equality axis.
-
-```proto
-{a,A}          // one position, two spellings: 'a' or 'A'
-{cat,dog}      // one position, two spellings: 'cat' or 'dog'
-{a,b,c}        // one position, three spellings
-```
-
-To build an **ordered alphabet of folded positions**, enumerate the classes -- the outer braces order the positions, each inner `{...}` is one class:
+`{x:U:y}` restricts the universe `U` to the values from `x` to `y`, **inclusive**, by positional value (most-significant first). `{x::y}` uses the ambient universe (Unicode). Either bound may be omitted.
 
 ```proto
-{{a,A},{b,B},{c,C}}   // 3 ordered positions, each case-folded
-{{a,A},{b,B},...,{z,Z}}  // the 26-letter case-fold alphabet (this is @w)
+{0:@d:255}    // decimal values 0 through 255
+{0::255}      // same, over the ambient universe
+{aa:@l:zz}    // two-letter lowercase strings 'aa' through 'zz'
+{000:@d:999}  // fixed three-wide decimals — '007' matches (the floor sets the width)
 ```
 
-Under `[count]`, repetition-equality is checked against the **class**, not the literal spelling, so congruent spellings count as the same unit:
+The floor's written width is the minimum width: values are zero-padded up to it and canonical beyond, so `{000:@d:999}` matches `007` and `042` but not `7`. A fixed width is therefore just a floor written with leading zeros — there is no separate padding operator.
+
+### Subtraction
+
+`!{…}` is the **subtractive universe** — every value _not_ in `{…}`. As a union arm it subtracts from the others:
 
 ```proto
-{a,A}[2]              // 'aa', 'aA', 'Aa', 'AA'  (case folds)
-{{a,A},{b,B}}[2]      // 'ab', 'aB', 'Ab', 'AB', and the same for repeats of one letter
-                      // -- but 'a' then 'b' are different positions, so each rep is one class
-{a,bc}[2]             // 'a' and 'bc' share a class, so 'abc', 'aa', 'bcbc' all repeat equally
+!{a}                   // any character except 'a'
+!{|,\n}                // any character except '|' or newline
+{@d,@l,@u,!{0,l,I,O}}  // base58: digits and letters, minus the four ambiguous glyphs
 ```
 
-This is `(\Sigma, \leq, \sim)` realized with one primitive: `..` reads the order `\leq`, `,` reads the congruence `\sim`, and `[count]` is the `\sim`-congruent power. The literal-identity relation is the finest `\sim` (every spelling its own class); a comma-list coarsens it.
-
-> **Note:** A class-to-class **range** (`{a..z}..{A..Z}`) is rejected -- two classes have no shared ordering. Enumerate the folded pairs as a class of classes (`{{a,A},...,{z,Z}}`) instead.
-
-A class member may be an escaped whitespace spelling, which makes `[count]` an interleave (a separator that is optional between repetitions, never alone):
-
-```proto
-{{-\ ,-},{*\ ,*}}[3..]   // '---', '- - -', '-- -' (rule chars, optional spaces)
-```
+A subtractive universe matches one position, like any universe; a run is `[count]`, nested for a heterogeneous run (`{!{|,\n}}[1:]` is a run of cell text).
 
 ---
 
 ## Repetition
 
-`[count]` repeats the preceding `{...}`.
+`[x:y:z]` repeats the preceding universe: minimum `x`, maximum `y`, step `z`. Omit a field to leave it open; `[n]` is exactly `n`.
 
-| Form   | Meaning      |
-| ------ | ------------ |
-| `N`    | Exactly N    |
-| `N..`  | N or more    |
-| `..N`  | Zero to N    |
-| `N..M` | N to M       |
-| `..`   | Zero or more |
+| Form      | Meaning                    |
+| --------- | -------------------------- |
+| `[n]`     | exactly `n`                |
+| `[x:]`    | `x` or more                |
+| `[:y]`    | up to `y`                  |
+| `[x:y]`   | `x` to `y`                 |
+| `[x:y:z]` | `x` to `y` in steps of `z` |
+| `[:]`     | any number                 |
 
-What "repeats" means depends on what is repeated:
-
-- A **class** (an alphabet -- `{a..z}`, `{cat,dog}`, a value range) repeats **by value**: every repetition matches the same value (or congruence class) as the first.
-- A **grouping brace** (a `{...}` whose interior is a sequence of constructs) repeats **by shape**: each repetition re-matches the structure, and its content may differ between repetitions.
+A bare `{U}[n]` repeats **homogeneously** — the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** — a fresh match per rep. A grouping brace (a `{…}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block — the cells of a row, the rows of a table.
 
 ```proto
-{a..z}[3]     // class: the same letter three times -- 'aaa', 'bbb', through 'zzz'
-{a..z}[2..5]  // class: the same letter 2-5 times
-{0..9}[..]    // class: the same digit any number of times
-{|{!|,\n}[1..]}[3]   // grouping brace: three '|'+cell units, each a different cell
-```
-
-The structural form is what lets a single pattern walk a homogeneous block -- e.g. the cells of a row, repeated by shape so each cell may hold different text.
-
-### Padding
-
-A plain value range matches only the **canonical** form of each value. `{{@d}..255}` matches '7' but not '007'. Padding relaxes the width:
-
-| Form          | Width                |
-| ------------- | -------------------- |
-| `{N:expr}`    | Exactly `N`          |
-| `{N..M:expr}` | `N` through `M`      |
-| `{:expr}`     | 1 through `len(max)` |
-
-```proto
-{2:{@d}..99}     // '00', '01', through '99'
-{3:{@d}..255}    // '000', '001', through '255'
-{2..3:{@d}..255} // '00', '000', through '255'
-{:{@d}..255}     // '0', '00', through '255'
+{a..z}[3]                    // 'aaa', 'bbb' — the same letter three times
+{{a..z}}[3]                  // 'abc', 'xyz' — any three letters
+{a..z}[2:6:2]                // the same letter 2, 4, or 6 times
+{{|}{!{|,\n}}[1:]}[2:]{|}    // two or more '|'+cell units, each cell different
 ```
 
 ---
@@ -177,7 +140,7 @@ A plain value range matches only the **canonical** form of each value. `{{@d}..2
 
 Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**.
 
-Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{Sphinx}{of{black}{quartz}}`:
+Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1:]{Sphinx}{of{black}{quartz}}`:
 
 | Group | Text                     | Explanation                     |
 | ----- | ------------------------ | ------------------------------- |
@@ -188,7 +151,7 @@ Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression
 | 2.0   | `black`                  | First sub-group inside group 2  |
 | 2.1   | `quartz`                 | Second sub-group inside group 2 |
 
-> **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
+> **Note:** Captures are addressable from a template via moustache references — `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
 
 ### Self-references
 
@@ -203,8 +166,8 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 ```proto
 {a..z}{$0}        // a doubled letter: 'aa', 'bb' (not 'ab')
-{a}[1..]{x}{#0}   // an a-run, 'x', then its length: matches 'aaax3', not 'aax3'
-{a}[2..]{-}[#0]   // as many '-' as there were 'a': 'aaa---', 'aa--'
+{a}[1:]{x}{#0}    // an a-run, 'x', then its length: matches 'aaax3', not 'aax3'
+{a}[2:]{-}[#0]    // as many '-' as there were 'a': 'aaa---', 'aa--'
 ```
 
 `{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` reads an earlier pipeline stage (`=>`-numbered, templates included) — the matching-side counterpart of the moustache `{{ i$j }}` accessor (see [Transformers](#transformers)).
@@ -215,24 +178,24 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 `=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently:
 
-- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops** the branch -- that is how a chain filters.
+- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops** the branch — that is how a chain filters.
 - a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`… => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>…</b></i>`).
 
-Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result -- neither privileged:
+Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result — neither privileged:
 
-- **list** -- the branch results, in order.
-- **splice** -- each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
+- **list** — the branch results, in order.
+- **splice** — each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
 
 ```proto
-{a..z}                            // the list of lowercase letters
-{a..z} => <w>                     // list: '<w>' per letter -- splice: each letter becomes '<w>'
-{cat} => "<b>{{.}}</b>"           // wrap each match
-{table} => "<table>{{.}}</table>" => {!\n}[1..] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
+{a..z}                              // the list of lowercase letters (one each)
+{a..z} => <w>                       // list: '<w>' per letter -- splice: each letter becomes '<w>'
+{cat} => "<b>{{.}}</b>"             // wrap each match
+{table} => "<table>{{.}}</table>" => {{!{\n}}}[1:] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
 
 ### Quoting static text
 
-Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
+Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character — it is **not** a synonym for `"`.
 
 ```proto
 {a} => "<b>"   // emits the literal text <b>
@@ -243,32 +206,26 @@ Literal text may be written in double quotes, which is emitted verbatim with `\"
 
 ## North Star Examples
 
-Worked patterns, each exercised verbatim by the suite ([tests/north_star/](tests/north_star/)).
+Worked patterns, in the universe/bounds model.
 
-**IPv4 address** -- four dotted octets, each a decimal value 0-255:
+**IPv4 address** — four dotted octets, each a decimal value 0–255:
 
 ```proto
-{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}
+{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}
 ```
 
-**Bitcoin P2PKH address** -- a `1` prefix then a 24-33 character base58 body. The length is a **width** constraint (`{N..M:...}` padding), not a value bound -- `1` is base58's zero symbol, so a value range would admit shorter strings:
+**Bitcoin P2PKH address** — a `1` prefix then a base58 value bounded by the smallest and largest 25-byte addresses (length is the value bound, not a digit count):
 
 ```proto
-{1}{24..33:{@b58}}
+{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
 ```
 
-**Ethereum address** -- `0x` then exactly 40 hex digits:
+**Markdown → HTML** — a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
-{0x}{40:{@hex}}
-```
-
-**Markdown -> HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
-
-```proto
-{#}[1..6]{ }[..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
+{#}[1:6]{ }[0:]{!{\n}}[1:] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
 ```
 
 ### Script files (.hmk)
 
-A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate -- all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
+A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate — all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
