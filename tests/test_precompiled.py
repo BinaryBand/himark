@@ -49,3 +49,37 @@ def test_load_rejects_foreign_file(tmp_path):
     bad.write_bytes(b"not a pipeline")
     with pytest.raises(ValueError, match="not an HMK compiled pipeline"):
         precompiled.load(bad)
+
+
+# ── .hmk script splitting ─────────────────────────────────────────────────────
+
+
+def test_split_groups_leading_arrow_continuations():
+    # Continuation lines keep their cosmetic indentation; phase0 strips each step.
+    src = '{a}\n  => "x"\n  => {b}\n{c} => "y"\n'
+    assert precompiled.split_statements(src) == ['{a}\n  => "x"\n  => {b}', '{c} => "y"']
+
+
+def test_split_skips_blank_and_comment_lines():
+    src = "// header\n\n{a} => b\n\n  // mid\n{c} => d\n"
+    assert precompiled.split_statements(src) == ["{a} => b", "{c} => d"]
+
+
+def test_split_strips_trailing_comment_outside_braces_and_quotes():
+    # `//` in a quoted template (a URL) or a brace is content, not a comment.
+    src = '{a} => "http://x"  // real comment\n{//} => "y"\n'
+    assert precompiled.split_statements(src) == ['{a} => "http://x"', '{//} => "y"']
+
+
+def test_split_keeps_arrow_inside_quotes_as_one_statement():
+    # A `=>` inside a quoted template must not be read as a step boundary, and a
+    # brace spanning lines stays one logical line.
+    src = '{a} => "x => y"\n'
+    assert precompiled.split_statements(src) == ['{a} => "x => y"']
+
+
+def test_load_script_roundtrips_through_compile(tmp_path):
+    script = tmp_path / "s.hmk"
+    script.write_text('{\\&} => &amp;   // escape\n{\\<} => &lt;\n', "utf-8")
+    pipe = precompiled.compile_pipeline(precompiled.load_script(script))
+    assert precompiled.apply(pipe, "a & b < c") == "a &amp; b &lt; c"

@@ -42,6 +42,96 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
     return [parser.parse(s) for s in statements]
 
 
+# ── .hmk script files ─────────────────────────────────────────────────────────
+
+
+def load_script(path: str | Path) -> list[str]:
+    """Read a `.hmk` script file into its list of statement strings.
+
+    A script holds one statement per logical line, optionally continued across
+    physical lines by leading `=>` steps:
+
+        {pattern}
+          => "template"
+          => {next pattern}      // a trailing comment
+
+    Rules (all applied at brace/quote depth 0, so braces, quoted templates, and
+    `=>`/`//` inside them are never misread): a `//` starts a line comment; a
+    blank line is ignored; a line beginning with `=>` continues the previous
+    statement; any other line starts a new one.
+    """
+    return split_statements(Path(path).read_text("utf-8"))
+
+
+def split_statements(text: str) -> list[str]:
+    """Split `.hmk` source into statement strings (see `load_script`)."""
+    statements: list[str] = []
+    current: list[str] = []
+    for raw in _logical_lines(text):
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        if line.lstrip().startswith("=>"):
+            current.append(line)
+        else:
+            if current:
+                statements.append("\n".join(current))
+            current = [line]
+    if current:
+        statements.append("\n".join(current))
+    return statements
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Split on newlines that sit at brace/quote depth 0, so a brace or quoted
+    template spanning physical lines stays one logical line."""
+    lines: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    inq = False
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == "\\" and i + 1 < len(text):
+            buf.append(text[i : i + 2])
+            i += 2
+            continue
+        if c == "\n" and depth == 0 and not inq:
+            lines.append("".join(buf))
+            buf = []
+        elif c == '"':
+            inq = not inq
+            buf.append(c)
+        else:
+            if not inq:
+                depth += (c == "{") - (c == "}")
+            buf.append(c)
+        i += 1
+    lines.append("".join(buf))
+    return lines
+
+
+def _strip_comment(line: str) -> str:
+    """Remove a `//` line comment, ignoring `//` inside braces or quotes (so a
+    `http://` in a template, or a `//` in a pattern, survives)."""
+    depth = 0
+    inq = False
+    i = 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\" and i + 1 < len(line):
+            i += 2
+            continue
+        if c == '"':
+            inq = not inq
+        elif not inq:
+            if c == "/" and depth == 0 and line[i + 1 : i + 2] == "/":
+                return line[:i]
+            depth += (c == "{") - (c == "}")
+        i += 1
+    return line
+
+
 def apply(pipeline: Pipeline, text: str) -> str:
     """Run each statement's in-place splice over `text` in turn, returning the
     transformed document. The compile cache warms on the first document."""

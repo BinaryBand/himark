@@ -7,13 +7,13 @@ writing the tool, then registering it below.
 
 import typer
 
-from marky.tools import markdown_transpiler, precompiled, query
+from marky.tools import precompiled, query, transpiler
 
 app = typer.Typer(help="HMK pattern matching and text transformation.")
 
 app.command(name="execute")(query.execute_cmd)
 app.command(name="find")(query.find_cmd)
-app.command(name="transpile")(markdown_transpiler.transpile_cmd)
+app.command(name="transpile")(transpiler.transpile_cmd)
 app.add_typer(precompiled.app, name="pipeline")
 
 
