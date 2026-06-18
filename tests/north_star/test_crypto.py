@@ -1,5 +1,7 @@
 """North Star: Cryptocurrency address patterns."""
 
+import pytest
+
 from marky import parser
 from marky.engine import find_matches
 
@@ -45,6 +47,56 @@ def test_btc_leading_one_required():
     assert "A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" not in matches(
         BTC, "A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
     )
+
+
+# ── Control vectors: real mainnet P2PKH addresses (varying lengths) ───────────
+# Every one of these is a genuine, well-formed legacy address and must match in
+# full. They span the realistic length range (27–34 chars), so they exercise the
+# floor/ceiling width window end to end.
+
+VALID_BTC = [
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",  # Satoshi genesis coinbase
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+    "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
+    "1HLoD9E4SDFFPDiYfNYnkBLQ85Y51J3Zb1",
+    "1FvzCLoTPGANNjWoUo6jUGuAG3wg1w4YjR",
+    "16ftSEQ4ctQFDtVZiUBusQUjRrGhM3JYwe",
+    "1QLbz7JHiBTspS962RLKV8GndWFwi5j6Qr",
+    "1111111111111111111114oLvT2",  # the all-but-burn short address (27 chars)
+]
+
+
+@pytest.mark.parametrize("addr", VALID_BTC)
+def test_btc_control_valid_matches_whole(addr):
+    assert addr in matches(BTC, addr)
+
+
+# Control non-addresses. The whole string must never be returned as a match.
+# (HMK is anchorless, so an inner '1…' sub-run may still match — that is fine;
+# we only assert the *entire* string is rejected.)
+
+INVALID_BTC = [
+    "3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy",  # P2SH (version byte 3)
+    "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",  # bech32 segwit
+    "A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",  # missing the leading '1'
+    "1abcd",  # far too short
+]
+
+
+@pytest.mark.parametrize("addr", INVALID_BTC)
+def test_btc_control_invalid_not_whole(addr):
+    assert addr not in matches(BTC, addr)
+
+
+def test_btc_rejects_forbidden_base58_symbols():
+    # base58 excludes 0, O, I, and l. A run made of a forbidden symbol must not
+    # match — the alphabet's exclusions apply inside a value-bounded field, not
+    # only to a single-position class.
+    assert matches(BTC, "1" + "O" * 33) == []
+    assert matches(BTC, "1" + "0" * 33) == []
+    # A legitimate address is still found after a forbidden-symbol prefix.
+    addr = "1A1zP1eP5QGefi2DMPTfTL5SLmv7D"
+    assert addr in matches(BTC, "1O0Il" + addr)
 
 
 # ── Ethereum ──────────────────────────────────────────────────────────────────

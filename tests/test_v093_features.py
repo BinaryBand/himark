@@ -147,7 +147,9 @@ def test_unknown_filter_raises():
 
 def test_payload_marker_splits_doc_and_pipe():
     # {{> }} sends the full render to the document but only the payload downstream.
-    out = ex('{#}[1..]{!{\\n}}[1..] => "<h{{#0}}>{{> $1 }}</h{{#0}}>" => "[{{.}}]"', "#Hi")
+    out = ex(
+        '{#}[1..]{!{\\n}}[1..] => "<h{{#0}}>{{> $1 }}</h{{#0}}>" => "[{{.}}]"', "#Hi"
+    )
     assert out == ["<h1>[Hi]</h1>"]
 
 

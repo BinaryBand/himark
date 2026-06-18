@@ -100,11 +100,24 @@ class _ValueExcluder:
 # ── Alphabet construction from a sub-node ─────────────────────────────────────
 
 
+def _drop_excluded(groups: list[list[str]], exclusions: list[str]) -> list[list[str]]:
+    """Remove excluded symbols from an alphabet's groups, dropping any group left
+    empty. An excluded symbol is simply not part of the value alphabet, so a run
+    stops at it — this is what keeps `@b58`'s forbidden `0`/`O`/`I`/`l` out of a
+    `{floor:@b58:ceiling}` bound, and keeps the positional values canonical."""
+    excl = _excluder(exclusions)
+    if excl is None:
+        return groups
+    kept = [[m for m in grp if not excl(m)] for grp in groups]
+    return [grp for grp in kept if grp]
+
+
 def _groups(node: t.SemanticNode) -> list[list[str]]:
     """The ordered symbol groups a node contributes to a value alphabet.
     Most symbols are singleton groups; a congruence group's members share one
     position. A value-range sub-node contributes the bounded slice of its own
-    alphabet, so `{{@i}..f}` is the first six case-fold letter groups."""
+    alphabet, so `{{@i}..f}` is the first six case-fold letter groups. A node's
+    own exclusions are removed from the symbols it contributes."""
     if isinstance(node, t.CharRangeNode):
         lo, hi = ord(node.start), ord(node.end)
         if hi - lo + 1 > 0x10000:
@@ -112,9 +125,10 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
                 f"Range {node.start!r}..{node.end!r} is too large "
                 f"to use as a value bound"
             )
-        return [[chr(c)] for c in range(lo, hi + 1)]
+        return _drop_excluded([[chr(c)] for c in range(lo, hi + 1)], node.exclusions)
     if isinstance(node, t.UnionNode):
-        return [g for o in node.options for g in _groups(o)]
+        groups = [g for o in node.options for g in _groups(o)]
+        return _drop_excluded(groups, node.exclusions)
     if isinstance(node, t.LiteralNode):
         # One position whose single spelling is the whole literal — so a
         # multi-char token (`bc` in `{a,bc}`) folds as one unit, not per char.
