@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.0-experimental  
+**Version:** 0.9.1-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -18,7 +18,7 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `{X}{Y}`    | **Adjacency** -- concatenation; the Cartesian product of universes (`{a..z}{A..Z}` $\to$ `aA`...`zZ`) |
 | `!{...}`    | **Subtractive universe** -- everything _not_ in `{...}`, from the ambient universe (Unicode)          |
 | `{x:...:y}` | **Bounds** -- the inner universe, restricted to values `x`-`y` inclusive (`{x::y}` = ambient)         |
-| `[x:y:z]`   | **Repetition** -- minimum `x`, maximum `y`, step `z`                                                  |
+| `[count]`   | **Repetition** -- a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)                 |
 | `=>`        | **Pipe** -- feed each match into the next transformation                                              |
 
 **Every `{...}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** -- the _same_ matched value, `n` times. To repeat **heterogeneously** -- a fresh match each time -- nest the universe in a group: `{{U}}[n]`.
@@ -29,8 +29,6 @@ A pattern is built from **universes** and a small set of operators over them. A 
 {a..z}[3]    // homogeneous: 'aaa', 'bbb'
 {{a..z}}[3]  // heterogeneous: any three letters, 'abc'
 ```
-
-This is the experimental algebra branch: the `<->` and `>>` operators and the old `{{...}}` reference sublanguage have been removed. References return as **moustache** template accessors (see [Captures](#captures), [Transformers](#transformers)) and pattern [self-references](#self-references).
 
 ---
 
@@ -119,31 +117,35 @@ All four cap the value at `90`; every row is that value, so only the width windo
 {@d,@l,@u,!{0,l,I,O}}  // base58: digits and letters, minus the four ambiguous characters
 ```
 
-A subtractive universe matches one position, like any universe; a run is `[count]`, nested for a heterogeneous run (`{!{|,\n}}[1:]` is a run of cell text).
+A subtractive universe matches one position, like any universe; a run is `[count]`, nested for a heterogeneous run (`{!{|,\n}}[1..]` is a run of cell text).
 
 ---
 
 ## Repetition
 
-`[x:y:z]` repeats the preceding universe: minimum `x`, maximum `y`, step `z`. Omit a field to leave it open; `[n]` is exactly `n`.
+`[count]` repeats the preceding universe. The count is itself a **universe** -- the same algebra as `{...}`, but over the ambient set of **base-10 non-negative integers** instead of Unicode. A bare number is exact, `,` unions counts, and `..` is a range:
 
-| Form      | Meaning                    |
-| --------- | -------------------------- |
-| `[n]`     | exactly `n`                |
-| `[x:]`    | `x` or more                |
-| `[:y]`    | up to `y`                  |
-| `[x:y]`   | `x` to `y`                 |
-| `[x:y:z]` | `x` to `y` in steps of `z` |
-| `[:]`     | any number                 |
+| Form      | Meaning                        |
+| --------- | ------------------------------ |
+| `[n]`     | exactly `n`                    |
+| `[x..]`   | `x` or more                    |
+| `[..y]`   | up to `y`                      |
+| `[x..y]`  | `x` to `y`                     |
+| `[..]`    | any number                     |
+| `[a,b,c]` | exactly `a`, `b`, or `c` times |
+
+Only the integer operators carry over. **Adjacency** is meaningless -- a count is one number, not a concatenation. A run of specific counts is usually a union (`[2,4,6]`); a long arithmetic run may take a bounded stride instead (see the note below), but an **unbounded** stride is out of scope -- a stepped scan with no end is expensive. A non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, a reference fits too: `[#i]` is the count group `i` matched (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
 
 A bare `{U}[n]` repeats **homogeneously** -- the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** -- a fresh match per rep. A grouping brace (a `{...}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block -- the cells of a row, the rows of a table.
 
 ```proto
 {a..z}[3]                    // 'aaa', 'bbb' -- the same letter three times
 {{a..z}}[3]                  // 'abc', 'xyz' -- any three letters
-{a..z}[2:6:2]                // the same letter 2, 4, or 6 times
-{{|}{!{|,\n}}[1:]}[2:]{|}    // two or more '|'+cell units, each cell different
+{a..z}[2,4,6]                // the same letter 2, 4, or 6 times -- a union, not a step
+{{|}{!{|,\n}}[1..]}[2..]{|}  // two or more '|'+cell units, each cell different
 ```
+
+> **Note:** A range may carry a **stride** as an optional third segment -- `[0..100..2]` is every second count, and `{a..z..2}` every second letter (`a, c, e, ...`). A stride needs both bounds, so it is always finite; an open-ended stride is not allowed (a stepped scan with no end is the cost to avoid). It is a quiet shorthand, not a first reach: for a handful of values a union (`[2,4,6]`, `{a,c,e}`) reads better -- use `..s` only when enumerating would be unwieldy.
 
 ---
 
@@ -151,18 +153,18 @@ A bare `{U}[n]` repeats **homogeneously** -- the same matched value. A nested `{
 
 Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**. A repeated group (`[count]`) captures its full matched text as one string, not one capture per repetition.
 
-Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1:]{Sphinx}{of{black}{quartz}}`:
+Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
 
-| Group | Text                     | Explanation                     |
-| ----- | ------------------------ | ------------------------------- |
-| full  | `###Sphinxofblackquartz` | The full matched text.          |
-| 0     | `###`                    | Group 0                         |
-| 1     | `Sphinx`                 | Group 1                         |
-| 2     | `ofblackquartz`          | Group 2                         |
-| 2.0   | `black`                  | First sub-group inside group 2  |
-| 2.1   | `quartz`                 | Second sub-group inside group 2 |
+| Group | Text                      | Explanation                     |
+| ----- | ------------------------- | ------------------------------- |
+| full  | `### Sphinxofblackquartz` | The full matched text.          |
+| 0     | `###`                     | Group 0                         |
+| 1     | `Sphinx`                  | Group 1                         |
+| 2     | `ofblackquartz`           | Group 2                         |
+| 2.0   | `black`                   | First sub-group inside group 2  |
+| 2.1   | `quartz`                  | Second sub-group inside group 2 |
 
-> **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
+> **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, `{{ i$ }}` for that stage's whole text as a raw string, and `{{ . }}` for the text flowing into the current step -- a relative shorthand for the previous stage's `{{ i$ }}` (see [Transformers](#transformers)).
 
 ### Self-references
 
@@ -174,14 +176,15 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 | `{#i}`  | `{...}`    | the decimal **repetition count** of group `i`                     |
 | `[#i]`  | `[count]`  | repeat exactly as many times as group `i` did                     |
 | `{N$M}` | `{...}`    | the text of pipeline stage `N`'s capture `M` (`{N$M.K}` descends) |
+| `{N$}`  | `{...}`    | the whole text of pipeline stage `N` (raw string)                 |
 
 ```proto
 {a..z}{$0}        // a doubled letter: 'aa', 'bb' (not 'ab')
-{a}[1:]{x}{#0}    // an a-run, 'x', then its length: matches 'aaax3', not 'aax3'
-{a}[2:]{-}[#0]    // as many '-' as there were 'a': 'aaa---', 'aa--'
+{a}[1..]{x}{#0}   // an a-run, 'x', then its length: matches 'aaax3', not 'aax3'
+{a}[2..]{-}[#0]   // as many '-' as there were 'a': 'aaa---', 'aa--'
 ```
 
-`{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` reads an earlier pipeline stage (`=>`-numbered, templates included) -- the matching-side counterpart of the moustache `{{ i$j }}` accessor (see [Transformers](#transformers)).
+`{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` (and `{N$}` for the whole stage text) reads an earlier pipeline stage (`=>`-numbered, templates included) -- the matching-side counterpart of the moustache `{{ i$j }}` / `{{ i$ }}` accessors (see [Transformers](#transformers)).
 
 ---
 
@@ -192,7 +195,7 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 - a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops the entire branch** -- its partial transform is discarded, not emitted. That is how a chain filters: a branch survives only if every query stage matches.
 - a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
 
-Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result -- neither privileged:
+Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` (or `{{ i$ }}` / `{N$}` for a whole stage) address any earlier step. The branches render two ways from the **same** result -- neither privileged:
 
 - **list** -- the branch results, in order.
 - **splice** -- each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
@@ -201,7 +204,7 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 {a..z}                              // the list of lowercase letters (one each)
 {a..z} => <w>                       // list: '<w>' per letter -- splice: each letter becomes '<w>'
 {cat} => "<b>{{.}}</b>"             // wrap each match
-{table} => "<table>{{.}}</table>" => {{!{\n}}}[1:] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
+{table} => "<table>{{.}}</table>" => {{!{\n}}}[1..] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
 
 ### Quoting static text
@@ -234,7 +237,7 @@ Worked patterns, in the universe/bounds model.
 **Markdown $\to$ HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
-{#}[1:6]{ }[0:]{!{\n}}[1:] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
+{#}[1..6]{ }[0..]{!{\n}}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
 ```
 
 ### Script files (.hmk)
