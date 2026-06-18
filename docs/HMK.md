@@ -65,7 +65,7 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 {a,b,c}           // union: a or b or c
 {cat,dog}         // union of two strings
 {a..z}            // range: the single characters a through z
-{aa..zz}          // range over a two-symbol value space (here, all of aa through zz)
+{aa..zz}          // range over a two-wide *Unicode* value space — every string from 'aa' to 'zz' by value
 {a..z}{A..Z}      // adjacency: a lowercase then an uppercase — the product aA, aB, ..., zZ
 {a..b}{cd}{e..f}  // adjacency of three universes: {acde, acdf, bcde, bcdf}
 ```
@@ -73,6 +73,8 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 > **Note:** the Cartesian product comes from **adjacency**, not from `..`. `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected — write `{a..z}{A..Z}` for the product, `{a..z,A..Z}` for either case, or `{{a,A},…,{z,Z}}` for case-folded positions.
 
 A universe always matches **one** of its elements (one position). `{a..z}` matches one letter; `{cat,dog}` matches one of the two words. A run is an explicit `[count]` (see [Repetition](#repetition)).
+
+> **Note:** an unnamed multi-character range is over **ambient Unicode**, not over letters. `{aa..zz}` is `{aa:@uni:zz}`, so it is the whole value band from `aa` to `zz` — every two-wide string whose value falls between them, including non-letter ones like `b🔥` (its first position `b` lands inside `a`–`z`). To mean "two lowercase letters," name the alphabet: `{aa:@l:zz}`.
 
 ### Congruence
 
@@ -178,7 +180,7 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 `=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently:
 
-- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops** the branch — that is how a chain filters.
+- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops the entire branch** — its partial transform is discarded, not emitted. That is how a chain filters: a branch survives only if every query stage matches.
 - a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`… => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>…</b></i>`).
 
 Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result — neither privileged:
