@@ -10,8 +10,22 @@ from typing import Literal, TypeAlias
 
 @dataclass(slots=True)
 class CountRange:
+    """A repetition count `[x..y]`. `step` > 1 is a stride (`[x..y..s]`, both
+    bounds required). `lazy` is the `[..<y]` shortest-first form."""
+
     min: int
     max: int | None
+    step: int = 1
+    lazy: bool = False
+
+
+@dataclass(slots=True)
+class CountSet:
+    """An explicit union of counts `[a,b,c]` — repeat exactly `a`, `b`, or `c`
+    times. `values` is sorted and de-duplicated."""
+
+    values: list[int]
+    lazy: bool = False
 
 
 @dataclass(slots=True)
@@ -23,7 +37,7 @@ class CountRefSpec:
     group: int
 
 
-CountSpec: TypeAlias = CountRange | CountRefSpec
+CountSpec: TypeAlias = CountRange | CountSet | CountRefSpec
 
 
 # -----------------------------
@@ -107,6 +121,16 @@ class UnionNode:
 class ComplementNode:
     inner: SemanticNode
     type: Literal["complement"] = "complement"
+
+
+@dataclass(slots=True, kw_only=True)
+class HeterogeneousNode:
+    """A nested universe `{{U}}` — repeats **heterogeneously**: a fresh match of
+    `inner` per rep (`{{a,A}}[2]` is aa/aA/Aa/AA), unlike a bare `{U}[n]` which
+    repeats the same matched string."""
+
+    inner: SemanticNode
+    type: Literal["heterogeneous"] = "heterogeneous"
 
 
 @dataclass(slots=True)

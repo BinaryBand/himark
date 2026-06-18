@@ -1,12 +1,17 @@
 """The match loop — generic over compiled `Element`s.
 
 This file knows nothing about HMK node types. It scans a list of `Element`s
-(literals and capturing groups) left to right, builds `Capture`s, and emits
-`Match`es. All construct-specific behaviour lives behind the `Matcher`
-interface, decided once at compile time in `_compile.py`.
+(literals and capturing groups) left to right and emits `Match`es. Matching is
+**backtracking** via continuation passing: each element offers its candidate
+ends in priority order (greedy: longest first; lazy: shortest first) and asks
+the continuation — the rest of the pattern — to match from each, taking the
+first that succeeds. Captures are appended to a flat list and rolled back by
+truncation when a branch fails.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
 
 from marky.engine._compile import (
     BackRefEl,
@@ -14,10 +19,14 @@ from marky.engine._compile import (
     Element,
     GroupEl,
     LiteralEl,
+    Reps,
     SeqGroupEl,
     StageRefEl,
 )
 from marky.engine._types import Capture, Match
+
+# A continuation: "match the rest of the pattern from this position", or None.
+Cont = Callable[[int], "int | None"]
 
 
 class _State:
@@ -46,7 +55,7 @@ def find_matches(
     pos = 0
     while pos < n:
         state = _State(stages=stages)
-        end = _match_elements(pattern, text, pos, state)
+        end = _match_seq(pattern, 0, text, pos, state)
         if end is not None and end > pos:
             matches.append(_finalize(text, pos, end, state))
             pos = end
@@ -69,95 +78,107 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
     return Match(text[start:end], start, end, state.captures)
 
 
-# ── Sequence matching ─────────────────────────────────────────────────────────
+# ── Sequence matching (the continuation chain) ────────────────────────────────
 
 
-def _match_elements(
-    elements: list[Element], text: str, pos: int, state: _State
+def _match_seq(
+    elements: list[Element], idx: int, text: str, pos: int, state: _State
 ) -> int | None:
-    current = pos
-    for el in elements:
-        end = _match_element(el, text, current, state)
-        if end is None:
-            return None
-        current = end
-    return current
+    """Match `elements[idx:]` from `pos`, backtracking through each element's
+    candidate ends. Returns the end of a full match, or None."""
+    if idx >= len(elements):
+        return pos
 
+    def cont(end: int) -> int | None:
+        return _match_seq(elements, idx + 1, text, end, state)
 
-def _reps_bounds(el: Element, state: _State) -> tuple[int, int | None] | None:
-    """Effective (min_reps, max_reps) for a repeatable element. A `[#i]` count
-    (`count_ref` set) resolves to group i's exact repetition count at match time;
-    an undefined referenced group returns None, failing the element."""
-    ref = el.count_ref
-    if ref is None:
-        return el.min_reps, el.max_reps
-    caps = state.root.captures
-    if ref >= len(caps):
-        return None
-    k = len(caps[ref].reps)
-    return k, k
-
-
-def _match_element(el: Element, text: str, pos: int, state: _State) -> int | None:
-    # LiteralEl is by far the most common element, so keep it inline; everything
-    # else dispatches on exact type through _DISPATCH (built at module load).
-    if type(el) is LiteralEl:
+    el = elements[idx]
+    if type(el) is LiteralEl:  # by far the most common element — inline it
         s = el.text
-        return pos + len(s) if text[pos : pos + len(s)] == s else None
-    return _DISPATCH[type(el)](el, text, pos, state)
+        if text[pos : pos + len(s)] == s:
+            return cont(pos + len(s))
+        return None
+    return _DISPATCH[type(el)](el, text, pos, state, cont)
 
 
-# ── Self-references `{$i}` / `{#i}`: match a value read from an earlier group ───
+def _resolve_reps(reps: Reps, state: _State) -> Reps | None:
+    """Resolve a `[#i]` reference to a fixed count; otherwise return `reps` as is.
+    An undefined referenced group returns None, failing the element."""
+    if reps.count_ref is None:
+        return reps
+    caps = state.root.captures
+    if reps.count_ref >= len(caps):
+        return None
+    k = len(caps[reps.count_ref].reps)
+    return Reps(min=k, max=k)
+
+
+def _counts(reps: Reps, built: int) -> list[int]:
+    """The acceptable rep counts in `0..built`, in priority order: greedy is
+    longest-first, lazy shortest-first."""
+    ks = [k for k in range(1, built + 1) if reps.accepts(k)]
+    ks.sort(reverse=not reps.lazy)
+    if reps.accepts(0):  # the zero-rep option is the laziest — tried last by greedy
+        ks.append(0) if not reps.lazy else ks.insert(0, 0)
+    return ks
+
+
+# ── Self-references `{$i}` / `{#i}` / `{N$M}`: a value read from earlier state ──
+
+
+def _referent_run(text: str, pos: int, referent: str, cap: int | None) -> list[int]:
+    """Ends after 1, 2, … contiguous copies of `referent` at `pos` (up to `cap`)."""
+    ends: list[int] = []
+    current = pos
+    while (cap is None or len(ends) < cap) and referent and text.startswith(
+        referent, current
+    ):
+        current += len(referent)
+        ends.append(current)
+    return ends
 
 
 def _match_referent(
-    referent: str | None,
-    min_reps: int,
-    max_reps: int | None,
-    text: str,
-    pos: int,
-    state: _State,
+    referent: str | None, reps: Reps, text: str, pos: int, state: _State, cont: Cont
 ) -> int | None:
-    """Match `referent` (a value pulled from the running captures), repeated per
-    the count. `referent is None` means the referenced group is undefined."""
+    """Match `referent` (a value pulled from running state) per `reps`, then the
+    continuation. `referent is None` means the referenced value is undefined."""
+    caps = state.captures
+    ends = [pos, *_referent_run(text, pos, referent, reps.max)] if referent else [pos]
 
-    def record(end: int, reps: list[str]) -> int:
-        state.captures.append(Capture(text[pos:end], (pos, end), reps))
-        return end
-
-    if referent is None:
-        return record(pos, []) if min_reps == 0 else None
-
-    reps: list[str] = []
-    current = pos
-    while max_reps is None or len(reps) < max_reps:
-        if not (referent and text.startswith(referent, current)):
-            break
-        reps.append(referent)
-        current += len(referent)
-    if len(reps) >= max(min_reps, 1):
-        return record(current, reps)
-    return record(pos, []) if min_reps == 0 else None
-
-
-def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State) -> int | None:
-    bounds = _reps_bounds(el, state)
-    if bounds is None:
+    def attempt(k: int) -> int | None:
+        end = ends[k]
+        mark = len(caps)
+        caps.append(Capture(text[pos:end], (pos, end), [referent] * k if referent else []))
+        r = cont(end)
+        if r is not None:
+            return r
+        del caps[mark:]
         return None
-    # The referent is the text group i captured; an unrecorded group is undefined.
-    root_caps = state.root.captures
-    referent = root_caps[el.group].text if el.group < len(root_caps) else None
-    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
+
+    for k in _counts(reps, len(ends) - 1):
+        r = attempt(k)
+        if r is not None:
+            return r
+    return None
 
 
-def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State) -> int | None:
-    bounds = _reps_bounds(el, state)
-    if bounds is None:
+def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State, cont: Cont):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
         return None
-    # The referent is group i's decimal repetition count (len of its rep pieces).
-    root_caps = state.root.captures
-    referent = str(len(root_caps[el.group].reps)) if el.group < len(root_caps) else None
-    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
+    caps = state.root.captures
+    referent = caps[el.group].text if el.group < len(caps) else None
+    return _match_referent(referent, reps, text, pos, state, cont)
+
+
+def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State, cont: Cont):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
+        return None
+    caps = state.root.captures
+    referent = str(len(caps[el.group].reps)) if el.group < len(caps) else None
+    return _match_referent(referent, reps, text, pos, state, cont)
 
 
 def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]):
@@ -172,105 +193,106 @@ def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]
     return cap.text if cap is not None else None
 
 
-def _match_stage_ref(el: StageRefEl, text: str, pos: int, state: _State) -> int | None:
-    bounds = _reps_bounds(el, state)
-    if bounds is None:
+def _match_stage_ref(el: StageRefEl, text: str, pos: int, state: _State, cont: Cont):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
         return None
     referent = _stage_referent(state.root.stages, el.stage, el.path)
-    return _match_referent(referent, bounds[0], bounds[1], text, pos, state)
+    return _match_referent(referent, reps, text, pos, state, cont)
 
 
 # ── Grouping brace: one capture whose sub-elements are sub-captures ────────────
 
 
-def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State) -> int | None:
-    bounds = _reps_bounds(el, state)
-    if bounds is None:
+def _match_seq_group(el: SeqGroupEl, text: str, pos: int, state: _State, cont: Cont):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
         return None
-    min_reps, max_reps = bounds
+    caps = state.captures
 
-    def once(p: int) -> tuple[int, list[Capture]] | None:
+    # A grouping brace is a *shape*: each iteration re-matches that shape, its
+    # content free between reps (the cells of a row, the rows of a table). Build
+    # the maximal run of shape-matches; each carries its own sub-captures.
+    runs: list[tuple[int, list[Capture]]] = []
+    current = pos
+    while reps.max is None or len(runs) < reps.max:
         sub = _State(root=state.root)
-        end = _match_elements(el.elements, text, p, sub)
-        return None if end is None else (end, sub.captures)
-
-    def record(end: int, reps: list[str], subs: list[Capture]) -> int:
-        state.captures.append(Capture(text[pos:end], (pos, end), reps, subs))
-        return end
-
-    first = once(pos)
-    if first is None or first[0] == pos:
-        return record(pos, [], []) if min_reps == 0 else None
-
-    end, subs = first
-    if max_reps == 1:
-        return record(end, [text[pos:end]], subs)
-
-    # Structural repetition: a grouping brace is a *shape*, so each iteration
-    # only has to re-match that shape — its content may differ between reps (the
-    # cells of a row, the rows of a table). Every iteration's sub-captures are
-    # kept, in document order. (Atomic classes still repeat by *value*; that
-    # stays in _match_group.)
-    reps = [text[pos:end]]
-    all_subs = list(subs)
-    current = end
-    while max_reps is None or len(reps) < max_reps:
-        nxt = once(current)
-        if nxt is None or nxt[0] == current:  # no further match / zero-width
+        end = _match_seq(el.elements, 0, text, current, sub)
+        if end is None or end == current:
             break
-        reps.append(text[current : nxt[0]])
-        all_subs.extend(nxt[1])
-        current = nxt[0]
-    if len(reps) >= min_reps:
-        return record(current, reps, all_subs)
-    return record(pos, [], []) if min_reps == 0 else None
+        runs.append((end, sub.captures))
+        current = end
+
+    def attempt(k: int) -> int | None:
+        end = pos if k == 0 else runs[k - 1][0]
+        rep_texts = [
+            text[(pos if i == 0 else runs[i - 1][0]) : runs[i][0]] for i in range(k)
+        ]
+        subs = [c for i in range(k) for c in runs[i][1]]
+        mark = len(caps)
+        caps.append(Capture(text[pos:end], (pos, end), rep_texts, subs))
+        r = cont(end)
+        if r is not None:
+            return r
+        del caps[mark:]
+        return None
+
+    for k in _counts(reps, len(runs)):
+        r = attempt(k)
+        if r is not None:
+            return r
+    return None
 
 
 # ── Capturing group with value-equal repetition ───────────────────────────────
 
 
-def _match_group(el: GroupEl, text: str, pos: int, state: _State) -> int | None:
-    bounds = _reps_bounds(el, state)
-    if bounds is None:
+def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
         return None
-    min_reps, max_reps = bounds
+    caps = state.captures
 
-    def record(end: int, reps: list[str]) -> int:
-        state.captures.append(Capture(text[pos:end], (pos, end), reps))
-        return end
+    def attempt(end: int, rep_list: list[str]) -> int | None:
+        mark = len(caps)
+        caps.append(Capture(text[pos:end], (pos, end), rep_list))
+        r = cont(end)
+        if r is not None:
+            return r
+        del caps[mark:]
+        return None
 
     greedy_end = el.matcher.match(text, pos)
     if greedy_end is None or greedy_end == pos:
-        return record(pos, []) if min_reps == 0 else None
+        return attempt(pos, []) if reps.accepts(0) else None
 
-    # Common case ({expr}, i.e. exactly one rep): the greedy match *is* the one
-    # unit, so skip the length-backoff and equality machinery entirely.
-    if max_reps == 1:
-        return record(greedy_end, [text[pos:greedy_end]])
-
-    # The first unit need not be greedy-maximal: a shorter first unit may let
-    # the remainder split into equal repetitions ("2525" -> 25+25). Try lengths
-    # longest-first and take the first that satisfies the count.
+    # The first unit need not be greedy-maximal: a shorter first unit may let the
+    # remainder split into equal repetitions ("2525" -> 25+25). Try unit lengths
+    # longest-first; within each, the run's acceptable counts in priority order.
     for unit_len in range(greedy_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
         if not el.matcher.accepts(first):
             continue
-        reps = [first]
+        rep_list = [first]
+        ends = [pos + unit_len]
         current = pos + unit_len
-        while max_reps is None or len(reps) < max_reps:
+        while reps.max is None or len(rep_list) < reps.max:
             nxt = el.matcher.equal_unit(text, current, first)
             if nxt is None:
                 break
-            reps.append(text[current:nxt])
+            rep_list.append(text[current:nxt])
+            ends.append(nxt)
             current = nxt
-        if len(reps) >= min_reps:
-            return record(current, reps)
+        for k in _counts(reps, len(rep_list)):
+            end = pos if k == 0 else ends[k - 1]
+            r = attempt(end, rep_list[:k])
+            if r is not None:
+                return r
+    return attempt(pos, []) if reps.accepts(0) else None
 
-    return record(pos, []) if min_reps == 0 else None
 
-
-# Exact-type dispatch for _match_element; GroupEl is the generic fall-through.
-_DISPATCH = {
+# Continuation-passing dispatch; GroupEl is the generic fall-through.
+_DISPATCH: dict[type, Callable[..., int | None]] = {
     SeqGroupEl: _match_seq_group,
     BackRefEl: _match_back_ref,
     CountRefEl: _match_count_ref,

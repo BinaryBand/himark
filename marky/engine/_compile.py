@@ -426,16 +426,31 @@ class LiteralEl:
     text: str
 
 
-# A repeatable element's `count_ref` (when not None) is the group index of a
-# `[#i]` count: its min/max reps resolve to that group's rep count at match time.
+@dataclass(slots=True)
+class Reps:
+    """A resolved repetition spec on an element. `allowed` (a `[a,b,c]` set)
+    overrides the `min..max` step-range; `lazy` is the `[..<y]` shortest-first
+    form; `count_ref` (a `[#i]`) resolves to a group's rep count at match time."""
+
+    min: int = 1
+    max: int | None = 1
+    step: int = 1
+    lazy: bool = False
+    allowed: frozenset[int] | None = None
+    count_ref: int | None = None
+
+    def accepts(self, k: int) -> bool:
+        if self.allowed is not None:
+            return k in self.allowed
+        if k < self.min or (self.max is not None and k > self.max):
+            return False
+        return (k - self.min) % self.step == 0
 
 
 @dataclass(slots=True)
 class GroupEl:
     matcher: Matcher
-    min_reps: int
-    max_reps: int | None
-    count_ref: int | None = None
+    reps: Reps
 
 
 @dataclass(slots=True)
@@ -444,9 +459,7 @@ class SeqGroupEl:
     brace groups become its sub-captures. Matched by the loop, not a Matcher."""
 
     elements: "list[Element]"
-    min_reps: int
-    max_reps: int | None
-    count_ref: int | None = None
+    reps: Reps
 
 
 @dataclass(slots=True)
@@ -456,9 +469,7 @@ class BackRefEl:
     handled by the loop (which holds that state), not by a compile-time Matcher."""
 
     group: int
-    min_reps: int
-    max_reps: int | None
-    count_ref: int | None = None
+    reps: Reps
 
 
 @dataclass(slots=True)
@@ -467,9 +478,7 @@ class CountRefEl:
     `i`, read from the running capture list at match time (like `BackRefEl`)."""
 
     group: int
-    min_reps: int
-    max_reps: int | None
-    count_ref: int | None = None
+    reps: Reps
 
 
 @dataclass(slots=True)
@@ -480,23 +489,22 @@ class StageRefEl:
 
     stage: int
     path: tuple[int, ...]
-    min_reps: int
-    max_reps: int | None
-    count_ref: int | None = None
+    reps: Reps
 
 
 Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl | StageRefEl
 
 
-def _count_config(count: t.CountSpec | None) -> tuple[int, int | None, int | None]:
-    """Resolve a count into (min_reps, max_reps, count_ref). A `[#i]` reference
-    carries the group index in count_ref; its min/max are placeholders the loop
-    overrides with the referenced group's actual rep count."""
+def _reps(count: t.CountSpec | None) -> Reps:
+    """Resolve a parsed count into the engine's `Reps`."""
+    if count is None:
+        return Reps(1, 1)
     if isinstance(count, t.CountRefSpec):
-        return 1, 1, count.group
-    if isinstance(count, t.CountRange):
-        return count.min, count.max, None
-    return 1, 1, None
+        return Reps(count_ref=count.group)
+    if isinstance(count, t.CountSet):
+        vals = frozenset(count.values)
+        return Reps(min=min(vals), max=max(vals), allowed=vals, lazy=count.lazy)
+    return Reps(min=count.min, max=count.max, step=count.step, lazy=count.lazy)
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
@@ -508,32 +516,20 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
         elif isinstance(child, t.BraceGroupNode):
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-            min_reps, max_reps, count_ref = _count_config(child.count)
+            reps = _reps(child.count)
             if isinstance(child.semantic, t.SequenceNode):
                 sub = compile_pattern(t.RootNode(children=child.semantic.children))
-                elements.append(SeqGroupEl(sub, min_reps, max_reps, count_ref))
+                elements.append(SeqGroupEl(sub, reps))
             elif isinstance(child.semantic, t.BackRefNode):
-                elements.append(
-                    BackRefEl(child.semantic.group, min_reps, max_reps, count_ref)
-                )
+                elements.append(BackRefEl(child.semantic.group, reps))
             elif isinstance(child.semantic, t.CountRefNode):
-                elements.append(
-                    CountRefEl(child.semantic.group, min_reps, max_reps, count_ref)
-                )
+                elements.append(CountRefEl(child.semantic.group, reps))
             elif isinstance(child.semantic, t.StageRefNode):
                 elements.append(
-                    StageRefEl(
-                        child.semantic.stage,
-                        child.semantic.path,
-                        min_reps,
-                        max_reps,
-                        count_ref,
-                    )
+                    StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
             else:
-                elements.append(
-                    GroupEl(lower(child.semantic), min_reps, max_reps, count_ref)
-                )
+                elements.append(GroupEl(lower(child.semantic), reps))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements
