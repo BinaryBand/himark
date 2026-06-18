@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.2-experimental  
+**Version:** 0.9.3-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -54,8 +54,6 @@ A pattern is built from **universes** and a small set of operators over them. A 
 >
 > **Anchors.** `@^` and `@$` are **not** alphabets -- they match the start and end of the current scope (the text a stage sees), zero-width and capturing nothing. They are primitives, not macros, so they live here rather than in the table above.
 
-<!-- It would be great if we could centralize the shortcut notation in Himark. Instead of accepting [0..] with an empty closing value as first class notation, maybe we could require [0..@inf] instead. However, if we add a centralized normalization layer (is it a layer?), we could have our parser consult a shortcut directory before raising an error. In the case of Range(x, null), we could default lhs to @inf. But we'll have to design an exception lookup algorithm if we truly want our exceptions and defaults to be centrally listed. Here are some suggestions: !c => !{c}, [..y] => [0..y], [1..] => [1..@inf], [..] => [0..@inf], {x{y}} => {{x}{y}}, {x...y} => {x..y}[0..@inf], x => {x}, {...} => {...}[1], etc... It may take some of the complexity load off the parser and strengthen the base arithmetic without costing writing clarity. -->
-
 ---
 
 ## Universes
@@ -96,12 +94,12 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 
 ```proto
 {0:@d:255}    // decimal values 0 through 255
-{0::255}      // same, over the ambient universe
+{0::255}      // omitted middle = @uni: a Unicode *code-point* value, not the decimal above
 {aa:@l:zz}    // two-letter lowercase strings 'aa' through 'zz'
 {000:@d:999}  // fixed three-wide decimals -- '007' matches (the floor sets the width)
 ```
 
-The two bounds' written widths set the field width: the narrower is the minimum, the wider the maximum. Equal widths fix it -- `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it -- `{000::9}` accepts the value `9` at any width from the ceiling's up to the floor's: `9`, `09`, and `009`. A fixed width is therefore a floor and ceiling written at the same width; there is no separate padding operator.
+The two bounds' written widths set the field width: the narrower is the minimum, the wider the maximum. Equal widths fix it -- `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it -- `{000:@d:9}` accepts the value `9` at any width from the ceiling's up to the floor's: `9`, `09`, and `009`. A fixed width is therefore a floor and ceiling written at the same width; there is no separate padding operator.
 
 |        | `{0:@d:90}`  | `{000:@d:90}` | `{0:@d:090}` | `{000:@d:090}` |
 | ------ | ------------ | ------------- | ------------ | -------------- |
@@ -136,22 +134,33 @@ A subtractive universe matches one position, like any universe; a run is `[count
 
 The operand must be a token or token union -- a finite set has a well-defined neighborhood, while a range, bound, or subtractive universe does not. Bound the insertion alphabet with `:@alpha` (default: the operand's own characters) so the neighborhood stays finite. Distance is **Levenshtein** (insert, delete, substitute); ties resolve by smallest distance, then longest span, then leftmost. Like `@uni`, a fuzzy universe is recognized by an automaton, not enumerated.
 
+`~k` is **closeness only** -- a quality threshold on one element, inherently bounded: a token of length `L` within distance `k` spans `L ± k` characters, so there is no open-ended search. "Find the nearest fuzzy match within a window" is the other half -- **extent** -- which lives on the repetition, not the fuzz: a lazy, budgeted run (see [Repetition](#repetition)) plus a `~k` delimiter.
+
+```proto
+{!{|}}[..<100]{|}~1  // up to 100 non-pipes, ending at the nearest fuzzy '|'
+```
+
+The window is the run's budget (`[..<100]`), laziness picks the **nearest**, and closeness is the delimiter's (`~1`) -- three knobs, each meaning one thing.
+
 ---
 
 ## Repetition
 
 `[count]` repeats the preceding universe. The count is itself a **universe** -- the same algebra as `{...}`, but over the ambient set of **base-10 non-negative integers** instead of Unicode. A bare number is exact, `,` unions counts, and `..` is a range:
 
-| Form      | Meaning                        |
-| --------- | ------------------------------ |
-| `[n]`     | exactly `n`                    |
-| `[x..]`   | `x` or more                    |
-| `[..y]`   | up to `y`                      |
-| `[x..y]`  | `x` to `y`                     |
-| `[..]`    | any positive integer           |
-| `[a,b,c]` | exactly `a`, `b`, or `c` times |
+| Form      | Meaning                         |
+| --------- | ------------------------------- |
+| `[n]`     | exactly `n`                     |
+| `[x..]`   | `x` or more                     |
+| `[..y]`   | up to `y`                       |
+| `[x..y]`  | `x` to `y`                      |
+| `[..]`    | any positive integer            |
+| `[a,b,c]` | exactly `a`, `b`, or `c` times  |
+| `[..<y]`  | lazy: up to `y`, shortest first |
 
 Only the integer operators carry over. **Adjacency** is meaningless -- a count is one number, not a concatenation. A run of specific counts is usually a union (`[2,4,6]`); a long arithmetic run may take a bounded stride instead (see the note below), but an **unbounded** stride is out of scope -- a stepped scan with no end is expensive. A non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, a reference fits too: `[#i]` is the count group `i` matched (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
+
+A run is **greedy** by default: it takes the longest count in range that still lets the rest of the pattern match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` makes it **lazy** -- the shortest count first, extending only as needed, so the run ends at the **nearest** following match (the niche case: a terminator you cannot simply exclude from the run's class). Either way the ceiling is the search **budget**: a greedy `[x..y]` tries `y` and backs off no further than `x`, capping the backtracking at `y - x` steps. `[..]` (open) is the only unbounded scan -- give it a ceiling when an open search's cost matters.
 
 A bare `{U}[n]` repeats **homogeneously** -- the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** -- a fresh match per rep. A grouping brace (a `{...}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block -- the cells of a row, the rows of a table.
 
