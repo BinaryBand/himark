@@ -8,20 +8,20 @@
 
 ---
 
-A pattern is built from **universes** and a small set of operators over them. A universe `{…}` is a virtual set of strings or characters; as a pattern it matches **exactly one** of its elements — one position.
+A pattern is built from **universes** and a small set of operators over them. A universe `{…}` is a virtual set of strings or characters; as a pattern it matches **exactly one** of its elements -- one position.
 
-| Operator  | Role                                                                                             |
-| --------- | ------------------------------------------------------------------------------------------------ |
-| `{…}`     | **Universe** — a set of strings/characters; matches one element                                  |
-| `,`       | **Union** — combine universes (`{a,b}` is `a` or `b`)                                            |
-| `..`      | **Range** — ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)                            |
-| `{X}{Y}`  | **Adjacency** — concatenation; the Cartesian product of universes (`{a..z}{A..Z}` → `aA`…`zZ`)   |
-| `!{…}`    | **Subtractive universe** — everything _not_ in `{…}`                                             |
-| `{x:…:y}` | **Bounds** — the inner universe, restricted to values `x`–`y` inclusive (`{x::y}` = ambient)     |
-| `[x:y:z]` | **Repetition** — minimum `x`, maximum `y`, step `z`                                              |
-| `=>`      | **Pipe** — feed each match into the next transformation                                          |
+| Operator  | Role                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------- |
+| `{…}`     | **Universe** -- a set of strings/characters; matches one element                                |
+| `,`       | **Union** -- combine universes (`{a,b}` is `a` or `b`)                                          |
+| `..`      | **Range** -- ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)                          |
+| `{X}{Y}`  | **Adjacency** -- concatenation; the Cartesian product of universes (`{a..z}{A..Z}` → `aA`…`zZ`) |
+| `!{…}`    | **Subtractive universe** -- everything _not_ in `{…}`, from the ambient universe (Unicode)      |
+| `{x:…:y}` | **Bounds** -- the inner universe, restricted to values `x`–`y` inclusive (`{x::y}` = ambient)   |
+| `[x:y:z]` | **Repetition** -- minimum `x`, maximum `y`, step `z`                                            |
+| `=>`      | **Pipe** -- feed each match into the next transformation                                        |
 
-**Every `{…}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** — the _same_ matched value, `n` times. To repeat **heterogeneously** — a fresh match each time — nest the universe in a group: `{{U}}[n]`.
+**Every `{…}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** -- the _same_ matched value, `n` times. To repeat **heterogeneously** -- a fresh match each time -- nest the universe in a group: `{{U}}[n]`.
 
 ```proto
 {a,A}[2]     // homogeneous: 'aa', 'AA'
@@ -57,7 +57,7 @@ This is the experimental algebra branch: the `<->` and `>>` operators and the ol
 
 ## Universes
 
-A universe is a set. Its atoms are characters and strings; `,` unions them, `..` bounds them into an ordered range, and **adjacency** — writing universes side by side — concatenates them into their Cartesian product.
+A universe is a set. Its atoms are characters and strings; `,` unions them, `..` bounds them into an ordered range, and **adjacency** -- writing universes side by side -- concatenates them into their Cartesian product.
 
 ```proto
 {a}               // the one-element universe {a}
@@ -65,20 +65,20 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 {a,b,c}           // union: a or b or c
 {cat,dog}         // union of two strings
 {a..z}            // range: the single characters a through z
-{aa..zz}          // range over a two-wide *Unicode* value space — every string from 'aa' to 'zz' by value
-{a..z}{A..Z}      // adjacency: a lowercase then an uppercase — the product aA, aB, ..., zZ
+{aa..zz}          // range over a two-wide *Unicode* value space -- every string from 'aa' to 'zz' by value
+{a..z}{A..Z}      // adjacency: a lowercase then an uppercase -- the product aA, aB, ..., zZ
 {a..b}{cd}{e..f}  // adjacency of three universes: {acde, acdf, bcde, bcdf}
 ```
 
-> **Note:** the Cartesian product comes from **adjacency**, not from `..`. `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected — write `{a..z}{A..Z}` for the product, `{a..z,A..Z}` for either case, or `{{a,A},…,{z,Z}}` for case-folded positions.
+> **Note:** the Cartesian product comes from **adjacency**, not from `..`. `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected -- write `{a..z}{A..Z}` for the product, `{a..z,A..Z}` for either case, or `{{a,A},…,{z,Z}}` for case-folded positions.
 
 A universe always matches **one** of its elements (one position). `{a..z}` matches one letter; `{cat,dog}` matches one of the two words. A run is an explicit `[count]` (see [Repetition](#repetition)).
 
-> **Note:** an unnamed multi-character range is over **ambient Unicode**, not over letters. `{aa..zz}` is `{aa:@uni:zz}`, so it is the whole value band from `aa` to `zz` — every two-wide string whose value falls between them, including non-letter ones like `b🔥` (its first position `b` lands inside `a`–`z`). To mean "two lowercase letters," name the alphabet: `{aa:@l:zz}`.
+> **Note:** an unnamed multi-character range is over **ambient Unicode**, not over letters. `{aa..zz}` is `{aa:@uni:zz}`, so it is the whole value band from `aa` to `zz` -- every two-wide string whose value falls between them, including non-letter ones like `b🔥` (its first position `b` lands inside `a`–`z`). To mean "two lowercase letters," name the alphabet: `{aa:@l:zz}`.
 
 ### Congruence
 
-`,` makes its members **interchangeable** — one position with several spellings. This matters under bounds and references, where congruent spellings share a value:
+`,` makes its members **interchangeable** -- one position with several spellings. This matters under bounds and references, where congruent spellings share a value:
 
 ```proto
 {a,A}            // one position, two spellings: 'a' or 'A'
@@ -95,14 +95,14 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 {0:@d:255}    // decimal values 0 through 255
 {0::255}      // same, over the ambient universe
 {aa:@l:zz}    // two-letter lowercase strings 'aa' through 'zz'
-{000:@d:999}  // fixed three-wide decimals — '007' matches (the floor sets the width)
+{000:@d:999}  // fixed three-wide decimals -- '007' matches (the floor sets the width)
 ```
 
-The floor's written width is the minimum width: values are zero-padded up to it and canonical beyond, so `{000:@d:999}` matches `007` and `042` but not `7`. A fixed width is therefore just a floor written with leading zeros — there is no separate padding operator.
+The two bounds' written widths set the field width: the narrower is the minimum, the wider the maximum. Equal widths fix it -- `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it -- `{000::9}` accepts the value `9` at any width from the ceiling's up to the floor's: `9`, `09`, and `009`. A fixed width is therefore a floor and ceiling written at the same width; there is no separate padding operator.
 
 ### Subtraction
 
-`!{…}` is the **subtractive universe** — every value _not_ in `{…}`. As a union arm it subtracts from the others:
+`!{…}` is the **subtractive universe** -- every value of the ambient universe (Unicode) _not_ in `{…}`. Alone it draws from the full Unicode set; as a union arm it subtracts from the others:
 
 ```proto
 !{a}                   // any character except 'a'
@@ -127,11 +127,11 @@ A subtractive universe matches one position, like any universe; a run is `[count
 | `[x:y:z]` | `x` to `y` in steps of `z` |
 | `[:]`     | any number                 |
 
-A bare `{U}[n]` repeats **homogeneously** — the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** — a fresh match per rep. A grouping brace (a `{…}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block — the cells of a row, the rows of a table.
+A bare `{U}[n]` repeats **homogeneously** -- the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** -- a fresh match per rep. A grouping brace (a `{…}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block -- the cells of a row, the rows of a table.
 
 ```proto
-{a..z}[3]                    // 'aaa', 'bbb' — the same letter three times
-{{a..z}}[3]                  // 'abc', 'xyz' — any three letters
+{a..z}[3]                    // 'aaa', 'bbb' -- the same letter three times
+{{a..z}}[3]                  // 'abc', 'xyz' -- any three letters
 {a..z}[2:6:2]                // the same letter 2, 4, or 6 times
 {{|}{!{|,\n}}[1:]}[2:]{|}    // two or more '|'+cell units, each cell different
 ```
@@ -140,7 +140,7 @@ A bare `{U}[n]` repeats **homogeneously** — the same matched value. A nested `
 
 ## Captures
 
-Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**.
+Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**. A repeated group (`[count]`) captures its full matched text as one string, not one capture per repetition.
 
 Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1:]{Sphinx}{of{black}{quartz}}`:
 
@@ -153,7 +153,7 @@ Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression
 | 2.0   | `black`                  | First sub-group inside group 2  |
 | 2.1   | `quartz`                 | Second sub-group inside group 2 |
 
-> **Note:** Captures are addressable from a template via moustache references — `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
+> **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, and `{{ . }}` for the text flowing into the step (see [Transformers](#transformers)).
 
 ### Self-references
 
@@ -172,7 +172,7 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 {a}[2:]{-}[#0]    // as many '-' as there were 'a': 'aaa---', 'aa--'
 ```
 
-`{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` reads an earlier pipeline stage (`=>`-numbered, templates included) — the matching-side counterpart of the moustache `{{ i$j }}` accessor (see [Transformers](#transformers)).
+`{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` reads an earlier pipeline stage (`=>`-numbered, templates included) -- the matching-side counterpart of the moustache `{{ i$j }}` accessor (see [Transformers](#transformers)).
 
 ---
 
@@ -180,13 +180,13 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 `=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently:
 
-- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops the entire branch** — its partial transform is discarded, not emitted. That is how a chain filters: a branch survives only if every query stage matches.
+- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops the entire branch** -- its partial transform is discarded, not emitted. That is how a chain filters: a branch survives only if every query stage matches.
 - a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`… => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>…</b></i>`).
 
-Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result — neither privileged:
+Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` address any earlier step. The branches render two ways from the **same** result -- neither privileged:
 
-- **list** — the branch results, in order.
-- **splice** — each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
+- **list** -- the branch results, in order.
+- **splice** -- each result laid back over its source span, the text between branches kept verbatim (the in-place transform).
 
 ```proto
 {a..z}                              // the list of lowercase letters (one each)
@@ -197,7 +197,7 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 
 ### Quoting static text
 
-Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character — it is **not** a synonym for `"`.
+Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
 
 ```proto
 {a} => "<b>"   // emits the literal text <b>
@@ -210,19 +210,19 @@ Literal text may be written in double quotes, which is emitted verbatim with `\"
 
 Worked patterns, in the universe/bounds model.
 
-**IPv4 address** — four dotted octets, each a decimal value 0–255:
+**IPv4 address** -- four dotted octets, each a decimal value 0–255:
 
 ```proto
 {0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}
 ```
 
-**Bitcoin P2PKH address** — a `1` prefix then a base58 value bounded by the smallest and largest 25-byte addresses (length is the value bound, not a digit count):
+**Bitcoin P2PKH address** -- a `1` prefix then a base58 value bounded by the smallest and largest 25-byte addresses (length is the value bound, not a digit count):
 
 ```proto
 {1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
 ```
 
-**Markdown → HTML** — a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
+**Markdown → HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
 {#}[1:6]{ }[0:]{!{\n}}[1:] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
@@ -230,4 +230,4 @@ Worked patterns, in the universe/bounds model.
 
 ### Script files (.hmk)
 
-A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate — all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
+A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate -- all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
