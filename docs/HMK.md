@@ -52,7 +52,7 @@ A pattern is built from **universes** and a small set of operators over them. A 
 
 > **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 $\S7$) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
 >
-> **Anchors.** `@^` and `@$` are **not** alphabets -- they match the start and end of the current scope (the text a stage sees), zero-width and capturing nothing. They are primitives, not macros, so they live here rather than in the table above.
+> **Anchors.** `@^` / `@$` match the start / end of a **line** (position 0 or just after / just before a `\n`); `@^^` / `@$$` match the start / end of the whole **scope** (the text a stage sees). All four are **not** alphabets -- they are zero-width and capture nothing, so a line-start header is `{@^}{#}[1..6]{ }[1..]{!\n}[1..]`. They are primitives, not macros, so they live here rather than in the table above.
 
 ---
 

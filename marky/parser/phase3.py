@@ -197,11 +197,15 @@ def _resolve_reference(content: str) -> t.SemanticNode | None:
 
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
-    stripped_anchor = strip_unescaped(content)
-    if stripped_anchor == "@^":
-        return t.AnchorNode(at="start")
-    if stripped_anchor == "@$":
-        return t.AnchorNode(at="end")
+    sa = strip_unescaped(content)
+    if sa == "@^":
+        return t.AnchorNode(at="line_start")
+    if sa == "@$":
+        return t.AnchorNode(at="line_end")
+    if sa == "@^^":
+        return t.AnchorNode(at="scope_start")
+    if sa == "@$$":
+        return t.AnchorNode(at="scope_end")
 
     ref = _resolve_reference(content)
     if ref is not None:

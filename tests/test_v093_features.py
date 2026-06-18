@@ -160,9 +160,24 @@ def test_two_payload_markers_raise():
         ex('{a} => "{{> . }}{{> . }}"', "a")
 
 
-def test_anchor_start():
+def test_line_anchor_start():
+    # @^ is a line start: position 0 or just after a newline.
     assert m("{@^}{x}", "x yx x") == ["x"]
+    assert m("{@^}{x}", "ax\nx y") == ["x"]  # the line-start x, not the mid-line one
 
 
-def test_anchor_end():
-    assert m("{cat}{@$}", "a cat cat") == ["cat"]
+def test_line_anchor_end():
+    # @$ is a line end: end of text or just before a newline.
+    assert m("{x}{@$}", "ax\nbx") == ["x", "x"]  # before the \n, and at the end
+    assert m("{x}{@$}", "xa\nxb") == []  # neither x is at a line end
+
+
+def test_scope_anchor_start():
+    # @^^ is the scope start: position 0 only, never mid-document.
+    assert m("{@^^}{x}", "x\nx x") == ["x"]
+    assert m("{@^^}{x}", "ax\nx") == []  # no x at position 0
+
+
+def test_scope_anchor_end():
+    # @$$ is the scope end: the very end of the text, not a line break.
+    assert m("{x}{@$$}", "x\nx") == ["x"]  # only the final x

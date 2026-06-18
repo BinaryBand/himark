@@ -100,7 +100,15 @@ def _match_seq(
             return cont(pos + len(s))
         return None
     if type(el) is AnchorEl:  # zero-width, non-capturing
-        ok = pos == 0 if el.at == "start" else pos == len(text)
+        at = el.at
+        if at == "line_start":
+            ok = pos == 0 or text[pos - 1] == "\n"
+        elif at == "line_end":
+            ok = pos == len(text) or text[pos] == "\n"
+        elif at == "scope_start":
+            ok = pos == 0
+        else:  # scope_end
+            ok = pos == len(text)
         return cont(pos) if ok else None
     return _DISPATCH[type(el)](el, text, pos, state, cont)
 

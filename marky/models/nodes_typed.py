@@ -126,10 +126,10 @@ class ComplementNode:
 
 @dataclass(slots=True, kw_only=True)
 class AnchorNode:
-    """A zero-width anchor `@^` / `@$` — matches the start / end of the current
-    scope (the text a stage sees) without consuming or capturing anything."""
+    """A zero-width anchor: `@^`/`@$` match a **line** start/end; `@^^`/`@$$` the
+    whole **scope** start/end. Matches a position without consuming or capturing."""
 
-    at: Literal["start", "end"]
+    at: Literal["line_start", "line_end", "scope_start", "scope_end"]
     type: Literal["anchor"] = "anchor"
 
 
