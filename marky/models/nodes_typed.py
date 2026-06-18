@@ -69,6 +69,7 @@ class BraceGroupNode:
     semantic: SemanticNode | None = None
     count: CountSpec | None = None
     count_src: str | None = None
+    fuzz: int | None = None  # a `~k` fuzzy modifier (edit distance)
 
 
 # -----------------------------
@@ -121,6 +122,26 @@ class UnionNode:
 class ComplementNode:
     inner: SemanticNode
     type: Literal["complement"] = "complement"
+
+
+@dataclass(slots=True, kw_only=True)
+class AnchorNode:
+    """A zero-width anchor `@^` / `@$` — matches the start / end of the current
+    scope (the text a stage sees) without consuming or capturing anything."""
+
+    at: Literal["start", "end"]
+    type: Literal["anchor"] = "anchor"
+
+
+@dataclass(slots=True, kw_only=True)
+class FuzzyNode:
+    """A fuzzy token `{token}~k` — matches any string within Levenshtein distance
+    `k` of one of `tokens` (a token or token union). Membership, captured as the
+    actual matched text."""
+
+    tokens: list[str]
+    k: int
+    type: Literal["fuzzy"] = "fuzzy"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -203,6 +224,9 @@ SemanticNode: TypeAlias = (
     | ValueRangeNode
     | UnionNode
     | ComplementNode
+    | HeterogeneousNode
+    | FuzzyNode
+    | AnchorNode
     | GroupClassNode
     | SequenceNode
     | BackRefNode
@@ -219,6 +243,9 @@ SemanticClasses = (
     ValueRangeNode,
     UnionNode,
     ComplementNode,
+    HeterogeneousNode,
+    FuzzyNode,
+    AnchorNode,
     GroupClassNode,
     SequenceNode,
     BackRefNode,

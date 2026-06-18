@@ -39,8 +39,11 @@ class Matcher(Protocol):
 
 
 class _Base:
-    """Default `accepts` (via match) and literal `equal_unit`. Concrete
-    matchers override `match`; group matchers override `equal_unit`."""
+    """Default `accepts` (via match). `equal_unit` is the **heterogeneous**
+    continuation — a fresh match of the next rep — used by the `{{U}}[n]` form
+    (homogeneous `{U}[n]` checks string equality in the loop instead). Concrete
+    matchers override `match`; `_Group` overrides `equal_unit` to stay within the
+    same congruence group."""
 
     def match(self, text: str, pos: int) -> int | None:  # pragma: no cover
         raise NotImplementedError
@@ -49,8 +52,7 @@ class _Base:
         return bool(s) and self.match(s, 0) == len(s)
 
     def equal_unit(self, text: str, pos: int, first: str) -> int | None:
-        n = len(first)
-        return pos + n if text[pos : pos + n] == first else None
+        return self.match(text, pos)
 
 
 # ── Exclusion helpers (resolved once, at compile time) ────────────────────────
@@ -328,10 +330,12 @@ class _Complement(_Base):
 
 
 class _Group(_Base):
-    """Equivalence-group class — the single congruence primitive. Members of a
-    group are interchangeable; repetition-equality is checked against the group
-    sequence, so 'a' and 'bc' count as the same unit when grouped, and 'a'/'A'
-    fold together for case-insensitive repetition."""
+    """Congruence class — interchangeable spellings of one position. A bare
+    `{U}[n]` repeats **homogeneously** (same matched string each rep, so
+    `{a,A}[2]` is aa/AA — the loop checks string equality). Its `equal_unit` is
+    the **heterogeneous** continuation used by `{{U}}[n]`: the same group
+    *sequence* with free spelling (`{{a,A}}[2]` is all four), but no crossing to
+    a different group (`{{-,*}}` never mixes `-` and `*`)."""
 
     __slots__ = ("members", "_singles")
 
@@ -342,9 +346,6 @@ class _Group(_Base):
             key=lambda pair: len(pair[0]),
             reverse=True,
         )
-        # Fast path for the common all-single-char group (alphabets, char
-        # classes): a frozenset of chars, or None when any member is multi-char
-        # (then longest-first member order matters and we keep the general loop).
         self._singles = (
             frozenset(m for m, _ in self.members)
             if all(len(m) == 1 for m, _ in self.members)
@@ -352,9 +353,6 @@ class _Group(_Base):
         )
 
     def match(self, text: str, pos: int) -> int | None:
-        # One member (single position). A run is `[count]`: repetition is
-        # heterogeneous within a congruence group (see `equal_unit`), so
-        # `{a,A}[2]` is aa/aA/Aa/AA and `{a,b,c}[1..]` is any run of a/b/c.
         if pos >= len(text):
             return None
         singles = self._singles
@@ -393,6 +391,54 @@ class _Group(_Base):
         return cur
 
 
+def _bounded_levenshtein(a: str, b: str, k: int) -> int:
+    """Levenshtein distance between `a` and `b`, capped at `k + 1` (anything over
+    `k` is reported as `k + 1` — we only care whether it is within `k`)."""
+    if abs(len(a) - len(b)) > k:
+        return k + 1
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        lo = max(1, i - k)
+        hi = min(len(b), i + k)
+        for j in range(1, len(b) + 1):
+            if j < lo or j > hi:
+                cur.append(k + 1)
+                continue
+            cost = 0 if ca == b[j - 1] else 1
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost))
+        if min(cur) > k:
+            return k + 1
+        prev = cur
+    return prev[len(b)]
+
+
+class _Fuzzy(_Base):
+    """Fuzzy token `{token}~k`: matches a span within Levenshtein distance `k` of
+    some token. A span has length |token| ± k, so the search is bounded; among
+    candidates it picks the smallest distance, then the longest span."""
+
+    __slots__ = ("tokens", "k", "lo", "hi")
+
+    def __init__(self, node: t.FuzzyNode):
+        self.tokens = node.tokens
+        self.k = node.k
+        self.lo = min(len(tok) for tok in node.tokens)
+        self.hi = max(len(tok) for tok in node.tokens)
+
+    def match(self, text: str, pos: int) -> int | None:
+        k = self.k
+        max_len = min(self.hi + k, len(text) - pos)
+        min_len = max(0, self.lo - k)
+        best: tuple[int, int] | None = None  # (distance, -length)
+        for length in range(min_len, max_len + 1):
+            span = text[pos : pos + length]
+            d = min(_bounded_levenshtein(span, tok, k) for tok in self.tokens)
+            if d <= k and (best is None or (d, -length) < best):
+                best = (d, -length)
+        return pos - best[1] if best else None
+
+
 def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
     return _ValueRange(_value_view(node))
 
@@ -407,6 +453,10 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
+    t.FuzzyNode: _Fuzzy,
+    # Nested fallback (e.g. a `{{U}}` arm); the het flag is set at the element
+    # level in `compile_pattern`, so here it lowers to the inner matcher.
+    t.HeterogeneousNode: lambda n: lower(n.inner),
 }
 
 
@@ -424,6 +474,14 @@ def lower(node: t.SemanticNode) -> Matcher:
 @dataclass(slots=True)
 class LiteralEl:
     text: str
+
+
+@dataclass(slots=True)
+class AnchorEl:
+    """A zero-width anchor `@^` / `@$` — succeeds at the start / end of the scope
+    without consuming or capturing."""
+
+    at: str
 
 
 @dataclass(slots=True)
@@ -451,6 +509,7 @@ class Reps:
 class GroupEl:
     matcher: Matcher
     reps: Reps
+    het: bool = False  # heterogeneous repetition ({{U}} or a complement)
 
 
 @dataclass(slots=True)
@@ -492,7 +551,9 @@ class StageRefEl:
     reps: Reps
 
 
-Element = LiteralEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl | StageRefEl
+Element = (
+    LiteralEl | AnchorEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl | StageRefEl
+)
 
 
 def _reps(count: t.CountSpec | None) -> Reps:
@@ -517,6 +578,9 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
             if child.semantic is None:
                 raise CompileError(f"Unresolved brace group: {{{child.content}}}")
             reps = _reps(child.count)
+            if isinstance(child.semantic, t.AnchorNode):
+                elements.append(AnchorEl(child.semantic.at))
+                continue
             if isinstance(child.semantic, t.SequenceNode):
                 sub = compile_pattern(t.RootNode(children=child.semantic.children))
                 elements.append(SeqGroupEl(sub, reps))
@@ -528,8 +592,13 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
                 elements.append(
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
+            elif isinstance(child.semantic, t.HeterogeneousNode):
+                # `{{U}}`: repeat the inner heterogeneously (a fresh match per rep).
+                elements.append(GroupEl(lower(child.semantic.inner), reps, het=True))
             else:
-                elements.append(GroupEl(lower(child.semantic), reps))
+                # A complement run is heterogeneous too (any non-inner char each).
+                het = isinstance(child.semantic, t.ComplementNode)
+                elements.append(GroupEl(lower(child.semantic), reps, het=het))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements

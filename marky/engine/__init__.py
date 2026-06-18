@@ -84,37 +84,49 @@ def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
 
 
 def _transform(
-    steps: list[t.RootNode], text: str, ancestors: tuple[Match, ...]
+    steps: list[t.RootNode],
+    text: str,
+    ancestors: tuple[Match, ...],
+    committed: bool = False,
 ) -> str | None:
     """Transform `text` through the rest of the chain, returning the branch's
-    result — or None when a query in the chain matches nothing (the branch is
-    dropped). `ancestors` is the chain of stage matches so far, one per step.
+    result — its **committed** output. `ancestors` is the chain of stage matches
+    so far; `committed` is True once a template upstream has rendered.
 
-    A template renders (`{{.}}` is `text`) and the chain continues on its render.
-    A query splices each match's transform in place; an unmatched query, or a
-    sub-transform that drops, drops this branch too."""
+    Eager-commit: a template renders and **commits** that render (the chain
+    continues on it, never rolled back). A query splices each match's transform
+    in place; a query that matches nothing keeps the committed text if a template
+    has rendered, else drops the branch — that is how a guard filters."""
     if not steps:
         return text
     head, rest = steps[0], steps[1:]
 
     if _is_template(head):
-        rendered = _render(head, text, list(ancestors))
-        stage = Match(rendered, 0, len(rendered), [])
-        return _transform(rest, rendered, (*ancestors, stage))
+        full, payload, span = _render(head, text, list(ancestors))
+        stage = Match(payload, 0, len(payload), [])
+        if span is None:  # no `{{> }}` — the whole render flows on
+            return _transform(rest, full, (*ancestors, stage), committed=True)
+        # `{{> }}`: `full` lands in the document; only `payload` flows downstream.
+        if not rest:
+            return full
+        downstream = _transform(rest, payload, (*ancestors, stage), committed=True)
+        if downstream is None:
+            return None
+        return full[: span[0]] + downstream + full[span[1] :]
 
     pieces: list[str] = []
     last = 0
     matched = False
     for m in find_matches(head, text, ancestors):
         matched = True
-        sub = _transform(rest, m.text, (*ancestors, m))
+        sub = _transform(rest, m.text, (*ancestors, m), committed)
         if sub is None:
             return None
         pieces.append(text[last : m.start])
         pieces.append(sub)
         last = m.end
     if not matched:
-        return None
+        return text if committed else None
     pieces.append(text[last:])
     return "".join(pieces)
 

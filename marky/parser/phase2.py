@@ -14,6 +14,9 @@ from marky.parser._text import ESCAPES, unescape
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")
+# Fuzzy suffix `~k`, with an optional (currently informational) insertion
+# alphabet `:@l` / `:{a..z}` — `{cat}~2`, `{cat}~2:@l`.
+_FUZZ_SRC = re.compile(r"~(\d+)(?::(?:[^\[\s{]+|\{[^}]*\}))?")
 
 
 def _scan_braces(text: str, pos: int) -> int:
@@ -85,6 +88,10 @@ def parse(text: str) -> t.RootNode:
             end = _scan_braces(text, pos)
             brace = t.BraceGroupNode(content=text[pos + 1 : end - 1])
             pos = end
+            fm = _FUZZ_SRC.match(text, pos)
+            if fm:
+                brace.fuzz = int(fm.group(1))
+                pos = fm.end()
             cm = _COUNT_SRC.match(text, pos)
             if cm:
                 brace.count_src = cm.group(1)

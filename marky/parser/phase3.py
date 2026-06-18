@@ -54,13 +54,31 @@ def _resolve_brace_node(child: t.BraceGroupNode) -> None:
     """Resolve a brace group in place: a `{…}` is an alphabet expression unless
     its interior concatenates constructs, in which case it is a grouping brace
     (`SequenceNode`). Any `[count]` suffix is parsed too."""
-    if _is_sequence_brace(child.content):
+    if child.fuzz is not None:
+        child.semantic = _resolve_fuzzy(child.content, child.fuzz)
+    elif _is_sequence_brace(child.content):
         child.semantic = _resolve_sequence_brace(child.content)
     else:
         child.semantic = _resolve_brace(child.content)
     if child.count_src is not None:
         child.count = _parse_count(child.count_src)
         child.count_src = None
+
+
+def _resolve_fuzzy(content: str, k: int) -> t.FuzzyNode:
+    """A `{token}~k` fuzzy operand: a token or token union. Each arm must be a
+    plain token (no range/bound/class) — its edit-distance neighborhood is the set."""
+    tokens: list[str] = []
+    for arm in split_top(",", content):
+        val = _singleton_value(arm)
+        if val is None:
+            raise CompileError(
+                f"A fuzzy operand must be a token or token union, got: {arm!r}"
+            )
+        tokens.append(val)
+    if not tokens:
+        raise CompileError(f"Empty fuzzy operand: {{{content}}}~{k}")
+    return t.FuzzyNode(tokens=tokens, k=k)
 
 
 def parse(node: t.RootNode) -> t.RootNode:
@@ -179,6 +197,12 @@ def _resolve_reference(content: str) -> t.SemanticNode | None:
 
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
+    stripped_anchor = strip_unescaped(content)
+    if stripped_anchor == "@^":
+        return t.AnchorNode(at="start")
+    if stripped_anchor == "@$":
+        return t.AnchorNode(at="end")
+
     ref = _resolve_reference(content)
     if ref is not None:
         return ref
@@ -188,6 +212,12 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     colon_parts = split_top(":", content)
     if len(colon_parts) == 3:
         return _resolve_bounds(colon_parts)
+
+    # Heterogeneous nesting `{{X}}`: a brace whose whole content is one nested
+    # brace repeats by re-matching afresh each rep (vs a bare `{U}` = same string).
+    stripped = strip_unescaped(content)
+    if stripped.startswith("{") and brace_end(stripped) == len(stripped):
+        return t.HeterogeneousNode(inner=_resolve_brace(inner_of(stripped)))
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")

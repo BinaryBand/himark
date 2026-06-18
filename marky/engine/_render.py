@@ -28,6 +28,16 @@ from marky.models.exceptions import CompileError
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 _ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")
 
+# Standard-library template filters: pure, deterministic transforms applied with
+# `{{ accessor | f | g }}`. Hashing / base-conversion helpers are deferred.
+_FILTERS = {
+    "upper": str.upper,
+    "lower": str.lower,
+    "trim": str.strip,
+    "len": lambda s: str(len(s)),
+    "hex": lambda s: s.encode().hex(),
+}
+
 
 def is_template(tree: t.RootNode) -> bool:
     """True if `tree` is a template step (literal text, possibly with moustache
@@ -35,24 +45,59 @@ def is_template(tree: t.RootNode) -> bool:
     return all(isinstance(n, t.LeafNode) for n in tree.children)
 
 
-def render(template_tree: t.RootNode, current: str, stages: list[Match]) -> str:
-    """Render a template: literal leaves concatenated in order, with each
-    `{{ … }}` resolved. `current` is the text flowing into this step (`{{.}}`);
-    `stages` is the ordered list of stage matches (`{{ i$j }}`)."""
-    return "".join(
-        _expand(n.content, current, stages)
-        for n in template_tree.children
-        if isinstance(n, t.LeafNode)
-    )
+def render(
+    template_tree: t.RootNode, current: str, stages: list[Match]
+) -> tuple[str, str, tuple[int, int] | None]:
+    """Render a template into `(full, payload, span)`. `full` is the whole render
+    (what lands in the document); `payload` is the text that flows downstream and
+    `span` its `(start, end)` within `full`. With no `{{> }}` marker the payload
+    is the whole render and `span` is None. `current` is `{{.}}`."""
+    out: list[str] = []
+    length = 0
+    payload: tuple[str, int] | None = None
+    for n in template_tree.children:
+        if not isinstance(n, t.LeafNode):
+            continue
+        text = n.content
+        last = 0
+        for mo in _MOUSTACHE_RE.finditer(text):
+            literal = text[last : mo.start()]
+            out.append(literal)
+            length += len(literal)
+            inner = mo.group(1).strip()
+            is_payload = inner.startswith(">")
+            if is_payload:
+                inner = inner[1:].strip()
+            value = _eval(inner, current, stages)
+            if is_payload:
+                if payload is not None:
+                    raise CompileError("At most one '{{> }}' marker per template")
+                payload = (value, length)
+            out.append(value)
+            length += len(value)
+            last = mo.end()
+        tail = text[last:]
+        out.append(tail)
+        length += len(tail)
+    full = "".join(out)
+    if payload is None:
+        return full, full, None
+    ptext, pstart = payload
+    return full, ptext, (pstart, pstart + len(ptext))
 
 
-def _expand(text: str, current: str, stages: list[Match]) -> str:
-    def sub(mo: re.Match[str]) -> str:
-        if mo.group(1).strip() == ".":
-            return current
-        return _resolve(mo.group(1), stages)
-
-    return _MOUSTACHE_RE.sub(sub, text)
+def _eval(inner: str, current: str, stages: list[Match]) -> str:
+    """Resolve a moustache body `accessor | filter | …`."""
+    parts = inner.split("|")
+    accessor = parts[0].strip()
+    value = current if accessor == "." else _resolve(accessor, stages)
+    for f in parts[1:]:
+        name = f.strip()
+        fn = _FILTERS.get(name)
+        if fn is None:
+            raise CompileError(f"Unknown template filter: '{name}'")
+        value = fn(value)
+    return value
 
 
 def _resolve(expr: str, stages: list[Match]) -> str:

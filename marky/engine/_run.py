@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from marky.engine._compile import (
+    AnchorEl,
     BackRefEl,
     CountRefEl,
     Element,
@@ -98,6 +99,9 @@ def _match_seq(
         if text[pos : pos + len(s)] == s:
             return cont(pos + len(s))
         return None
+    if type(el) is AnchorEl:  # zero-width, non-capturing
+        ok = pos == 0 if el.at == "start" else pos == len(text)
+        return cont(pos) if ok else None
     return _DISPATCH[type(el)](el, text, pos, state, cont)
 
 
@@ -130,8 +134,10 @@ def _referent_run(text: str, pos: int, referent: str, cap: int | None) -> list[i
     """Ends after 1, 2, … contiguous copies of `referent` at `pos` (up to `cap`)."""
     ends: list[int] = []
     current = pos
-    while (cap is None or len(ends) < cap) and referent and text.startswith(
-        referent, current
+    while (
+        (cap is None or len(ends) < cap)
+        and referent
+        and text.startswith(referent, current)
     ):
         current += len(referent)
         ends.append(current)
@@ -149,7 +155,9 @@ def _match_referent(
     def attempt(k: int) -> int | None:
         end = ends[k]
         mark = len(caps)
-        caps.append(Capture(text[pos:end], (pos, end), [referent] * k if referent else []))
+        caps.append(
+            Capture(text[pos:end], (pos, end), [referent] * k if referent else [])
+        )
         r = cont(end)
         if r is not None:
             return r
@@ -269,6 +277,9 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
     # The first unit need not be greedy-maximal: a shorter first unit may let the
     # remainder split into equal repetitions ("2525" -> 25+25). Try unit lengths
     # longest-first; within each, the run's acceptable counts in priority order.
+    # A bare `{U}[n]` repeats **homogeneously** (the same string); a heterogeneous
+    # `{{U}}[n]` / complement repeats via the matcher's `equal_unit`.
+    het = el.het
     for unit_len in range(greedy_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
         if not el.matcher.accepts(first):
@@ -277,7 +288,12 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
         ends = [pos + unit_len]
         current = pos + unit_len
         while reps.max is None or len(rep_list) < reps.max:
-            nxt = el.matcher.equal_unit(text, current, first)
+            if het:
+                nxt = el.matcher.equal_unit(text, current, first)
+            elif text.startswith(first, current):
+                nxt = current + len(first)
+            else:
+                nxt = None
             if nxt is None:
                 break
             rep_list.append(text[current:nxt])

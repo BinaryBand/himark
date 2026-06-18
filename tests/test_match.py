@@ -232,8 +232,10 @@ def test_bare_chars_one_class():
 
 
 def test_congruence_pair_is_case_agnostic():
-    # The headline: `,` folds a class, so `[2]` accepts every casing.
-    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
+    # A bare class repeats homogeneously (same matched string), so `{a,A}[2]` is
+    # aa/AA; the heterogeneous (every-casing) form is the nested `{{a,A}}[2]`.
+    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "AA"]
+    assert matches("{{a,A}}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
 def test_ordered_class_of_classes():
@@ -250,9 +252,9 @@ def test_class_rejects_partial_token():
 
 
 def test_class_interleave():
-    # Congruence of "char + escaped space" and "char" spellings makes [count]
-    # an interleave: separators optional between repetitions, never alone.
-    hr = "{{-\\ ,-},{*\\ ,*},{_\\ ,_}}[3..]"
+    # A heterogeneous run (a fresh member per rep) is the nested `{{…}}[3..]`
+    # form: "char + escaped space" and "char" spellings interleave.
+    hr = "{{{-\\ ,-},{*\\ ,*},{_\\ ,_}}}[3..]"
     assert matches(hr, "---") == ["---"]
     assert matches(hr, "- - -") == ["- - -"]
     assert matches(hr, "* * *") == ["* * *"]
@@ -264,8 +266,8 @@ def test_class_interleave():
 
 def test_congruence_with_whitespace_member():
     # A class member may be whitespace: `{a,\ }` folds 'a' and ' ' into one
-    # position; a run `[1..]` repeats it heterogeneously over the class.
-    assert matches("{a,\\ }[1..]", "a a") == ["a a"]
+    # position; the nested `{{…}}[1..]` repeats it heterogeneously over the class.
+    assert matches("{{a,\\ }}[1..]", "a a") == ["a a"]
 
 
 # ── complement ────────────────────────────────────────────────────────────────
@@ -307,11 +309,10 @@ def test_count_range():
 
 
 def test_token_repetition():
-    result = matches("{cat,dog}[2]", "catcat dogdog catdog")
-    assert "catcat" in result
-    assert "dogdog" in result
-    # 'cat' and 'dog' share one class, so a mixed pair is congruent too.
-    assert "catdog" in result
+    # A bare class repeats homogeneously (same token twice); a mixed pair needs
+    # the heterogeneous nested form `{{cat,dog}}[2]`.
+    assert matches("{cat,dog}[2]", "catcat dogdog catdog") == ["catcat", "dogdog"]
+    assert "catdog" in matches("{{cat,dog}}[2]", "catdog")
 
 
 def test_variable_number_repetition():
@@ -326,14 +327,12 @@ def test_variable_number_repetition():
 
 
 def test_multichar_class_repetition():
-    # Repetition-equality is group-based even for multi-char members:
-    # 'a' and 'bc' share a class, so repetitions may differ in surface length.
-    result = matches("{a,bc}[2]", "abc aa bcbc bca xy")
-    assert "abc" in result
-    assert "aa" in result
-    assert "bcbc" in result
-    assert "bca" in result
-    assert "xy" not in result
+    # A bare multi-char class repeats homogeneously (same token), so `{a,bc}[2]`
+    # is 'aa'/'bcbc' but not the mixed 'abc'. The heterogeneous nested form mixes.
+    assert matches("{a,bc}[2]", "aa bcbc abc") == ["aa", "bcbc"]
+    het = matches("{{a,bc}}[2]", "abc aa bcbc bca xy")
+    assert "abc" in het and "aa" in het and "bcbc" in het and "bca" in het
+    assert "xy" not in het
 
 
 # ── enumerated case-fold class ────────────────────────────────────────────────

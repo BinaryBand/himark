@@ -1,19 +1,22 @@
-// Headers
-{#}[1..6]{ }[..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
+// Headers — anchored to a line start ({\n}) and requiring a space after the #s,
+// so a mid-line or in-word '#' (anchors, {#i} refs, links like [x](#y)) is not a
+// header. Groups: 0={\n} 1={#} 2={ } 3=text.
+{@^,\n}{#}[1..6]{ }[1..]{!\n}[1..] => "\n<h{{#1}}>{{$3}}</h{{#1}}>"
 
 // Blockquote
-{{\n>}{!\n}[..]}[1..] => "\n<blockquote>{{$0.1}}<blockquote>"
+{{\n}{>}{!\n}[..]}[1..] => "<blockquote>{{.}}</blockquote>"
 
-{**}{!**}[..]{**} => "<b>{{$1}}</b>"     // Bold
+{```}{!\n}[..]{!```}[1..]{```} => "<code class='{{$1}}'>{{$2}}</code>" // Codeblock
 {`}{!`}[1..]{`} => "<code>{{$1}}</code>" // Code
+{**}{!**}[..]{**} => "<b>{{$1}}</b>"     // Bold
 
 // Line breaks
 {\n{-,*,_}[3..]\n} => "\n<hr/>\n"
 
 // Tables
-{{{|..}{!|,\n}[..]{|..}}[2..#]\n}[3..]
-  => "<table>\n{{0$}}</table>"
-  => {\n}[1..]{|..}{!\n,</table>}[..]
-  => "<tr>|{{$2}}</tr>"
-  => {|}[1..]{!|,</tr>}[..]
-  => "<td>{{$1}}</td>"
+{{{|..}{!|,\n}[..]{|..}}[2..#]\n}[3..] 
+    => "<table>{{>.}}</table>" 
+    => {!\n}[..] 
+    => "<tr>{{>.}}</tr>" 
+    => {|..}{!|}[..]{|..} 
+    => "<td>{{$1}}</td>"

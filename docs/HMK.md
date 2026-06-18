@@ -82,8 +82,9 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 `,` makes its members **interchangeable** -- one position with several spellings. This matters under bounds and references, where congruent spellings share a value:
 
 ```proto
-{a,A}            // one position, two spellings: 'a' or 'A'
-{{a,A},{b,B}}    // an ordered alphabet of folded positions (a < b, each case-folded)
+{a,A}                  // one position, two spellings: 'a' or 'A'
+{{a,A},{b,B}}          // an ordered alphabet of folded positions (a < b, each case-folded)
+{{one,two},{ett, två}} // congruence can fold multiple characters, too
 ```
 
 ---

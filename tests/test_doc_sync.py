@@ -21,8 +21,10 @@ def test_doc_macro_table_matches_macros_toml():
 
 
 def test_doc_congruence_pair_repetition():
-    # Spec headline: {a,A}[2] accepts 'aa', 'aA', 'Aa', 'AA' (comma folds a class).
-    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
+    # Spec headline: a bare class repeats homogeneously ({a,A}[2] = aa/AA); the
+    # heterogeneous (every-casing) form is the nested {{a,A}}[2].
+    assert matches("{a,A}[2]", "aa aA Aa AA ab") == ["aa", "AA"]
+    assert matches("{{a,A}}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
 def test_doc_captures_example():

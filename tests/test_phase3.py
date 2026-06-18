@@ -106,13 +106,12 @@ def test_congruence_enumerated_is_union_of_classes():
     assert [o.type for o in node.options] == ["group_class", "group_class"]
 
 
-def test_single_brace_collapse():
-    # { {a..z} } — the outer brace collapses transparently to the inner class.
-    # A brace around a single non-singleton class is identity: { {a..z} } = {a..z}.
+def test_single_brace_nesting_is_heterogeneous():
+    # { {a..z} } — a brace whose whole content is one nested brace is the
+    # heterogeneous form {{U}}: it repeats by re-matching afresh, not as identity.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "char_range"
-    assert node.start == "a"
-    assert node.end == "z"
+    assert node.type == "heterogeneous"
+    assert node.inner.type == "char_range"
 
 
 # ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
@@ -228,7 +227,7 @@ def test_pure_alphabet_braces_stay_arithmetic():
     assert first_semantic("{a..z}").type == "char_range"
     assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{aa:{a..z}:zz}").type == "value_range"
-    assert first_semantic("{ {a..z} }").type == "char_range"  # collapses to inner
+    assert first_semantic("{ {a..z} }").type == "heterogeneous"  # {{U}} nesting
     assert first_semantic("{{a,A},{b,B}}").type == "union"
 
 
@@ -360,9 +359,8 @@ def test_braced_class_arms_form_a_union():
 
 
 def test_single_brace_disambiguation_space_allowed():
-    # { {a..z} } — surrounding space is stripped; the outer brace collapses
-    # transparently to the inner class. { {a..z} } = {a..z} = char_range.
+    # { {a..z} } — surrounding space is stripped; a single nested brace is the
+    # heterogeneous form {{U}}, wrapping the inner char range.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "char_range"
-    assert node.start == "a"
-    assert node.end == "z"
+    assert node.type == "heterogeneous"
+    assert node.inner.type == "char_range"
