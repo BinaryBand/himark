@@ -16,7 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from marky.engine.alphabet import Alphabet
+from marky.engine.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
 from marky.models import nodes_typed as t
 from marky.models.exceptions import CompileError
 
@@ -86,7 +86,7 @@ def _excluder(excl: list[str]) -> _Excluder | None:
 class _ValueExcluder:
     __slots__ = ("singles", "ranges")
 
-    def __init__(self, excl: list[str], alph: Alphabet):
+    def __init__(self, excl: list[str], alph: Alphabet | RangeAlphabet):
         base = _Excluder(excl)
         self.singles = {alph.value(x) for x in base.singles}
         self.ranges = [(alph.value(lo), alph.value(hi)) for lo, hi in base.ranges]
@@ -145,42 +145,50 @@ def _alphabet_of(node: t.SemanticNode, *, distinct: bool) -> Alphabet:
     return Alphabet(_groups(node), distinct=distinct)
 
 
-# ── Value-range view (ValueRange / FullAlpha) ─────────────────────────────────
+def _value_alphabet(node: t.SemanticNode) -> Alphabet | RangeAlphabet:
+    """The alphabet a bound's values are read in. A code-point range too large to
+    materialize (`@uni`, the normalised `{x::y}` middle) becomes a virtual
+    `RangeAlphabet`; everything else is the ordinary materialized `Alphabet`."""
+    if isinstance(node, t.CharRangeNode):
+        lo, hi = ord(node.start), ord(node.end)
+        if hi - lo + 1 > MAX_SYMBOLS:
+            return RangeAlphabet(lo, hi)
+    return _alphabet_of(node, distinct=True)
+
+
+# ── Value-bound view ──────────────────────────────────────────────────────────
 
 
 @dataclass(slots=True)
 class _ValueView:
-    alphabet: Alphabet
+    alphabet: Alphabet | RangeAlphabet
     lo: int | None
     hi: int | None
     excluded: _ValueExcluder
-    min_width: int
+    wmin: int
+    wmax: int | None
 
 
-def _value_view(node: t.SemanticNode) -> _ValueView | None:
-    """The value-arithmetic view of a node, or None if it has no value bounds.
+def _value_view(node: t.ValueRangeNode) -> _ValueView:
+    """The value-arithmetic view of a `{floor:alphabet:ceiling}` bound.
 
-    The min_width is the lower endpoint's written width: values are zero-padded
-    to it, so `{aa..{a..z}..zz}` matches exactly the 2-char lowercase strings.
+    The two written endpoint widths set the field-width window: with both present
+    it is `[min, max]` of the widths; an omitted ceiling opens the top (wmax None),
+    an omitted floor lets the value start at width 1. Leading zero-padding inside
+    the window is allowed, so `{000:@d:9}` matches `9`, `09`, and `009`.
     """
-    if isinstance(node, t.ValueRangeNode):
-        alph = _alphabet_of(node.alpha, distinct=True)
-        lo = alph.value(node.lower) if node.lower is not None else None
-        hi = alph.value(node.upper) if node.upper is not None else None
-        min_width = len(node.lower) if node.lower is not None else 1
-        return _ValueView(
-            alph, lo, hi, _ValueExcluder(node.exclusions, alph), min_width
-        )
-    if isinstance(node, (t.UnionNode, t.GroupClassNode)):
-        # A union/group class of alphabet arms (e.g. @hex) is itself an
-        # alphabet; arms that aren't (tokens, complements) fall back to None.
-        try:
-            alph = _alphabet_of(node, distinct=False)
-        except CompileError:
-            return None
-        excl = node.exclusions if isinstance(node, t.UnionNode) else []
-        return _ValueView(alph, None, None, _ValueExcluder(excl, alph), 1)
-    return None
+    alph = _value_alphabet(node.alpha)
+    lo = alph.value(node.lower) if node.lower is not None else None
+    hi = alph.value(node.upper) if node.upper is not None else None
+    wf = len(node.lower) if node.lower is not None else None
+    wc = len(node.upper) if node.upper is not None else None
+    if wf is not None and wc is not None:
+        wmin, wmax = min(wf, wc), max(wf, wc)
+    elif wf is not None:  # open ceiling — any width at or above the floor's
+        wmin, wmax = wf, None
+    else:  # open floor — value starts at 0, up to the ceiling's width
+        wmin, wmax = 1, wc
+    return _ValueView(alph, lo, hi, _ValueExcluder(node.exclusions, alph), wmin, wmax)
 
 
 # ── Concrete matchers ─────────────────────────────────────────────────────────
@@ -235,8 +243,10 @@ class _StringRange(_Base):
 
 
 class _ValueRange(_Base):
-    """Canonical-form value match: each value has exactly one representation,
-    zero-padded only up to the lower endpoint's width."""
+    """Width-window value match for a `{floor:alphabet:ceiling}` bound: the value
+    lies in [floor, ceiling] and the written width lies in the bound's width
+    window. Leading zero-padding inside the window is allowed, and the longest
+    valid width wins."""
 
     __slots__ = ("view",)
 
@@ -249,18 +259,17 @@ class _ValueRange(_Base):
         end = pos
         while end < n and text[end] in v.alphabet:
             end += 1
-        for length in range(end - pos, v.min_width - 1, -1):
-            cand = text[pos : pos + length]
-            if length > v.min_width and v.alphabet.is_zero(cand[0]):
-                continue
-            value = v.alphabet.value(cand)
+        avail = end - pos
+        top = avail if v.wmax is None else min(v.wmax, avail)
+        for width in range(top, v.wmin - 1, -1):
+            value = v.alphabet.value(text[pos : pos + width])
             if (v.lo is not None and value < v.lo) or (
                 v.hi is not None and value > v.hi
             ):
                 continue
             if v.excluded(value):
                 continue
-            return pos + length
+            return pos + width
         return None
 
 
@@ -384,75 +393,8 @@ class _Group(_Base):
         return cur
 
 
-class _ValueWindowPadded(_Base):
-    """Fixed-width or width-range value match; leading zero-padding allowed."""
-
-    __slots__ = ("view", "min_width", "max_width")
-
-    def __init__(self, view: _ValueView, min_width: int, max_width: int | None):
-        self.view = view
-        self.min_width = min_width
-        self.max_width = max_width
-
-    def match(self, text: str, pos: int) -> int | None:
-        v = self.view
-        n = len(text)
-        end = pos
-        while end < n and text[end] in v.alphabet:
-            end += 1
-        if self.max_width is not None:
-            max_w = self.max_width
-        elif v.hi is not None:
-            max_w = v.alphabet.canonical_len(v.hi)
-        else:
-            max_w = end - pos
-        for width in range(min(max_w, end - pos), self.min_width - 1, -1):
-            value = v.alphabet.value(text[pos : pos + width])
-            if (v.lo is not None and value < v.lo) or (
-                v.hi is not None and value > v.hi
-            ):
-                continue
-            if v.excluded(value):
-                continue
-            return pos + width
-        return None
-
-
-class _PerCharPadded(_Base):
-    """Width-window over a run of single-char inner matches (non-value inner)."""
-
-    __slots__ = ("inner", "min_width", "max_width")
-
-    def __init__(self, inner: Matcher, min_width: int, max_width: int | None):
-        self.inner = inner
-        self.min_width = min_width
-        self.max_width = max_width
-
-    def match(self, text: str, pos: int) -> int | None:
-        inner = self.inner.match
-        n = len(text)
-        run = pos
-        while run < n and inner(text, run) == run + 1:
-            run += 1
-        max_w = self.max_width if self.max_width is not None else run - pos
-        width = min(max_w, run - pos)
-        return pos + width if width >= self.min_width else None
-
-
-# ── Padding lowering ──────────────────────────────────────────────────────────
-
-
-def _lower_padded(node: t.PaddedNode) -> Matcher:
-    view = _value_view(node.inner)
-    if view is not None:
-        return _ValueWindowPadded(view, node.min_width, node.max_width)
-    return _PerCharPadded(lower(node.inner), node.min_width, node.max_width)
-
-
-def _lower_value_range(node: t.SemanticNode) -> Matcher:
-    view = _value_view(node)
-    assert view is not None
-    return _ValueRange(view)
+def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
+    return _ValueRange(_value_view(node))
 
 
 # ── Lowering registry ─────────────────────────────────────────────────────────
@@ -465,7 +407,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
-    t.PaddedNode: _lower_padded,
 }
 
 

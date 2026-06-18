@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.1-experimental  
+**Version:** 0.9.2-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -19,6 +19,7 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `!{...}`    | **Subtractive universe** -- everything _not_ in `{...}`, from the ambient universe (Unicode)          |
 | `{x:...:y}` | **Bounds** -- the inner universe, restricted to values `x`-`y` inclusive (`{x::y}` = ambient)         |
 | `[count]`   | **Repetition** -- a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)                 |
+| `{...}~k`   | **Fuzzy** -- the universe within edit distance `k` of a token (`{cat}~1`); see [Fuzzy](#fuzzy)        |
 | `=>`        | **Pipe** -- feed each match into the next transformation                                              |
 
 **Every `{...}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** -- the _same_ matched value, `n` times. To repeat **heterogeneously** -- a fresh match each time -- nest the universe in a group: `{{U}}[n]`.
@@ -50,6 +51,10 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `@uni`   | U+0000-U+10FFFF             |
 
 > **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 $\S7$) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
+>
+> **Anchors.** `@^` and `@$` are **not** alphabets -- they match the start and end of the current scope (the text a stage sees), zero-width and capturing nothing. They are primitives, not macros, so they live here rather than in the table above.
+
+<!-- It would be great if we could centralize the shortcut notation in Himark. Instead of accepting [0..] with an empty closing value as first class notation, maybe we could require [0..@inf] instead. However, if we add a centralized normalization layer (is it a layer?), we could have our parser consult a shortcut directory before raising an error. In the case of Range(x, null), we could default lhs to @inf. But we'll have to design an exception lookup algorithm if we truly want our exceptions and defaults to be centrally listed. Here are some suggestions: !c => !{c}, [..y] => [0..y], [1..] => [1..@inf], [..] => [0..@inf], {x{y}} => {{x}{y}}, {x...y} => {x..y}[0..@inf], x => {x}, {...} => {...}[1], etc... It may take some of the complexity load off the parser and strengthen the base arithmetic without costing writing clarity. -->
 
 ---
 
@@ -68,7 +73,7 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 {a..b}{cd}{e..f}  // adjacency of three universes: {acde, acdf, bcde, bcdf}
 ```
 
-> **Note:** the Cartesian product comes from **adjacency**, not from `..`. `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected -- write `{a..z}{A..Z}` for the product, `{a..z,A..Z}` for either case, or `{{a,A},...,{z,Z}}` for case-folded positions.
+> **Note:** `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected -- write `{a..z}{A..Z}` for the Cartesian product, `{a..z,A..Z}` for either case, or `{{a,A},...,{z,Z}}` for case-folded positions.
 
 A universe always matches **one** of its elements (one position). `{a..z}` matches one letter; `{cat,dog}` matches one of the two words. A run is an explicit `[count]` (see [Repetition](#repetition)).
 
@@ -98,14 +103,12 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 
 The two bounds' written widths set the field width: the narrower is the minimum, the wider the maximum. Equal widths fix it -- `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it -- `{000::9}` accepts the value `9` at any width from the ceiling's up to the floor's: `9`, `09`, and `009`. A fixed width is therefore a floor and ceiling written at the same width; there is no separate padding operator.
 
-All four cap the value at `90`; every row is that value, so only the width window decides. Windows: `{0::90}` is 1-2, `{000::90}` is 2-3, `{0::090}` is 1-3, `{000::090}` is exactly 3.
-
-|        | `{0::90}`    | `{000::90}`  | `{0::090}`   | `{000::090}` |
-| ------ | ------------ | ------------ | ------------ | ------------ |
-| `9`    | $\checkmark$ |              | $\checkmark$ |              |
-| `90`   | $\checkmark$ | $\checkmark$ | $\checkmark$ |              |
-| `090`  |              | $\checkmark$ | $\checkmark$ | $\checkmark$ |
-| `0090` |              |              |              |              |
+|        | `{0:@d:90}`  | `{000:@d:90}` | `{0:@d:090}` | `{000:@d:090}` |
+| ------ | ------------ | ------------- | ------------ | -------------- |
+| `9`    | $\checkmark$ |               | $\checkmark$ |                |
+| `90`   | $\checkmark$ | $\checkmark$  | $\checkmark$ |                |
+| `090`  |              | $\checkmark$  | $\checkmark$ | $\checkmark$   |
+| `0090` |              |               |              |                |
 
 ### Subtraction
 
@@ -121,6 +124,20 @@ A subtractive universe matches one position, like any universe; a run is `[count
 
 ---
 
+## Fuzzy
+
+`{token}~k` is the universe of **all strings within edit distance `k`** of a token -- a finite set, so it is an ordinary universe: it matches one element, captures the **actual** matched text, and composes with `[count]`, captures, and references like any `{...}`. `k` is explicit and required -- there is no implicit fuzz.
+
+```proto
+{cat}~1      // 'cat', 'cap', 'cot', 'at', 'cart', ... (Levenshtein distance <= 1)
+{cat,dog}~1  // within distance 1 of either token
+{cat}~2:@l   // distance <= 2, inserting/substituting only lowercase letters
+```
+
+The operand must be a token or token union -- a finite set has a well-defined neighborhood, while a range, bound, or subtractive universe does not. Bound the insertion alphabet with `:@alpha` (default: the operand's own characters) so the neighborhood stays finite. Distance is **Levenshtein** (insert, delete, substitute); ties resolve by smallest distance, then longest span, then leftmost. Like `@uni`, a fuzzy universe is recognized by an automaton, not enumerated.
+
+---
+
 ## Repetition
 
 `[count]` repeats the preceding universe. The count is itself a **universe** -- the same algebra as `{...}`, but over the ambient set of **base-10 non-negative integers** instead of Unicode. A bare number is exact, `,` unions counts, and `..` is a range:
@@ -131,7 +148,7 @@ A subtractive universe matches one position, like any universe; a run is `[count
 | `[x..]`   | `x` or more                    |
 | `[..y]`   | up to `y`                      |
 | `[x..y]`  | `x` to `y`                     |
-| `[..]`    | any number                     |
+| `[..]`    | any positive integer           |
 | `[a,b,c]` | exactly `a`, `b`, or `c` times |
 
 Only the integer operators carry over. **Adjacency** is meaningless -- a count is one number, not a concatenation. A run of specific counts is usually a union (`[2,4,6]`); a long arithmetic run may take a bounded stride instead (see the note below), but an **unbounded** stride is out of scope -- a stepped scan with no end is expensive. A non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, a reference fits too: `[#i]` is the count group `i` matched (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
@@ -190,10 +207,17 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 ## Transformers
 
-`=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently:
+`=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently. A branch's output is **whatever it has committed**:
 
-- a **query** matches within the branch's text and splices each match's transform back in place, keeping the text between matches; a query that matches nothing **drops the entire branch** -- its partial transform is discarded, not emitted. That is how a chain filters: a branch survives only if every query stage matches.
-- a **template** renders, and the chain continues on its render. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
+- a **query** matches within the branch's text and commits each match's transform in place, keeping the text between matches. A query that matches nothing commits nothing and **stops** the branch. If nothing has been committed yet, the branch produces no output -- so a query placed before the work is a **guard**: a non-match drops the branch before anything is written (this is how a chain filters).
+- a **template** renders and **commits** that render. A later query that finds nothing leaves the committed render untouched -- a committed template is **never rolled back**. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
+
+By default a template's whole render both writes to the document and flows downstream. To split the two, mark one accessor with `{{> ... }}`: that part is what the next stage sees, while the full render still lands in the document. At most one `{{> ... }}` may appear per template.
+
+```proto
+"# Hello" => {#}[1..6]{ }[1..]{!{\n}}[1..] => "<h{{#0}}>{{> $2 }}</h{{#0}}>"
+// document gets "<h1>Hello</h1>"; the pipe continues with just "Hello"
+```
 
 Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{N$M}` (or `{{ i$ }}` / `{N$}` for a whole stage) address any earlier step. The branches render two ways from the **same** result -- neither privileged:
 
@@ -206,6 +230,25 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 {cat} => "<b>{{.}}</b>"             // wrap each match
 {table} => "<table>{{.}}</table>" => {{!{\n}}}[1..] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
+
+### Filters
+
+A moustache value may be piped through **filters** -- a fixed standard library of pure, deterministic transforms, in the `=>` spirit: `{{ accessor | f | g }}`. Filters are **template-only** (never in matching position), so the matcher stays declarative.
+
+| Filter  | Effect                        |
+| ------- | ----------------------------- |
+| `upper` | uppercase                     |
+| `lower` | lowercase                     |
+| `trim`  | strip leading/trailing space  |
+| `len`   | character count (as a number) |
+| `hex`   | bytes → hexadecimal           |
+
+```proto
+{!{ }}[1..] => "<b>{{ . | upper }}</b>"   // wrap each word, uppercased
+{cat}{dog} => "{{ 0$0 | len }}"           // '3'
+```
+
+Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed and pure -- there are no user-defined filters and no I/O. Hashing and base-conversion helpers (`sha256`, `ascii`, `b256`) extend the same `|` grammar but are **deferred** (see the aspirational Bitcoin pipeline in `docs/IN_BRIEF.md`).
 
 ### Quoting static text
 
@@ -237,7 +280,7 @@ Worked patterns, in the universe/bounds model.
 **Markdown $\to$ HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
-{#}[1..6]{ }[0..]{!{\n}}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
+{#}[1..6]{ }[1..]{!{\n}}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
 ```
 
 ### Script files (.hmk)

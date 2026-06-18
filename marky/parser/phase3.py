@@ -1,8 +1,8 @@
 """Phase 3: Semantic resolution — convert phase2 nodes into typed HMK AST nodes.
 
 Transforms:
-  brace_group  → literal | char_range | string_range | full_alpha |
-                 value_range | union | complement | group_class | padded |
+  brace_group  → literal | char_range | string_range | value_range |
+                 union | complement | group_class |
                  sequence (a grouping brace — a concatenation of constructs)
 
 A `{…}` brace is one σ (built from `..` and `,`) unless its interior is a
@@ -12,7 +12,9 @@ whose nested braces are sub-captures, `{of{black}{quartz}}`).
 The σ-grammar has two axes: `..` builds an ordered range (≤), and `,` builds a
 congruence class (~) whose members are interchangeable spellings of one
 position. `{a,A}` is one folded position; `{{a,A},{b,B},…}` is an ordered
-alphabet of folded positions.
+alphabet of folded positions. A value *bound* is `{floor:alphabet:ceiling}`:
+the alphabet restricted to values floor–ceiling, the two written widths setting
+the field-width window (`{0:@d:255}`, `{aa:@l:zz}`, `{x::y}` = ambient @uni).
 """
 
 import re
@@ -29,7 +31,6 @@ from marky.parser._text import (
     unescape,
 )
 
-_PADDING_RE = re.compile(r"^(\d+\.\.\d+|\d*)\s*:\s*(.+)$", re.DOTALL)
 _BACKREF_RE = re.compile(r"\$(\d+)")
 _COUNTREF_RE = re.compile(r"#(\d+)")
 _STAGEREF_RE = re.compile(r"(\d+)\$(\d+(?:\.\d+)*)?")
@@ -88,7 +89,9 @@ def _is_sequence_brace(content: str) -> bool:
     bare text or exactly one `{…}` atom. A part that glues a construct onto
     adjacent text — or holds more than one construct — is a sub-pattern.
     """
-    _, body = _parse_padding(content)
+    if len(split_top(":", content)) == 3:
+        return False  # a `{floor:alphabet:ceiling}` bound is one value universe
+    body = content
     if body.startswith("!"):
         body = body[1:]
     for arm in split_top(",", body):
@@ -124,18 +127,31 @@ def _is_sigma_atom(part: str) -> bool:
 # ── Brace resolution ─────────────────────────────────────────────────────────
 
 
-def _parse_padding(content: str) -> tuple[tuple[int, int | None] | None, str]:
-    """Strip a padding prefix ({N: }, {N..M: }, {: }) → ((min, max), rest)."""
-    pm = _PADDING_RE.match(content)
-    if not pm:
-        return None, content
-    spec, rest = pm.group(1), pm.group(2)
-    if not spec:
-        return (1, None), rest  # {:expr} — engine derives max from the range
-    if ".." in spec:
-        lo, hi = spec.split("..", 1)
-        return (int(lo), int(hi)), rest
-    return (int(spec), int(spec)), rest
+def _resolve_universe(expr: str) -> t.SemanticNode:
+    """Resolve a universe expression — the middle of a bound, or a `{…}` alphabet
+    arm. Strips one layer of surrounding braces (`{a..z}` → `a..z`) so a bare
+    expression and a braced one resolve the same way."""
+    expr = strip_unescaped(expr)
+    if expr.startswith("{") and brace_end(expr) == len(expr):
+        expr = inner_of(expr)
+    return _resolve_brace(expr)
+
+
+def _resolve_bounds(parts: list[str]) -> t.ValueRangeNode:
+    """Resolve a `{floor:alphabet:ceiling}` bound. An empty alphabet normalises to
+    @uni (full Unicode); an omitted floor/ceiling is an open end. Endpoint strings
+    are kept verbatim — their written widths set the engine's field-width window."""
+    floor_s, alpha_s, ceil_s = (strip_unescaped(p) for p in parts)
+    if alpha_s == "":
+        alpha: t.SemanticNode = t.CharRangeNode(start="\x00", end="\U0010ffff")
+    else:
+        alpha = _resolve_universe(alpha_s)
+    # Endpoints may be singleton constructors (`{1}[3]` → '111'), else literal text.
+    lower = _member_value(floor_s) if floor_s else None
+    upper = _member_value(ceil_s) if ceil_s else None
+    if lower is None and upper is None:
+        raise CompileError("A bound needs a floor or a ceiling: got '{:U:}'")
+    return t.ValueRangeNode(alpha=alpha, lower=lower, upper=upper)
 
 
 def _resolve_reference(content: str) -> t.SemanticNode | None:
@@ -167,7 +183,11 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if ref is not None:
         return ref
 
-    pad, content = _parse_padding(content)
+    # `:`-bounds: {floor:alphabet:ceiling} (two top-level colons). A literal colon
+    # in a class is escaped (`\:`).
+    colon_parts = split_top(":", content)
+    if len(colon_parts) == 3:
+        return _resolve_bounds(colon_parts)
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")
@@ -215,8 +235,6 @@ def _resolve_brace(content: str) -> t.SemanticNode:
 
     if is_complement:
         node = t.ComplementNode(inner=node)
-    if pad is not None:
-        node = t.PaddedNode(inner=node, min_width=pad[0], max_width=pad[1])
     return node
 
 
@@ -290,16 +308,12 @@ def _singleton_value(expr: str) -> str | None:
     return unescape(expr)
 
 
-def _alpha(part: str) -> t.SemanticNode:
-    """Resolve an α part like '{a..z}' into its class node."""
-    return _resolve_brace(inner_of(part))
-
-
 def _resolve_arm(arm: str) -> t.SemanticNode:
     """Resolve one arm (no top-level commas) into a typed node.
 
-    Each `..`-part is classified by cardinality: a singleton (τ) evaluates to its
-    one concrete value; anything else is an abstract group (α).
+    `..` is a plain range between two concrete endpoints. A value *bound* (an
+    alphabet plus floor/ceiling) is written with `:` ({floor:alphabet:ceiling}),
+    not `..`, so an alphabet endpoint here is an error pointing at the `:` form.
     """
     parts = strict_split("..", arm, arm)
     svals = [_singleton_value(p) for p in parts]
@@ -312,44 +326,28 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
                 return t.LiteralNode(content=sval)
             # A brace around a single class is transparent — it occupies the
             # same single position as the class it wraps (`{ {a..z} }` = `{a..z}`).
-            return _alpha(part)
+            return _resolve_universe(part)
         return t.LiteralNode(content=unescape(part))
 
     if len(parts) == 2:
-        a, b = parts
         av, bv = svals
         if av is not None and bv is not None:
-            # τ..τ — a single-char range occupies one position: `{a..z}` matches
-            # exactly one symbol a–z. A run is the explicit open range
-            # `{a..{a..z}}`. Multi-char endpoints are a lexicographic string
-            # range (bounded between the two words).
+            # τ..τ — a range between two concrete endpoints. Single chars occupy
+            # one position (`{a..z}`); multi-char endpoints are a lexicographic
+            # string range bounded between the two words (`{cat..dog}`).
             if len(av) == 1 and len(bv) == 1:
                 return t.CharRangeNode(start=av, end=bv)
             return t.StringRangeNode(start=av, end=bv)
-        if av is None and bv is not None:
-            return t.ValueRangeNode(alpha=_alpha(a), upper=bv)  # α..τ
-        if av is not None and bv is None:
-            return t.ValueRangeNode(alpha=_alpha(b), lower=av)  # τ..α
-        # α..α — a class-to-class range has no ordering. To fold two classes
-        # position-wise, enumerate the pairs as a class of classes
-        # (e.g. {{a,A},{b,B},…}).
+        # An alphabet endpoint means this is a value bound, now spelled with `:`.
         raise CompileError(
-            f"A class-to-class range is not supported; enumerate the folded "
-            f"positions as a class of classes (e.g. {{{{a,A}},{{b,B}}}}): got {arm!r}"
+            f"A value bound is written '{{floor:alphabet:ceiling}}' with ':', "
+            f"not '..': got {arm!r}"
         )
 
-    if len(parts) == 3:
-        (av, bv, cv) = svals
-        # A bounded range needs single-value endpoints around a class middle,
-        # e.g. aa..{a..z}..zz.
-        if av is None or cv is None or bv is not None:
-            raise CompileError(
-                f"Bounded range must be value..class..value "
-                f"(e.g. aa..{{a..z}}..zz), got: {arm!r}"
-            )
-        return t.ValueRangeNode(alpha=_alpha(parts[1]), lower=av, upper=cv)
-
-    raise CompileError(f"Too many '..' separators in: {arm!r}")
+    raise CompileError(
+        f"A bounded value range is written '{{floor:alphabet:ceiling}}' with ':', "
+        f"not '..': got {arm!r}"
+    )
 
 
 # ── Count parsing ─────────────────────────────────────────────────────────────

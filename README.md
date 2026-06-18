@@ -4,7 +4,7 @@ A pattern-matching and text-transformation language for people who find regex wr
 
 ```hmk
 {!\ }[1..]                                             # a word: a run of non-spaces
-{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}  # an IPv4 address
+{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}      # an IPv4 address
 {!\ }[1..] => "<p>{{.}}</p>"                           # wrap each word in <p>
 ```
 
@@ -33,7 +33,7 @@ poetry run marky execute '{!\ }[1..]' 'hi there'
 # hi
 # there
 
-poetry run marky find '{{@d}..255}' '192.168.1.1'
+poetry run marky find '{0:@d:255}' '192.168.1.1'
 # 0 3
 # ...
 
@@ -65,12 +65,12 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 | `{a..z}`        | **one** lowercase letter (a single position)  |
 | `{a,A}`         | one congruence class: `a` or `A`              |
 | `{!\ }[1..]`    | a run of non-spaces (a word)                  |
-| `{{@d}..255}`   | a decimal value from 0 to 255                 |
+| `{0:@d:255}`    | a decimal value from 0 to 255                 |
 | `{cat,dog}`     | one class: the token `cat` or `dog`           |
 | `{cat..dog}`    | any string between `cat` and `dog`            |
-| `{:{@hex}}`     | a hex value of any width                      |
+| `{0:@hex:fff}`  | a hex value, 1 to 3 digits wide               |
 
-**Every `{…}` matches one position** — one symbol or one value. A *run* comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A heterogeneous run of an ordered alphabet is a **value** of a width — padding: `{:{@hex}}`, `{40:{@hex}}`. Operators, tightest to loosest: `..` ordered range · `,` congruence class · `!` subtract.
+**Every `{…}` matches one position** — one symbol or one value. A *run* comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A multi-symbol **value** is a `:`-bound — `{x:U:y}`, where the floor/ceiling widths set the field width (`{0:@d:255}`, `{0:@hex:fff}`). Operators: `..` ordered range · `,` congruence class · `!` subtract · `:` value bound.
 
 ### Macros
 

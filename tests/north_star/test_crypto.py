@@ -10,11 +10,10 @@ def matches(pattern, text):
 
 
 # ── Bitcoin P2PKH ─────────────────────────────────────────────────────────────
-# Matches a leading '1' then a width-bounded b58 body. Length is a width
-# constraint, not a value constraint — '1' is b58's zero symbol, so a value
-# lower bound cannot enforce a minimum length.
+# A leading '1' then a base58 value bounded by the smallest and largest 25-byte
+# addresses (the floor/ceiling widths give the length window).
 
-BTC = "{1}{24..33:{@b58}}"
+BTC = "{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}"
 
 
 def test_btc_minimum_length_enforced():
@@ -49,10 +48,10 @@ def test_btc_leading_one_required():
 
 
 # ── Ethereum ──────────────────────────────────────────────────────────────────
-# 0x prefix + exactly 40 hex digits. @hex's letter arm is a congruence slice
-# of @i, so case folds without duplicate symbols; width-fixed to 40.
+# 0x prefix + exactly 40 hex digits. A fixed width is a floor and ceiling written
+# at the same width, so the value runs from 40 zeros to 40 f's (case-folded).
 
-ETH = "{0x}{40:{@hex}}"
+ETH = "{0x}{" + "0" * 40 + ":@hex:" + "f" * 40 + "}"
 
 
 def test_eth_valid_address():

@@ -45,7 +45,7 @@ def test_char_range_single_position():
 
 def test_upper_bound():
     # phase3 sees the expanded macro text (@d -> 0..9), not the @ ref.
-    node = first_semantic("{{0..9}..255}")
+    node = first_semantic("{:{0..9}:255}")
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)
     assert node.upper == "255"
@@ -53,7 +53,7 @@ def test_upper_bound():
 
 
 def test_lower_bound():
-    node = first_semantic("{128..{0..9}}")
+    node = first_semantic("{128:{0..9}:}")
     assert node.type == "value_range"
     assert node.lower == "128"
     assert node.upper is None  # open above (unbounded)
@@ -61,7 +61,7 @@ def test_lower_bound():
 
 
 def test_bounded_range():
-    node = first_semantic("{aa..{a..z}..zz}")
+    node = first_semantic("{aa:{a..z}:zz}")
     assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
@@ -140,7 +140,7 @@ def test_singleton_value_helper():
 
 def test_singleton_bounded_range_synonym():
     # {z}[3] is a singleton τ, equivalent to writing the literal 'zzz'.
-    node = first_semantic("{{1}[3]..{a..z}..{z}[3]}")
+    node = first_semantic("{{1}[3]:{a..z}:{z}[3]}")
     assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
@@ -148,15 +148,15 @@ def test_singleton_bounded_range_synonym():
 
 
 def test_singleton_upper_bound():
-    # α..τ where τ is a singleton constructor.
-    node = first_semantic("{{0..9}..{9}[3]}")
+    # An open-floor bound whose ceiling is a singleton constructor.
+    node = first_semantic("{:{0..9}:{9}[3]}")
     assert node.type == "value_range"
     assert node.lower is None
     assert node.upper == "999"
 
 
 def test_singleton_lower_bound():
-    node = first_semantic("{{0}[3]..{0..9}}")
+    node = first_semantic("{{0}[3]:{0..9}:}")
     assert node.type == "value_range"
     assert node.lower == "000"
     assert node.upper is None
@@ -190,30 +190,6 @@ def test_token_class():
 def test_complement():
     node = first_semantic("{!\\n}")
     assert node.type == "complement"
-
-
-# ── Padding ──────────────────────────────────────────────────────────────────
-
-
-def test_fixed_padding():
-    node = first_semantic("{3: {@d}..255}")
-    assert node.type == "padded"
-    assert node.min_width == 3
-    assert node.max_width == 3
-
-
-def test_width_range_padding():
-    node = first_semantic("{2..3: {@d}..255}")
-    assert node.type == "padded"
-    assert node.min_width == 2
-    assert node.max_width == 3
-
-
-def test_variable_padding():
-    node = first_semantic("{: {@d}..255}")
-    assert node.type == "padded"
-    assert node.min_width == 1
-    assert node.max_width is None
 
 
 # ── Count ────────────────────────────────────────────────────────────────────
@@ -251,7 +227,7 @@ def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
     assert first_semantic("{a..z}").type == "char_range"
     assert first_semantic("{cat,dog}").type == "group_class"
-    assert first_semantic("{aa..{a..z}..zz}").type == "value_range"
+    assert first_semantic("{aa:{a..z}:zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "char_range"  # collapses to inner
     assert first_semantic("{{a,A},{b,B}}").type == "union"
 

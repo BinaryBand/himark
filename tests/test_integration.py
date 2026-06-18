@@ -12,7 +12,7 @@ def matches(pattern, text):
 
 # ── IPv4 ──────────────────────────────────────────────────────────────────────
 
-IPV4 = "{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}"
+IPV4 = "{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}"
 
 
 def test_ipv4_valid():
@@ -96,9 +96,7 @@ def test_http_token_class():
 def test_template_is_not_terminal():
     # A template's render flows on: a later query matches it, a later template
     # wraps it ({{.}} composes).
-    out = execute(
-        parser.parse('{cat} => "<a>{{.}}</a>" => "<b>{{.}}</b>"'), "cat"
-    )
+    out = execute(parser.parse('{cat} => "<a>{{.}}</a>" => "<b>{{.}}</b>"'), "cat")
     assert out == ["<b><a>cat</a></b>"]
 
 

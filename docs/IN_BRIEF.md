@@ -56,13 +56,13 @@ Every range normalises to a three-part `{floor:A:ceiling}`: the middle `A` is th
 
 > **Note:** `0$0` returns a full variable with its respective alphabet and range values, whereas `0$` returns a raw string.
 
-### North star examples
+### Aspirational examples
 
 ```proto
 {1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
   => "{{ ascii(0$0) }}"
   => {min:@b256:max}{min:@b256:max}
-  => "{{ 2$1 }}{{ sha256(sha256(2$0)) }}"
+  => "{{ 0$0 | b256(25) | sha256 | sha256 }}."
   => {min:@b256:max}{$0}{min:@b256:max}
   => "{{0$}} is valid!"
 ```

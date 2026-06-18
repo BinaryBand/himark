@@ -57,7 +57,10 @@ def test_load_rejects_foreign_file(tmp_path):
 def test_split_groups_leading_arrow_continuations():
     # Continuation lines keep their cosmetic indentation; phase0 strips each step.
     src = '{a}\n  => "x"\n  => {b}\n{c} => "y"\n'
-    assert precompiled.split_statements(src) == ['{a}\n  => "x"\n  => {b}', '{c} => "y"']
+    assert precompiled.split_statements(src) == [
+        '{a}\n  => "x"\n  => {b}',
+        '{c} => "y"',
+    ]
 
 
 def test_split_skips_blank_and_comment_lines():
@@ -80,6 +83,6 @@ def test_split_keeps_arrow_inside_quotes_as_one_statement():
 
 def test_load_script_roundtrips_through_compile(tmp_path):
     script = tmp_path / "s.hmk"
-    script.write_text('{\\&} => &amp;   // escape\n{\\<} => &lt;\n', "utf-8")
+    script.write_text("{\\&} => &amp;   // escape\n{\\<} => &lt;\n", "utf-8")
     pipe = precompiled.compile_pipeline(precompiled.load_script(script))
     assert precompiled.apply(pipe, "a & b < c") == "a &amp; b &lt; c"

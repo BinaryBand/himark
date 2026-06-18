@@ -3,7 +3,7 @@
 from marky import parser
 from marky.engine import find_matches
 
-PATTERN = "{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}{.}{{@d}..255}"
+PATTERN = "{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}"
 
 
 def matches(text):

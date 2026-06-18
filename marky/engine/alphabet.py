@@ -67,3 +67,34 @@ class Alphabet:
             ceiling *= self.base
             length += 1
         return length
+
+
+class RangeAlphabet:
+    """A virtual positional alphabet over a contiguous code-point range too large
+    to materialize (e.g. `@uni`, U+0000–U+10FFFF). Value is ord-positional in base
+    `hi - lo + 1`, the zero symbol is `lo`. Duck-types `Alphabet` for the matcher
+    (`in`, `is_zero`, `value`, `canonical_len`) without building a group table."""
+
+    __slots__ = ("lo", "hi", "base")
+
+    def __init__(self, lo: int, hi: int) -> None:
+        self.lo, self.hi, self.base = lo, hi, hi - lo + 1
+
+    def __contains__(self, ch: str) -> bool:
+        return self.lo <= ord(ch) <= self.hi
+
+    def is_zero(self, ch: str) -> bool:
+        return ord(ch) == self.lo
+
+    def value(self, s: str) -> int:
+        v = 0
+        for c in s:
+            v = v * self.base + (ord(c) - self.lo)
+        return v
+
+    def canonical_len(self, value: int) -> int:
+        length, ceiling = 1, self.base
+        while value >= ceiling:
+            ceiling *= self.base
+            length += 1
+        return length

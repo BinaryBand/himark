@@ -61,16 +61,16 @@ def test_named_alpha_dec():
 
 
 def test_named_alpha_hex():
-    # @hex is one position (a single hex digit); a hex *string* is a value, so a
-    # heterogeneous run is the padded form {:{@hex}} (a value of any width).
-    result = matches("{:{@hex}}", "xyz0af")
+    # @hex is one position (a single hex digit); a hex *string* is a bounded value
+    # {0:@hex:fff} (width window 1–3, by the floor/ceiling widths).
+    result = matches("{0:@hex:fff}", "xyz0af")
     assert result == ["0af"]
 
 
 def test_named_alpha_hex_case_insensitive():
     # @w carries the case fold, so 'a' and 'F' are one hex value; "0aF" is a
     # single value of width 3.
-    result = matches("{:{@hex}}", "0aF g9C")
+    result = matches("{0:@hex:fff}", "0aF g9C")
     assert result == ["0aF", "9C"]
 
 
@@ -79,52 +79,51 @@ def test_named_alpha_hex_rejects_non_hex():
 
 
 def test_hex_value_range_folds_case():
-    # {{@hex}..ff}: congruent spellings share a value, so 'FF' is also 255.
-    assert matches("{{@hex}..ff}", "ff FF 100") == ["ff", "FF", "10", "0"]
+    # {:@hex:ff}: congruent spellings share a value, so 'FF' is also 255.
+    assert matches("{:@hex:ff}", "ff FF 100") == ["ff", "FF", "10", "0"]
 
 
-# ── upper_bound ───────────────────────────────────────────────────────────────
+# ── upper_bound (open floor) ──────────────────────────────────────────────────
 
 
 def test_upper_bound_dec():
-    result = matches("{{@d}..255}", "192 300 10 999")
+    result = matches("{:@d:255}", "192 300 10 999")
     assert "192" in result
     assert "10" in result
-    assert "300" not in result
+    assert "300" not in result  # over 255 → matches '30' then '0'
     assert "999" not in result
 
 
 def test_upper_bound_hex():
-    # Canonical form only: '0f' is not the canonical spelling of value 15,
-    # so it matches as '0' then 'f'.
-    result = matches("{{@hex}..ff}", "0f 100 ff ab")
-    assert "0f" not in result
-    assert "0" in result and "f" in result
+    # The ceiling's width (2) is the max field width, so leading-zero padding is
+    # allowed inside the window: '0f' (value 15, width 2) matches.
+    result = matches("{:@hex:ff}", "0f 100 ff ab")
+    assert "0f" in result
     assert "ff" in result
-    assert "100" not in result
+    assert "ab" in result
+    assert "100" not in result  # width 3 > the 2-wide window
 
 
 def test_upper_bound_ascii_virtual():
-    # ascii is materializable, so it works as a value-range bound by codepoint.
-    result = matches("{{@ascii}..A}", "A B")
+    # ascii is materializable, so it works as a value bound by codepoint.
+    result = matches("{:@ascii:A}", "A B")
     assert "A" in result  # ord 'A' == 65, within bound
     assert "B" not in result  # ord 'B' == 66, over bound
 
 
-def test_uni_as_bound_raises():
-    import pytest
+def test_uni_as_bound_virtual():
+    # @uni is too large to materialize, so the engine uses a virtual ord-based
+    # alphabet: {x::y} normalises to {x:@uni:y} and matches by codepoint value.
+    result = matches("{:@uni:A}", "A B")
+    assert "A" in result  # ord 'A' == 65, within bound
+    assert "B" not in result  # ord 'B' == 66, over bound
 
-    from marky.models.exceptions import CompileError
 
-    with pytest.raises(CompileError):
-        matches("{{@uni}..A}", "xyz")
-
-
-# ── lower_bound ───────────────────────────────────────────────────────────────
+# ── lower_bound (open ceiling) ────────────────────────────────────────────────
 
 
 def test_lower_bound_dec():
-    result = matches("{128..{@d}}", "64 128 255 300")
+    result = matches("{128:@d:}", "64 128 255 300")
     assert "128" in result
     assert "255" in result
     assert "64" not in result
@@ -135,30 +134,14 @@ def test_lower_bound_dec():
 
 def test_bounded_range():
     # Decimal values 10–99
-    result = matches("{10..{@d}..99}", "5 10 50 99")
+    result = matches("{10:@d:99}", "5 10 50 99")
     assert "10" in result
     assert "50" in result
     assert "99" in result
     assert "5" not in result
 
 
-# ── Value exclusion on ranges ─────────────────────────────────────────────────
-
-
-def test_exclusion_subrange_on_upper_bound():
-    # 0–255 excluding 128–191; 130 is excluded, 100 and 200 are kept
-    result = matches("{{@d}..255,!128..191}", "130 100 200")
-    assert "100" in result
-    assert "200" in result
-    assert "130" not in result
-
-
-def test_exclusion_single_value():
-    # 0–255 excluding exactly 200
-    result = matches("{{@d}..255,!200}", "199 200 201")
-    assert "199" in result
-    assert "201" in result
-    assert "200" not in result
+# ── Value exclusion on char-range classes ─────────────────────────────────────
 
 
 def test_exclusion_char_range_stress():
@@ -172,12 +155,6 @@ def test_exclusion_char_range_stress():
     assert result == expected
 
 
-def test_exclusion_named_alpha_units():
-    # Exclusions filter whole matched values: the value 'f' is dropped, while a
-    # wider value like '12' is not the excluded value.
-    assert matches("{:{@hex,!f}}", "f a 12") == ["a", "12"]
-
-
 def test_exclusion_full_alpha_stress():
     # {{a..z},!m..p} is single-position: each char in a-z except m-p is one match.
     text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
@@ -188,25 +165,6 @@ def test_exclusion_full_alpha_stress():
     assert result == expected
 
 
-# ── Canonical form ────────────────────────────────────────────────────────────
-
-
-def test_canonical_rejects_leading_zeros():
-    # '007' is not the canonical spelling of 7; it matches as three values.
-    assert matches("{{@d}..255}", "007") == ["0", "0", "7"]
-
-
-def test_lower_endpoint_sets_minimum_width():
-    # {aa..{a..z}..zz} matches exactly the 2-char lowercase strings: values
-    # are zero-padded to the lower endpoint's written width, canonical beyond.
-    result = matches("{aa..{a..z}..zz}", "aa ab zz a aab")
-    assert "aa" in result
-    assert "ab" in result
-    assert "zz" in result
-    assert "a" not in result  # below minimum width
-    assert "aab" not in result  # leading zero beyond minimum width
-
-
 def test_duplicate_symbols_in_value_alphabet_raise():
     import pytest
 
@@ -214,36 +172,33 @@ def test_duplicate_symbols_in_value_alphabet_raise():
 
     # The digits appear twice; symbol values would be ambiguous.
     with pytest.raises(CompileError):
-        matches("{{@d,@hex}..ff}", "ff")
+        matches("{:{@d,@hex}:ff}", "ff")
 
 
-# ── Padding ──────────────────────────────────────────────────────────────────
+# ── Width window (the two bounds' widths set the field width) ──────────────────
 
 
-def test_fixed_padding_enforces_bound():
-    result = matches("{3: {@d}..255}", "042 999 256 255")
-    assert "042" in result
-    assert "255" in result
-    assert "999" not in result
-    assert "256" not in result
+def test_width_window_ipv4_octet():
+    # {0:@d:255}: value 0–255, width 1–3 (floor 1-wide, ceiling 3-wide).
+    result = matches("{0:@d:255}", "0 7 42 255 256")
+    assert "0" in result and "42" in result and "255" in result
+    assert "256" not in result  # over 255 → matches '25' then '6'
 
 
-def test_fixed_padding_rejects_wrong_width():
-    assert matches("{3: {@d}..255}", "12") == []
+def test_width_window_fixed_three_wide():
+    # Equal widths fix the field: {000:@d:999} is exactly 3 wide.
+    result = matches("{000:@d:999}", "7 042 007 1234")
+    assert "042" in result and "007" in result
+    assert "7" not in result  # below the 3-wide window
+    assert "1234" not in result  # wider than the window → '123' then '4'
 
 
-def test_width_range_padding():
-    result = matches("{2..3:{@d}..255}", "00 042 255")
-    assert "00" in result
-    assert "042" in result
-    assert "255" in result
-    assert matches("{2..3:{@d}..255}", "7") == []  # below minimum width
-
-
-def test_variable_padding_caps_width_at_len_max():
-    result = matches("{:{@d}..255}", "0042")
-    assert "0042" not in result
-    assert "004" in result  # the 3-wide window is the greedy match
+def test_width_window_narrow_ceiling_relaxes():
+    # {000:@d:9} accepts value 9 at any width from the ceiling's (1) up to the
+    # floor's (3): '9', '09', '009' — but not '0009'.
+    result = matches("{000:@d:9}", "9 09 009 0009")
+    assert "9" in result and "09" in result and "009" in result
+    assert "0009" not in result  # 4 wide > the window
 
 
 # ── string_range ─────────────────────────────────────────────────────────────
@@ -282,9 +237,9 @@ def test_congruence_pair_is_case_agnostic():
 
 
 def test_ordered_class_of_classes():
-    # {{a,A},{b,B}} is an ordered (two-symbol) alphabet of folded positions: one
-    # position matches one symbol, so a heterogeneous run is its padded value.
-    result = matches("{:{{a,A},{b,B}}}", "aBAb zz")
+    # {{a,A},{b,B}} is an ordered (two-symbol) alphabet of folded positions; a
+    # bounded value over it (width up to 4) matches a folded a/b string.
+    result = matches("{aa:{{a,A},{b,B}}:bbbb}", "aBAb zz")
     assert result == ["aBAb"]
 
 
@@ -361,7 +316,7 @@ def test_token_repetition():
 
 def test_variable_number_repetition():
     # First unit backs off from greedy "252" to "25" so 25+25 matches.
-    assert matches("{{@d}..255}[2]", "2525") == ["2525"]
+    assert matches("{:@d:255}[2]", "2525") == ["2525"]
 
 
 # Note: word-level congruent repetition (CASE_FOLD[2] = "same word, any casing,
@@ -385,15 +340,15 @@ def test_multichar_class_repetition():
 
 
 def test_case_fold_class_matches_letter_sequence():
-    # A case-folded word is a value over the 26-symbol alphabet: {:CASE_FOLD}.
-    result = matches("{:" + CASE_FOLD + "}", "Hello 123 World")
+    # A case-folded word is a value over the 26-symbol alphabet (here 5 wide).
+    result = matches("{aaaaa:" + CASE_FOLD + ":zzzzz}", "Hello 123 World")
     assert "Hello" in result
     assert "World" in result
     assert "123" not in result
 
 
 def test_case_fold_class_rejects_non_alpha():
-    assert matches("{:" + CASE_FOLD + "}", "123") == []
+    assert matches("{aaaaa:" + CASE_FOLD + ":zzzzz}", "123") == []
 
 
 def test_class_to_class_range_unsupported():
@@ -446,22 +401,23 @@ def test_splice_constant_in_place():
 
 def test_chained_patterns_narrow():
     # A run of patterns feeds each match of the first into the second.
-    assert execute(parser.parse("{@d} => {{@d}..9}"), "1 23 4") == ["1", "2", "3", "4"]
+    assert execute(parser.parse("{@d} => {:@d:9}"), "1 23 4") == ["1", "2", "3", "4"]
 
 
 # ── named alphabets: b32, b64 ────────────────────────────────────────────────
 
 
 def test_named_alpha_b32():
-    # b32 = {@d},{{@w}..v} (RFC 4648 §7). One position is one base32 symbol, so a
-    # base32 *string* is the padded value {:{@b32}}; w-z are outside the alphabet.
-    assert matches("{:{@b32}}", "01v wxyz") == ["01v"]
+    # b32 = {@d},{:@w:v} (RFC 4648 §7). One position is one base32 symbol; w-z
+    # are outside the alphabet. A bounded value matches a base32 string.
+    assert matches("{@b32}", "01v wxyz") == ["0", "1", "v"]
+    assert matches("{0:@b32:vvv}", "01v wxyz") == ["01v"]
 
 
 def test_named_alpha_b64():
-    # b64 = {@d},{@l},{@u},+,/ — case-sensitive, a 64-symbol alphabet; a base64
-    # string is the padded value {:{@b64}}.
-    assert matches("{:{@b64}}", "Az+/ !") == ["Az+/"]
+    # b64 = {@d},{@l},{@u},+,/ — case-sensitive, a 64-symbol alphabet. One
+    # position is one base64 symbol; '!' and ' ' are outside it.
+    assert matches("{@b64}", "Az+/ !") == ["A", "z", "+", "/"]
 
 
 # ── Self-reference {$i}: match the text an earlier group captured ──────────────
@@ -470,20 +426,20 @@ def test_named_alpha_b64():
 def test_back_ref_repeats_captured_word():
     # group 0 is a 3-letter word; {-{$0}}[0..] then matches '-' + that same word,
     # zero or more times. The whole "abc-abc-abc" is one match.
-    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    pat = "{aaa:@l:zzz}{-{$0}}[0..]"
     assert matches(pat, "abc-abc-abc") == ["abc-abc-abc"]
 
 
 def test_back_ref_mismatch_stops_repetition():
     # A differing word does not satisfy the back-ref, so only the first word is
     # part of the repeated run; the second matches on its own.
-    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    pat = "{aaa:@l:zzz}{-{$0}}[0..]"
     assert matches(pat, "abc-xyz") == ["abc", "xyz"]
 
 
 def test_back_ref_zero_reps():
     # With no separator-word to follow, [0..] matches zero reps: just the word.
-    pat = "{aaa..{a..z}..zzz}{-{$0}}[0..]"
+    pat = "{aaa:@l:zzz}{-{$0}}[0..]"
     assert matches(pat, "abc") == ["abc"]
 
 
@@ -503,13 +459,13 @@ def test_back_ref_undefined_group_fails():
 def test_count_ref_matches_repeat_count():
     # group 0 repeats a 3-letter word [2..9]; {#0} is its repeat count rendered
     # in decimal, so "abcabcabc repeated 3 times" matches as a whole.
-    pat = "{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}"
+    pat = "{aaa:@l:zzz}[2..9]{ repeated {#0} times}"
     assert matches(pat, "abcabcabc repeated 3 times") == ["abcabcabc repeated 3 times"]
 
 
 def test_count_ref_wrong_count_fails():
     # The trailing number must equal the actual repeat count.
-    pat = "{aaa..{a..z}..zzz}[2..9]{ repeated {#0} times}"
+    pat = "{aaa:@l:zzz}[2..9]{ repeated {#0} times}"
     assert matches(pat, "abcabcabc repeated 4 times") == []
 
 
@@ -551,19 +507,30 @@ def test_count_position_ref_backs_off_when_short():
 
 def test_moustache_whole_match():
     # {{0$}} (and bare {{$}}) interpolate the whole feeding match.
-    assert execute(parser.parse('{:{@hex}} => "<{{0$}}>"'), "0af 12") == ["<0af>", "<12>"]
-    assert execute(parser.parse('{:{@hex}} => "<{{$}}>"'), "0af 12") == ["<0af>", "<12>"]
+    assert execute(parser.parse('{0:@hex:fff} => "<{{0$}}>"'), "0af 12") == [
+        "<0af>",
+        "<12>",
+    ]
+    assert execute(parser.parse('{0:@hex:fff} => "<{{$}}>"'), "0af 12") == [
+        "<0af>",
+        "<12>",
+    ]
 
 
 def test_moustache_capture_indices():
     # {{0$0}} / {{0$1}} address individual capture groups; {{0$}} the whole match.
-    out = execute(parser.parse('{cat}{dog} => "a={{0$0}} b={{0$1}} all={{0$}}"'), "catdog")
+    out = execute(
+        parser.parse('{cat}{dog} => "a={{0$0}} b={{0$1}} all={{0$}}"'), "catdog"
+    )
     assert out == ["a=cat b=dog all=catdog"]
 
 
 def test_moustache_count_ref():
     # {{0#0}} is the repetition count of group 0.
-    assert execute(parser.parse('{a..z}[1..] => "n={{0#0}}"'), "aaa b") == ["n=3", "n=1"]
+    assert execute(parser.parse('{a..z}[1..] => "n={{0#0}}"'), "aaa b") == [
+        "n=3",
+        "n=1",
+    ]
 
 
 def test_moustache_multi_stage_index():
@@ -574,7 +541,7 @@ def test_moustache_multi_stage_index():
 
 
 def test_moustache_splices_in_place():
-    assert splice(parser.parse('{:{@hex}} => "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
+    assert splice(parser.parse('{0:@hex:fff} => "<{{0$}}>"'), "0af-12") == "<0af>-<12>"
 
 
 def test_moustache_capture_out_of_range_raises():
@@ -605,9 +572,7 @@ def test_moustache_subcapture_path():
 
 def test_moustache_subcapture_deep():
     # A sub-capture that is itself a grouping brace descends further: 0$0.1.0/.1.
-    out = execute(
-        parser.parse('{{a}{{b}{c}}} => "x={{0$0.1.0}} y={{0$0.1.1}}"'), "abc"
-    )
+    out = execute(parser.parse('{{a}{{b}{c}}} => "x={{0$0.1.0}} y={{0$0.1.1}}"'), "abc")
     assert out == ["x=b y=c"]
 
 
@@ -656,9 +621,9 @@ def test_stage_ref_matches_earlier_capture():
 
 def test_stage_ref_dotted_subcapture():
     # A pattern stage ref descends into sub-captures, like the moustache path.
-    assert execute(
-        parser.parse('{{cat}{dog}} => {0$0.1} => "[{{.}}]"'), "catdog"
-    ) == ["cat[dog]"]
+    assert execute(parser.parse('{{cat}{dog}} => {0$0.1} => "[{{.}}]"'), "catdog") == [
+        "cat[dog]"
+    ]
 
 
 def test_stage_ref_unresolvable_drops_branch():

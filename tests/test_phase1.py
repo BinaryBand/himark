@@ -31,8 +31,9 @@ def test_macro_w_case_fold_pairs():
 
 
 def test_macro_nested_expansion():
-    # @hex references @d and @w; expansion repeats until stable.
-    assert phase1.preprocess("{@hex}") == "{{0..9},{{" + _W + "}..f}}"
+    # @hex references @d and @w; expansion repeats until stable. @w slices into a
+    # `:` value bound ({:@w:f}), so the expansion is {{0..9},{:…@w…:f}}.
+    assert phase1.preprocess("{@hex}") == "{{0..9},{:" + _W + ":f}}"
 
 
 def test_macro_whitespace_set():
@@ -77,18 +78,18 @@ def test_macro_dec_matches_digits():
 
 
 def test_macro_dec_value_bound():
-    result = matches("{{@d}..255}", "192 300 10")
+    result = matches("{:@d:255}", "192 300 10")
     assert "192" in result and "10" in result
     assert "300" not in result
 
 
 def test_macro_w_case_insensitive_word():
     # @w is an ordered folded alphabet (case-fold letters plus '_'), so a word is
-    # a value over it: {:{@w}}. Digits are not word symbols.
-    assert matches("{:{@w}}", "Ab9") == ["Ab"]
-    assert matches("{:{@w}}", "xyz") == ["xyz"]
-    assert matches("{:{@w}}", "a_b") == ["a_b"]
-    assert matches("{:{@w}}", "!.?") == []
+    # a value bounded over it: {a:@w:zzzzz}. Digits are not word symbols.
+    assert matches("{a:@w:zzzzz}", "Ab9") == ["Ab"]
+    assert matches("{a:@w:zzzzz}", "xyz") == ["xyz"]
+    assert matches("{a:@w:zzzzz}", "a_b") == ["a_b"]
+    assert matches("{a:@w:zzzzz}", "!.?") == []
 
 
 def test_macro_x_matches_non_whitespace():
@@ -109,8 +110,8 @@ def test_implicit_wrap_end_to_end():
 
 def test_b58_symbol_order_preserved():
     # @b58 must keep the 58-symbol order for value arithmetic: '1' is value 0,
-    # '9' is value 8, 'A' is value 9 — so {{@b58}..9} admits '9' but not 'A'.
-    result = matches("{{@b58}..9}", "9 A")
+    # '9' is value 8, 'A' is value 9 — so {:@b58:9} admits '9' but not 'A'.
+    result = matches("{:@b58:9}", "9 A")
     assert "9" in result
     assert "A" not in result
 

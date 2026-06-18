@@ -124,19 +124,6 @@ class GroupClassNode:
     groups: list[list[str]] = field(default_factory=list)
 
 
-@dataclass(slots=True, kw_only=True)
-class PaddedNode:
-    """Width-constrained value match: {N:expr}, {N..M:expr}, or {:expr}.
-
-    max_width None means "up to the width of the inner range's maximum value"
-    (the {:expr} form); the engine derives it at match time."""
-
-    inner: SemanticNode
-    type: Literal["padded"] = "padded"
-    min_width: int = 1
-    max_width: int | None = None
-
-
 @dataclass(slots=True)
 class SequenceNode:
     """A grouping brace: a `{...}` whose interior is a concatenation of constructs
@@ -193,7 +180,6 @@ SemanticNode: TypeAlias = (
     | UnionNode
     | ComplementNode
     | GroupClassNode
-    | PaddedNode
     | SequenceNode
     | BackRefNode
     | CountRefNode
@@ -210,7 +196,6 @@ SemanticClasses = (
     UnionNode,
     ComplementNode,
     GroupClassNode,
-    PaddedNode,
     SequenceNode,
     BackRefNode,
     CountRefNode,
