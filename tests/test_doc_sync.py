@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from himark import parser
-from himark.engine import find_matches
+from himark.engine import execute, find_matches
 from himark.parser.macros import MACROS
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
@@ -54,6 +54,14 @@ def test_doc_subtractive_universe_examples():
     # `!{|,\n}` any char except '|' or newline.
     assert matches("!{a}", "abc") == ["b", "c"]
     assert matches("!{|,\\n}", "a|b") == ["a", "b"]
+
+
+def test_doc_b256_value_filter_example():
+    # The Filters section: a group accessor carries its alphabet, so b256 reads
+    # '256' as the value 256 and emits it as two big-endian bytes.
+    assert execute(parser.parse('{0:@d:65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
+        "\x01\x00"
+    ]
 
 
 def test_doc_primitives_vs_objects():

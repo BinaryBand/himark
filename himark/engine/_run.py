@@ -269,9 +269,11 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
         return None
     caps = state.captures
 
+    alphabet = el.matcher.value_alphabet  # set only for `{x:A:y}` bounds
+
     def attempt(end: int, rep_list: list[str]) -> int | None:
         mark = len(caps)
-        caps.append(Capture(text[pos:end], (pos, end), rep_list))
+        caps.append(Capture(text[pos:end], (pos, end), rep_list, alphabet=alphabet))
         r = cont(end)
         if r is not None:
             return r

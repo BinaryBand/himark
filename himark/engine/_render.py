@@ -20,6 +20,7 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 """
 
 import re
+from dataclasses import dataclass
 
 from himark.engine._types import Match
 from himark.models import nodes_typed as t
@@ -27,15 +28,46 @@ from himark.models.exceptions import CompileError
 
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 _ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")
+_FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 
-# Standard-library template filters: pure, deterministic transforms applied with
-# `{{ accessor | f | g }}`. Hashing / base-conversion helpers are deferred.
-_FILTERS = {
+
+@dataclass(slots=True)
+class _Value:
+    """A moustache value flowing through the filter chain. `text` is the surface
+    string; `alphabet` (set only for a **group** accessor over a `{x:A:y}` bound)
+    lets a value filter read it as a number. A whole-stage accessor, `{{.}}`, and
+    any string-filter output carry no alphabet — they are raw strings."""
+
+    text: str
+    alphabet: object | None = None
+
+
+# String filters read the surface text and produce a raw string.
+_STRING_FILTERS = {
     "upper": str.upper,
     "lower": str.lower,
     "trim": str.strip,
     "len": lambda s: str(len(s)),
     "hex": lambda s: s.encode().hex(),
+}
+
+
+def _filter_b256(value: _Value, n: int) -> str:
+    """The reference's value as `n` big-endian base-256 bytes (latin-1 string)."""
+    if value.alphabet is None:
+        raise CompileError(
+            "b256 needs a value reference (a '{x:A:y}' group), not a raw string"
+        )
+    iv = value.alphabet.value(value.text)
+    try:
+        return iv.to_bytes(n, "big").decode("latin-1")
+    except OverflowError:
+        raise CompileError(f"b256({n}): value {iv} does not fit in {n} bytes") from None
+
+
+# Value filters read the typed `_Value` (alphabet required) plus literal args.
+_VALUE_FILTERS = {
+    "b256": _filter_b256,
 }
 
 
@@ -87,20 +119,33 @@ def render(
 
 
 def _eval(inner: str, current: str, stages: list[Match]) -> str:
-    """Resolve a moustache body `accessor | filter | …`."""
+    """Resolve a moustache body `accessor | filter | …` to its surface string."""
     parts = inner.split("|")
     accessor = parts[0].strip()
-    value = current if accessor == "." else _resolve(accessor, stages)
+    value = _Value(current) if accessor == "." else _resolve(accessor, stages)
     for f in parts[1:]:
-        name = f.strip()
-        fn = _FILTERS.get(name)
-        if fn is None:
-            raise CompileError(f"Unknown template filter: '{name}'")
-        value = fn(value)
-    return value
+        value = _apply_filter(f, value)
+    return value.text
 
 
-def _resolve(expr: str, stages: list[Match]) -> str:
+def _apply_filter(token: str, value: _Value) -> _Value:
+    """Apply one `name` or `name(args)` filter, returning a raw-string `_Value`."""
+    m = _FILTER_RE.fullmatch(token)
+    if m is None:
+        raise CompileError(f"Malformed template filter: '{token.strip()}'")
+    name, arg_src = m.group(1), m.group(2)
+    if name in _STRING_FILTERS:
+        if arg_src:
+            raise CompileError(f"Filter '{name}' takes no arguments")
+        return _Value(_STRING_FILTERS[name](value.text))
+    vfn = _VALUE_FILTERS.get(name)
+    if vfn is None:
+        raise CompileError(f"Unknown template filter: '{name}'")
+    args = [int(a) for a in arg_src.split(",")] if arg_src else []
+    return _Value(vfn(value, *args))
+
+
+def _resolve(expr: str, stages: list[Match]) -> _Value:
     m = _ACCESSOR_RE.fullmatch(expr)
     if m is None:
         raise CompileError(f"Unsupported moustache reference: {{{{{expr}}}}}")
@@ -112,7 +157,7 @@ def _resolve(expr: str, stages: list[Match]) -> str:
     stage = stages[pipe_idx]
 
     if sigil == "$" and not path_src:
-        return stage.text  # whole match
+        return _Value(stage.text)  # whole match — a raw string, no alphabet
     if not path_src:
         raise CompileError("A '#' moustache reference needs a capture index")
 
@@ -120,4 +165,7 @@ def _resolve(expr: str, stages: list[Match]) -> str:
     capture = stage.capture_at(path)
     if capture is None:
         raise CompileError(f"Moustache index out of range in {{{{{expr}}}}}")
-    return capture.text if sigil == "$" else str(len(capture.reps))
+    if sigil == "#":
+        return _Value(str(len(capture.reps)))  # repetition count — a number
+    # A group accessor carries the alphabet it matched under (its value type).
+    return _Value(capture.text, capture.alphabet)

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from himark.engine.alphabet import Alphabet, RangeAlphabet
+
 
 @dataclass(slots=True)
 class Capture:
@@ -18,6 +20,10 @@ class Capture:
     span: tuple[int, int]  # (start, end) relative to the match start
     reps: list[str]  # per-repetition pieces (one entry when count == 1)
     subs: list[Capture] = field(default_factory=list)  # nested capture groups
+    # The value alphabet this group matched under, when it was a `{x:A:y}` bound
+    # (else None). It lets a downstream value filter (e.g. `b256`) read the
+    # capture as a number in `A`, not just its raw text.
+    alphabet: Alphabet | RangeAlphabet | None = None
 
 
 @dataclass

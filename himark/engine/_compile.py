@@ -45,6 +45,10 @@ class _Base:
     matchers override `match`; `_Group` overrides `equal_unit` to stay within the
     same congruence group."""
 
+    # The value alphabet a capture of this matcher carries (None unless the
+    # matcher is a `{x:A:y}` bound); read by the run loop to type the capture.
+    value_alphabet: "Alphabet | RangeAlphabet | None" = None
+
     def match(self, text: str, pos: int) -> int | None:  # pragma: no cover
         raise NotImplementedError
 
@@ -249,6 +253,10 @@ class _ValueRange(_Base):
 
     def __init__(self, view: _ValueView):
         self.view = view
+
+    @property
+    def value_alphabet(self) -> Alphabet | RangeAlphabet:
+        return self.view.alphabet
 
     def match(self, text: str, pos: int) -> int | None:
         v = self.view

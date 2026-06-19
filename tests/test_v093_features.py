@@ -205,6 +205,37 @@ def test_unknown_filter_raises():
         ex('{a} => "{{ . | nope }}"', "a")
 
 
+def test_b256_value_filter_reads_capture_as_number():
+    # A group accessor carries the alphabet it matched under, so b256 reads '256'
+    # as the base-10 value 256 and re-encodes it as two big-endian bytes.
+    assert ex('{0:@d:65535} => "{{ 0$0 | b256(2) }}"', "256") == ["\x01\x00"]
+
+
+def test_b256_on_raw_string_stage_ref_raises():
+    import pytest
+
+    from himark.models.exceptions import CompileError
+
+    # `0$` is the whole stage text — a raw string with no alphabet, so a value
+    # filter cannot read it as a number.
+    with pytest.raises(CompileError):
+        ex('{0:@d:65535} => "{{ 0$ | b256(2) }}"', "256")
+
+
+def test_b256_overflow_raises():
+    import pytest
+
+    from himark.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        ex('{0:@d:65535} => "{{ 0$0 | b256(1) }}"', "256")
+
+
+def test_string_filter_still_works_on_value_accessor():
+    # A value accessor degrades gracefully to its text under a string filter.
+    assert ex('{0:@d:65535} => "{{ 0$0 | len }}"', "256") == ["3"]
+
+
 def test_payload_marker_splits_doc_and_pipe():
     # {{> }} sends the full render to the document but only the payload downstream.
     out = ex(

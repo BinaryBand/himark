@@ -213,6 +213,8 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 `{$i}` and `{#i}` read the captures of the **current** match; `{N$M}` (and `{N$}` for the whole stage text) reads an earlier pipeline stage (`=>`-numbered, templates included) -- the matching-side counterpart of the moustache `{{ i$j }}` / `{{ i$ }}` accessors (see [Transformers](#transformers)).
 
+> **Note:** In **matching** position a reference is always concrete text -- you match the literal characters the group captured. The text-vs-**value** distinction matters only in **template** position, where a filter may consume the reference: a **group** accessor carries the captured text together with the alphabet it matched under, a **whole-stage** accessor is a raw string (see [Filters](#filters)).
+
 ---
 
 ## Transformers
@@ -245,20 +247,24 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 
 A moustache value may be piped through **filters** -- a fixed standard library of pure, deterministic transforms, in the `=>` spirit: `{{ accessor | f | g }}`. Filters are **template-only** (never in matching position), so the matcher stays declarative.
 
-| Filter  | Effect                        |
-| ------- | ----------------------------- |
-| `upper` | uppercase                     |
-| `lower` | lowercase                     |
-| `trim`  | strip leading/trailing space  |
-| `len`   | character count (as a number) |
-| `hex`   | bytes → hexadecimal           |
+A moustache reference is one of two kinds. A **group** accessor (`{{ i$j }}`, `{{ $j }}`) carries the captured text _together with the alphabet it matched under_ -- a **value**. A **whole-stage** accessor (`{{ i$ }}`), the flowing text `{{ . }}`, and the output of any string filter are **raw strings**. **String** filters read the text of either kind; a **value** filter needs the alphabet and is a compile error on a raw string.
+
+| Filter     | Kind   | Effect                                                    |
+| ---------- | ------ | --------------------------------------------------------- |
+| `upper`    | string | uppercase                                                 |
+| `lower`    | string | lowercase                                                 |
+| `trim`     | string | strip leading/trailing space                              |
+| `len`      | string | character count (as a number)                             |
+| `hex`      | string | bytes → hexadecimal                                       |
+| `b256(n)`  | value  | the reference's value as `n` big-endian base-256 bytes    |
 
 ```proto
 {!{ }}[1..] => "<b>{{ . | upper }}</b>"   // wrap each word, uppercased
 {cat}{dog} => "{{ 0$0 | len }}"           // '3'
+{0:@d:65535} => "{{ 0$0 | b256(2) }}"     // '256' (value 256) → bytes 0x01 0x00
 ```
 
-Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed and pure -- there are no user-defined filters and no I/O. Hashing and base-conversion helpers (`sha256`, `ascii`, `b256`) extend the same `|` grammar but are **deferred** (see the aspirational Bitcoin pipeline in `docs/IN_BRIEF.md`).
+Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed and pure -- there are no user-defined filters and no I/O. The remaining hashing helpers (`sha256`, `ascii`) extend the same `|` grammar but are **deferred** (see the aspirational Bitcoin pipeline in `docs/IN_BRIEF.md`).
 
 ### Quoting static text
 
