@@ -130,6 +130,14 @@ The two written widths set the field width -- narrower is the minimum, wider the
 
 > Like any universe, a subtractive universe matches one position.
 
+A subtracted member may be a **multi-character** string, which makes `!{...}` a **break**: it still matches one character, but only one that does not _begin_ a forbidden string at that point. So `!{```}` is "any char that does not start a ` ``` ` here," and a run `!{```}[1..]` cannot cross the sequence — it stops at the **nearest** one. This is how you scan up to a delimiter the run would otherwise contain (a code fence, an HTML comment), without a separate lazy operator:
+
+```proto
+!{```}[1..]            // a run of text up to (not into) the next ```
+!{```,~~~}[1..]        // …up to the nearest ``` or ~~~ (either fence)
+{<!--}{!{-->}}[1..]{-->}  // an HTML comment: body runs to the nearest -->
+```
+
 ---
 
 ## Fuzzy
@@ -159,11 +167,10 @@ The operand is a token, a token union, or an alphabet-annotated token `{token:A:
 | `[x..y..s]` | `x` to `y` in steps of `s` (stride; both bounds required) |
 | `[..]`      | any positive integer                                      |
 | `[a,b,c]`   | exactly `a`, `b`, or `c` times                            |
-| `[..<y]`    | lazy: up to `y`, shortest first                           |
 
 Only the integer operators carry over: adjacency is meaningless (a count is one number), and a non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, references fit: `[#i]` repeats as group `i` did (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
 
-A run is **greedy** by default: it takes the longest count in range that still lets the rest match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` is **lazy**: shortest first, ending at the **nearest** following match (for a terminator you cannot exclude from the run's class). The ceiling is the search **budget** -- a greedy `[x..y]` backs off no further than `x` -- so `[..]` (open) is the only unbounded scan.
+A run is always **greedy**: it takes the longest count in range that still lets the rest match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word, and a `[x..y]` backs off no further than `x`. There is no lazy operator: to scan up to the **nearest** delimiter the run would otherwise swallow, subtract it — a multi-character break `!{X}` cannot cross `X`, so a greedy `!{```}[1..]` stops at the first ` ``` ` (see [Subtraction](#subtraction)).
 
 `[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`). An **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an **alphabet of objects** stays within one object: `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`. (A single object `{{0..9,a..f}}[2]` keeps every member free — any two hex digits — since its members are one interchangeable point.)
 

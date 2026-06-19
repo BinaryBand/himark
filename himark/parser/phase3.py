@@ -473,8 +473,8 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
 def _parse_count(src: str) -> t.CountSpec:
     """Parse a count modifier string into a count descriptor.
 
-    Forms: `[n]`, `[x..]`, `[..y]`, `[x..y]`, `[x..y..s]` (stride), `[..<y]`
-    (lazy), `[a,b,c]` (union), `[#i]` (count-reference)."""
+    Forms: `[n]`, `[x..]`, `[..y]`, `[x..y]`, `[x..y..s]` (stride),
+    `[a,b,c]` (union), `[#i]` (count-reference)."""
     src = src.strip()
     # `[#i]` — repeat exactly group i's repetition count (resolved at match time).
     m = _COUNTREF_RE.fullmatch(src)
@@ -487,11 +487,11 @@ def _parse_count(src: str) -> t.CountSpec:
         except ValueError:
             raise CompileError(f"Invalid count expression: [{src}]") from None
         return t.CountSet(values=values)
-    # `[n]` / `[x..y]` with optional lazy `<` and optional stride `..s`.
-    m = re.fullmatch(r"(\d*)(?:\.\.(<?)(\d*)(?:\.\.(\d+))?)?", src)
+    # `[n]` / `[x..y]` with optional stride `..s`.
+    m = re.fullmatch(r"(\d*)(?:\.\.(\d*)(?:\.\.(\d+))?)?", src)
     if not m or not (m.group(1) or ".." in src):
         raise CompileError(f"Invalid count expression: [{src}]")
-    lo, lazy, hi, step = m.groups()
+    lo, hi, step = m.groups()
     if ".." not in src:  # exact [n]
         return t.CountRange(min=int(lo), max=int(lo))
     step_n = int(step) if step else 1
@@ -499,5 +499,5 @@ def _parse_count(src: str) -> t.CountSpec:
     if step_n != 1 and max_n is None:
         raise CompileError(f"A strided count needs an upper bound: [{src}]")
     return t.CountRange(
-        min=int(lo) if lo else 0, max=max_n, step=step_n, lazy=bool(lazy)
+        min=int(lo) if lo else 0, max=max_n, step=step_n
     )

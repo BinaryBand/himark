@@ -46,14 +46,10 @@ def test_greedy_backs_off():
     assert m("{a}[1..]x{#0}", "aaax2") == ["aax2"]
 
 
-def test_lazy_ends_at_nearest():
-    # `[..<y]` is lazy: the run ends at the nearest following match.
-    assert m("{!|}[..<99]{|}", "ab|cd|ef") == ["ab|", "cd|"]
-
-
-def test_lazy_extends_until_match():
-    # Lazy still extends as far as needed for the tail to match.
-    assert m("{a}[1..<5]{b}", "aaab") == ["aaab"]
+def test_multi_char_break_replaces_lazy_to_nearest():
+    # There is no lazy operator; a multi-char break scans up to the nearest
+    # delimiter the run cannot cross (the old `{!|}[..<99]{|}` lazy idiom).
+    assert m("{!|}[1..]{|}", "ab|cd|ef") == ["ab|", "cd|"]
 
 
 # ── Points: primitives vs objects (comma lists vs nesting) ────────────────────

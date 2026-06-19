@@ -3,10 +3,9 @@
 This file knows nothing about HMK node types. It scans a list of `Element`s
 (literals and capturing groups) left to right and emits `Match`es. Matching is
 **backtracking** via continuation passing: each element offers its candidate
-ends in priority order (greedy: longest first; lazy: shortest first) and asks
-the continuation — the rest of the pattern — to match from each, taking the
-first that succeeds. Captures are appended to a flat list and rolled back by
-truncation when a branch fails.
+ends greedily (longest first) and asks the continuation — the rest of the
+pattern — to match from each, taking the first that succeeds. Captures are
+appended to a flat list and rolled back by truncation when a branch fails.
 """
 
 from __future__ import annotations
@@ -126,12 +125,10 @@ def _resolve_reps(reps: Reps, state: _State) -> Reps | None:
 
 
 def _counts(reps: Reps, built: int) -> list[int]:
-    """The acceptable rep counts in `0..built`, in priority order: greedy is
-    longest-first, lazy shortest-first."""
-    ks = [k for k in range(1, built + 1) if reps.accepts(k)]
-    ks.sort(reverse=not reps.lazy)
-    if reps.accepts(0):  # the zero-rep option is the laziest — tried last by greedy
-        ks.append(0) if not reps.lazy else ks.insert(0, 0)
+    """The acceptable rep counts in `0..built`, greedy (longest-first) priority."""
+    ks = [k for k in range(built, 0, -1) if reps.accepts(k)]
+    if reps.accepts(0):  # the zero-rep option is the laziest — tried last
+        ks.append(0)
     return ks
 
 

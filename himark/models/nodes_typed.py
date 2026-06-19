@@ -11,12 +11,11 @@ from typing import Literal, TypeAlias
 @dataclass(slots=True)
 class CountRange:
     """A repetition count `[x..y]`. `step` > 1 is a stride (`[x..y..s]`, both
-    bounds required). `lazy` is the `[..<y]` shortest-first form."""
+    bounds required)."""
 
     min: int
     max: int | None
     step: int = 1
-    lazy: bool = False
 
 
 @dataclass(slots=True)
@@ -25,7 +24,6 @@ class CountSet:
     times. `values` is sorted and de-duplicated."""
 
     values: list[int]
-    lazy: bool = False
 
 
 @dataclass(slots=True)

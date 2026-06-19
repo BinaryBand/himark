@@ -322,6 +322,22 @@ def test_subtractive_universe_outside_brace():
     assert matches("{a}!{b}", "axac") == ["ax", "ac"]
 
 
+def test_multi_char_subtraction_is_a_break():
+    # HMK.md §Subtraction: a multi-character subtracted member makes `!{X}` a
+    # break — one char that does not *begin* X — so a run stops at the nearest X.
+    assert matches("{!{xy}}[1..]", "aabxycc") == ["aab", "ycc"]  # run halts before xy
+    assert matches("!{xy}", "axyb") == ["a", "y", "b"]  # only the 'x' of xy is skipped
+    # The fenced-code use: a body run halts at the nearest closing fence, so
+    # adjacent blocks stay separate (no lazy operator needed).
+    body = "{```}{\\n}{!{\\n```}}[0..]{\\n}{```}"
+    assert matches(body, "```\nA\n```\n```\nB\n```") == ["```\nA\n```", "```\nB\n```"]
+
+
+def test_multi_char_subtraction_union_breaks_on_either():
+    # A union of multi-char members breaks on whichever delimiter comes first.
+    assert matches("{!{```,~~~}}[1..]", "aa```bb~~~cc") == ["aa", "``bb", "~~cc"]
+
+
 # ── Repetition equality ───────────────────────────────────────────────────────
 
 

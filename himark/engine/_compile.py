@@ -533,13 +533,12 @@ class AnchorEl:
 @dataclass(slots=True)
 class Reps:
     """A resolved repetition spec on an element. `allowed` (a `[a,b,c]` set)
-    overrides the `min..max` step-range; `lazy` is the `[..<y]` shortest-first
-    form; `count_ref` (a `[#i]`) resolves to a group's rep count at match time."""
+    overrides the `min..max` step-range; `count_ref` (a `[#i]`) resolves to a
+    group's rep count at match time."""
 
     min: int = 1
     max: int | None = 1
     step: int = 1
-    lazy: bool = False
     allowed: frozenset[int] | None = None
     count_ref: int | None = None
 
@@ -610,8 +609,8 @@ def _reps(count: t.CountSpec | None) -> Reps:
         return Reps(count_ref=count.group)
     if isinstance(count, t.CountSet):
         vals = frozenset(count.values)
-        return Reps(min=min(vals), max=max(vals), allowed=vals, lazy=count.lazy)
-    return Reps(min=count.min, max=count.max, step=count.step, lazy=count.lazy)
+        return Reps(min=min(vals), max=max(vals), allowed=vals)
+    return Reps(min=count.min, max=count.max, step=count.step)
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
