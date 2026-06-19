@@ -393,6 +393,34 @@ class _Group(_Base):
         return cur
 
 
+class _Het(_Base):
+    """The `{{U}}` object: one universe repeated with **every member free each
+    position** (HMK.md §Repetition — `{{a..z}}[3]` is any three letters, each
+    free). It wraps the lowered universe so a run's `equal_unit` is a fresh match
+    of any member — unlike a bare alphabet of objects (`{{a,A},{c,C}}`), whose run
+    stays within one congruence group. `_CharRange`/`_Union` already free their
+    members this way; the wrapper also frees a `_Group` (a folded range union like
+    `{{0..9,a..f}}`), whose own `equal_unit` would otherwise pin each rep to the
+    first member's group."""
+
+    __slots__ = ("inner",)
+
+    def __init__(self, inner: Matcher):
+        self.inner = inner
+
+    @property
+    def value_alphabet(self) -> "Alphabet | RangeAlphabet | None":
+        return self.inner.value_alphabet
+
+    def match(self, text: str, pos: int) -> int | None:
+        return self.inner.match(text, pos)
+
+    def accepts(self, s: str) -> bool:
+        return self.inner.accepts(s)
+
+    # equal_unit inherited from _Base = a fresh match → any member, each position.
+
+
 def _bounded_levenshtein(a: str, b: str, k: int) -> int:
     """Levenshtein distance between `a` and `b`, capped at `k + 1` (anything over
     `k` is reported as `k + 1` — we only care whether it is within `k`)."""
@@ -611,8 +639,10 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
             elif isinstance(child.semantic, t.HeterogeneousNode):
-                # `{{U}}`: repeat the inner heterogeneously (a fresh match per rep).
-                elements.append(GroupEl(lower(child.semantic.inner), reps, het=True))
+                # `{{U}}`: one object, repeated with every member free per position
+                # (`_Het` makes each rep a fresh match, even over a folded union).
+                inner = _Het(lower(child.semantic.inner))
+                elements.append(GroupEl(inner, reps, het=True))
             else:
                 # A run repeats one **point**, faces free within it: a congruence
                 # class (`GroupClassNode`) stays in the matched member's group

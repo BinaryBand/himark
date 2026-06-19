@@ -49,8 +49,9 @@
     => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"
 
 // 2. Keep the valid ones: {$3} forces actual == expect. Render the final form.
-//    The hex runs are complements ({!\ } / {!/}) so each digit is free; a
-//    constrained {{0..9,a..f}} run would fold to one congruence arm.
+//    The hex fields are matched as complement runs ({!\ } up to the space, {!/}
+//    up to the slash) -- simple and self-delimiting; {{0..9,a..f}}[8] would work
+//    too, now that a het object frees every member.
 {<btc addr=\"}{!\"}[1..]{\" expect=}{!\ }[1..]{\ actual=}{$3}{/>}
     => "<btc>{{$1}}</btc>"
 

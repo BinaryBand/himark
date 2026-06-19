@@ -244,6 +244,22 @@ def test_congruence_pair_is_case_agnostic():
     assert matches("{{a,A}}[2]", "aa aA Aa AA ab") == ["aa", "aA", "Aa", "AA"]
 
 
+def test_het_object_over_union_frees_every_member():
+    # HMK.md §Repetition: `{{U}}` is one object whose members are interchangeable,
+    # so each position takes *any* of them. Over a union of ranges that means a
+    # mix is allowed — `{{0..9,a..f}}[8]` is any 8 hex digits, not 8 identical
+    # ones (which is what the bare alphabet `{0..9,a..f}[8]` repeats).
+    assert matches("{{0..9,a..f}}[3]", "c29 cab fff") == ["c29", "cab", "fff"]
+    assert matches("{{0..9,a..f}}[8]", "c29b7d93") == ["c29b7d93"]
+    assert matches("{0..9,a..f}[3]", "c29 fff") == ["fff"]  # bare class: same char
+
+
+def test_het_object_of_objects_stays_in_one_group():
+    # The contrast: an alphabet of *objects* repeats one object, never crossing —
+    # `{{a,A},{c,C}}[2]` is aa/aA/Aa/AA or cc/cC/Cc/CC, but never 'ac'.
+    assert matches("{{a,A},{c,C}}[2]", "aA cC ac") == ["aA", "cC"]
+
+
 def test_ordered_class_of_classes():
     # {{a,A},{b,B}} is an ordered (two-symbol) alphabet of folded positions; a
     # bounded value over it (width up to 4) matches a folded a/b string.
