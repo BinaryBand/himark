@@ -236,6 +236,29 @@ def test_string_filter_still_works_on_value_accessor():
     assert ex('{0:@d:65535} => "{{ 0$0 | len }}"', "256") == ["3"]
 
 
+def test_sha256_filter_matches_standard_vector():
+    import hashlib
+
+    out = ex('{!\\ }[1..] => "{{ . | sha256 | hex }}"', "abc")
+    assert out == [hashlib.sha256(b"abc").hexdigest()]
+
+
+def test_byte_filters_chain_double_sha_over_b256():
+    import hashlib
+
+    out = ex('{0:@d:65535} => "{{ 0$0 | b256(2) | sha256 | sha256 | hex }}"', "256")
+    expected = hashlib.sha256(
+        hashlib.sha256((256).to_bytes(2, "big")).digest()
+    ).hexdigest()
+    assert out == [expected]
+
+
+def test_b58_decodes_as_bitcoin_base58_value():
+    # @b58 already works as a value alphabet: '21' is base-58 value 58, so b256(1)
+    # emits the single byte 0x3a.
+    assert ex('{1:@b58:zz} => "{{ 0$0 | b256(1) | hex }}"', "21") == ["3a"]
+
+
 def test_payload_marker_splits_doc_and_pipe():
     # {{> }} sends the full render to the document but only the payload downstream.
     out = ex(

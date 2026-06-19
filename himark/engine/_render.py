@@ -19,6 +19,7 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 (everything outside `{{ }}`) is constant.
 """
 
+import hashlib
 import re
 from dataclasses import dataclass
 
@@ -42,13 +43,26 @@ class _Value:
     alphabet: object | None = None
 
 
+def _as_bytes(s: str, filt: str) -> bytes:
+    """The byte string of `s` — one byte per code point, matching b256's latin-1
+    output so byte filters chain (`… | b256(25) | sha256`)."""
+    try:
+        return s.encode("latin-1")
+    except UnicodeEncodeError:
+        raise CompileError(
+            f"{filt} operates on a byte string (code points 0-255); "
+            "pipe through b256 first"
+        ) from None
+
+
 # String filters read the surface text and produce a raw string.
 _STRING_FILTERS = {
     "upper": str.upper,
     "lower": str.lower,
     "trim": str.strip,
     "len": lambda s: str(len(s)),
-    "hex": lambda s: s.encode().hex(),
+    "hex": lambda s: _as_bytes(s, "hex").hex(),
+    "sha256": lambda s: hashlib.sha256(_as_bytes(s, "sha256")).digest().decode("latin-1"),
 }
 
 
