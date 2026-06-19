@@ -74,6 +74,13 @@ def test_split_strips_trailing_comment_outside_braces_and_quotes():
     assert precompiled.split_statements(src) == ['{a} => "http://x"', '{//} => "y"']
 
 
+def test_split_ignores_unbalanced_quotes_and_braces_in_comments():
+    # A comment is inert: an odd `"` or a stray `{`/`}` inside it must not corrupt
+    # logical-line splitting for the statements that follow it.
+    src = '// grep addr="[^"]+" and a stray }\n{a} => "x"\n{b} => "y"\n'
+    assert precompiled.split_statements(src) == ['{a} => "x"', '{b} => "y"']
+
+
 def test_split_keeps_arrow_inside_quotes_as_one_statement():
     # A `=>` inside a quoted template must not be read as a step boundary, and a
     # brace spanning lines stays one logical line.

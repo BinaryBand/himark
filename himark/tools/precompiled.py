@@ -84,17 +84,29 @@ def split_statements(text: str) -> list[str]:
 
 def _logical_lines(text: str) -> list[str]:
     """Split on newlines that sit at brace/quote depth 0, so a brace or quoted
-    template spanning physical lines stays one logical line."""
+    template spanning physical lines stays one logical line.
+
+    A `//` line comment at depth 0 is **inert**: its text is kept (so a trailing
+    comment rides along to `_strip_comment`) but its `"`/`{`/`}` are not tracked,
+    so an unbalanced quote or brace inside a comment cannot corrupt the split.
+    A `//` inside a brace or quote is content, never a comment."""
     lines: list[str] = []
     buf: list[str] = []
     depth = 0
     inq = False
     i = 0
-    while i < len(text):
+    n = len(text)
+    while i < n:
         c = text[i]
-        if c == "\\" and i + 1 < len(text):
+        if c == "\\" and i + 1 < n:
             buf.append(text[i : i + 2])
             i += 2
+            continue
+        if depth == 0 and not inq and c == "/" and text[i + 1 : i + 2] == "/":
+            j = text.find("\n", i)  # skip the comment body, up to (not past) \n
+            end = n if j == -1 else j
+            buf.append(text[i:end])
+            i = end
             continue
         if c == "\n" and depth == 0 and not inq:
             lines.append("".join(buf))

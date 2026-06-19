@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.3-experimental  
+**Version:** 0.9.4-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -15,6 +15,7 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `{...}`     | **Universe**             | a set of strings/chars; matches one element                            |
 | `,`         | **Union**                | combine universes (`{a,b}` is `a` or `b`)                              |
 | `..`        | **Range**                | ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)              |
+| `{X}{Y}`    | **Adjacency**            | concatenate universes — their Cartesian product (`{a..z}{A..Z}`)       |
 | `!{...}`    | **Subtractive universe** | everything _not_ in `{...}`, from the ambient universe (Unicode)       |
 | `{x:...:y}` | **Bounds**               | restricted a universe to values `x`-`y` inclusive (`{x::y}` = ambient) |
 | `[count]`   | **Repetition**           | a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)    |
@@ -43,8 +44,8 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `@s`     | `\n,\r, ,\t`                |
 | `@w`     | `{a,A},{b,B},...,{z,Z},_`   |
 | `@x`     | `!{@s}`                     |
-| `@hex`   | `{@d},{{@w}:f}`             |
-| `@b32`   | `{@d},{{@w}:v}`             |
+| `@hex`   | `{@d},{:@w:f}`              |
+| `@b32`   | `{@d},{:@w:v}`              |
 | `@b58`   | `{@d},{@u},{@l},!{0,I,O,l}` |
 | `@b64`   | `{@d},{@l},{@u},+,/`        |
 | `@b256`  | U+0000-U+00FF (every byte)  |
@@ -57,7 +58,7 @@ A pattern is built from **universes** and a small set of operators. A universe `
 
 ## Anchors
 
-`@\^` / `@$` match the start / end of a **line** (position 0 or just after / just before a `\n`); `@^\^` / `@$$` match the start / end of the whole **scope** (the text a stage sees). All four are **not** alphabets -- they are zero-width and capture nothing, so a line-start header is `{@^}{#}[1..6]{ }[1..]{!\n}[1..]`. They are primitives, not macros, so they live here rather than in the table above.
+`@^` / `@$` match the start / end of a **line** (position 0 or just after / just before a `\n`); `@^^` / `@$$` match the start / end of the whole **scope** (the text a stage sees). All four are **not** alphabets -- they are zero-width and capture nothing, so a line-start header is `{@^}{#}[1..6]{ }[1..]{!\n}[1..]`. They are primitives, not macros, so they live here rather than in the table above.
 
 ---
 
@@ -149,21 +150,22 @@ The operand is a token, a token union, or an alphabet-annotated token `{token:A:
 
 `[count]` repeats the preceding universe. The count is itself a **universe** -- the same algebra as `{...}`, but over the ambient set of **base-10 non-negative integers** instead of Unicode. A bare number is exact, `,` unions counts, and `..` is a range:
 
-| Form      | Meaning                         |
-| --------- | ------------------------------- |
-| `[n]`     | exactly `n`                     |
-| `[x..]`   | `x` or more                     |
-| `[..y]`   | up to `y`                       |
-| `[x..y]`  | `x` to `y`                      |
-| `[..]`    | any positive integer            |
-| `[a,b,c]` | exactly `a`, `b`, or `c` times  |
-| `[..<y]`  | lazy: up to `y`, shortest first |
+| Form        | Meaning                                                   |
+| ----------- | --------------------------------------------------------- |
+| `[n]`       | exactly `n`                                               |
+| `[x..]`     | `x` or more                                               |
+| `[..y]`     | up to `y`                                                 |
+| `[x..y]`    | `x` to `y`                                                |
+| `[x..y..s]` | `x` to `y` in steps of `s` (stride; both bounds required) |
+| `[..]`      | any positive integer                                      |
+| `[a,b,c]`   | exactly `a`, `b`, or `c` times                            |
+| `[..<y]`    | lazy: up to `y`, shortest first                           |
 
 Only the integer operators carry over: adjacency is meaningless (a count is one number), and a non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, references fit: `[#i]` repeats as group `i` did (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
 
 A run is **greedy** by default: it takes the longest count in range that still lets the rest match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` is **lazy**: shortest first, ending at the **nearest** following match (for a terminator you cannot exclude from the run's class). The ceiling is the search **budget** -- a greedy `[x..y]` backs off no further than `x` -- so `[..]` (open) is the only unbounded scan.
 
-`[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`). An **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an object stays within universe `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`.
+`[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`). An **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an **alphabet of objects** stays within one object: `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`. (A single object `{{0..9,a..f}}[2]` keeps every member free — any two hex digits — since its members are one interchangeable point.)
 
 ```proto
 {a..z}[3]                    // primitive: the same letter three times (e.g. 'aaa','bbb')
@@ -225,7 +227,7 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 - a **query** matches within the branch and commits each match's transform in place, keeping the text between. A query that matches nothing **stops** the branch; if nothing is committed yet, it produces no output -- so a query before the work is a **guard** that filters out non-matches.
 - a **template** renders and **commits** it -- never rolled back. Templates are **not** terminal: a later query matches the rendered text, a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
 
-By default a template's whole render both writes to the document and flows downstream. To split the two, mark one accessor with `{{> ... }}`: that part is what the next stage sees, while the full render still lands in the document. At most one `{{> ... }}` may appear per template.
+By default a template's whole render both writes to the document and flows downstream. To split the two, mark one accessor with `{{> ... }}`: that part — and only that part — is what the next stage sees, while the full render still lands in the document. The surrounding template text is kept in the document but **dropped** from the downstream flow. At most one `{{> ... }}` may appear per template.
 
 ```proto
 "# Hello" => {#}[1..6]{ }[1..]{!{\n}}[1..] => "<h{{#0}}>{{> $2 }}</h{{#0}}>"
@@ -248,7 +250,7 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 
 A moustache value may be piped through **filters** -- a fixed standard library of pure, deterministic transforms, in the `=>` spirit: `{{ accessor | f | g }}`. Filters are **template-only** (never in matching position), so the matcher stays declarative.
 
-A moustache reference is one of two kinds. A **group** accessor (`{{ i$j }}`, `{{ $j }}`) carries the captured text _together with the alphabet it matched under_ -- a **value**. A **whole-stage** accessor (`{{ i$ }}`), the flowing text `{{ . }}`, and the output of any string filter are **raw strings**. **String** filters read the text of either kind; a **value** filter needs the alphabet and is a compile error on a raw string.
+A moustache value is either a **value** or a **raw string**. Only a group accessor over a `{x:A:y}` **bound** carries the captured text _together with the alphabet it matched under_, and only that is a **value** — a value filter can read it as a number in its alphabet. Every other reference is a **raw string**: a whole-stage accessor (`{{ i$ }}`), the flowing text `{{ . }}`, the output of any string filter, and — crucially — a group accessor with no value alphabet (a plain literal, a bare range like `{a..z}`, a fuzzy `{cat}~1`, or a subtractive `!{a}` capture, none of which carry one). **String** filters read the text of either kind; a **value** filter needs the alphabet, so it is a compile error on a raw string.
 
 | Filter     | Kind   | Effect                                                    |
 | ---------- | ------ | --------------------------------------------------------- |
