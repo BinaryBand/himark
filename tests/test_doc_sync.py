@@ -48,6 +48,14 @@ def test_doc_fuzzy_bridge_alphabet_example():
     assert matches("{cat:@l:cat}~1", "cot") == ["cot"]
 
 
+def test_doc_subtractive_universe_examples():
+    # The Subtraction section writes the subtractive universe `!{X}` with the
+    # bang *outside* the brace, standalone: `!{a}` is any char except 'a',
+    # `!{|,\n}` any char except '|' or newline.
+    assert matches("!{a}", "abc") == ["b", "c"]
+    assert matches("!{|,\\n}", "a|b") == ["a", "b"]
+
+
 def test_doc_primitives_vs_objects():
     # Headline model: a comma-list is ordered primitives; nesting makes an object
     # whose faces are interchangeable. So `{a,A}[2]` stays in one point (aa/AA),

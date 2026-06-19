@@ -2,6 +2,7 @@
 
 Constructs recognized:
   {expr}[count]   — brace_group with optional count modifier
+  !{expr}[count]  — subtractive universe (a top-level complement, `!` folded in)
   "..."           — quoted literal text (verbatim, with escapes)
   leaf text       — verbatim literal fragments
 """
@@ -82,11 +83,19 @@ def parse(text: str) -> t.RootNode:
             pos = end
             continue
 
-        # Brace group {expr}[count?]
-        if ch == "{":
+        # Brace group {expr}[count?], or a subtractive universe !{expr}[count?].
+        # A top-level `!` right before a brace negates it (HMK.md §Subtraction);
+        # the `!` is folded into the brace content so phase3's complement path
+        # (content starting with `!`) resolves `!{X}` and the inner `{!X}`
+        # spelling identically. An inner `!{…}` arm lives inside a brace's
+        # content string and is left for phase3, never reaching this top scan.
+        if ch == "{" or (ch == "!" and text[pos + 1 : pos + 2] == "{"):
             flush_leaf()
-            end = _scan_braces(text, pos)
-            brace = t.BraceGroupNode(content=text[pos + 1 : end - 1])
+            complement = ch == "!"
+            start = pos + 1 if complement else pos
+            end = _scan_braces(text, start)
+            inner = text[start + 1 : end - 1]
+            brace = t.BraceGroupNode(content="!" + inner if complement else inner)
             pos = end
             fm = _FUZZ_SRC.match(text, pos)
             if fm:

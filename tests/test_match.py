@@ -288,6 +288,18 @@ def test_complement_char_range():
     assert "c" not in result
 
 
+def test_subtractive_universe_outside_brace():
+    # HMK.md §Subtraction: `!{X}` (bang outside the brace) is the canonical
+    # subtractive universe and resolves identically to the inner `{!X}` spelling.
+    assert matches("!{a}", "abc") == ["b", "c"]
+    assert matches("!{a}", "abc") == matches("{!a}", "abc")
+    # A multi-member operand subtracts each member.
+    assert matches("!{|,\n}", "a|b") == ["a", "b"]
+    # Composes with a run and with adjacency like any universe.
+    assert matches("!{a}[1..]", "xxax") == ["xx", "x"]
+    assert matches("{a}!{b}", "axac") == ["ax", "ac"]
+
+
 # ── Repetition equality ───────────────────────────────────────────────────────
 
 
