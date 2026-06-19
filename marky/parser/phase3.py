@@ -242,11 +242,17 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if len(colon_parts) == 3:
         return _resolve_bounds(colon_parts)
 
-    # Heterogeneous nesting `{{X}}`: a brace whose whole content is one nested
-    # brace repeats by re-matching afresh each rep (vs a bare `{U}` = same string).
+    # Object nesting `{{X}}`: a brace whose whole content is one nested brace is
+    # a single object. A materialisable inner (`{{a,A}}`) folds its members into
+    # one congruence group, repeated with faces free; a range/value inner
+    # (`{{a..z}}`) stays a lazy heterogeneous run (a fresh match per rep).
     stripped = strip_unescaped(content)
     if stripped.startswith("{") and brace_end(stripped) == len(stripped):
-        return t.HeterogeneousNode(inner=_resolve_brace(inner_of(stripped)))
+        inner = _resolve_brace(inner_of(stripped))
+        grps = _arm_group(inner)
+        if grps is not None:
+            return t.GroupClassNode(groups=grps)
+        return t.HeterogeneousNode(inner=inner)
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")
@@ -317,23 +323,47 @@ def _apply_member_exclusions(members: list[str], exclusions: list[str]) -> list[
     ]
 
 
+def _arm_group(node: t.SemanticNode) -> list[list[str]] | None:
+    """The congruence groups one comma-arm contributes, or None when the arm is a
+    range/value/complement that cannot be materialised. A bare token is one
+    singleton group; a flat class of primitives folds into a single object
+    (`{a,A}` → `[[a, A]]`); a class that is already an ordered alphabet of objects
+    keeps its groups in order (`{{a,A},{b,B}}` stays two folded positions, so `@w`
+    is 26 ordered case-folds)."""
+    if isinstance(node, t.LiteralNode):
+        return [[node.content]]
+    if isinstance(node, t.GroupClassNode):
+        if all(len(g) == 1 for g in node.groups):
+            return [[m for g in node.groups for m in g]]  # flat primitives → fold
+        return [list(g) for g in node.groups]  # ordered alphabet of objects → keep
+    return None
+
+
 def _classify_arms(arms: list[str], exclusions: list[str]) -> t.SemanticNode:
-    """Build the appropriate node type for a list of union arms."""
+    """Build the node for a comma-list: an **ordered alphabet of points**. Each
+    arm contributes its group(s): a bare arm is a primitive (a singleton group);
+    a nested brace arm is an object that folds into one group, unless it is
+    already an alphabet of objects (whose groups carry through in order). When
+    every arm is materialisable this is a `GroupClassNode` (so `{a,b}` is `{a..b}`
+    and `{{a,A},{c,C}}` is two folded positions); a range/value arm (`{a..z}`,
+    `{@d}`) keeps the alphabet lazy as an ordered `UnionNode`."""
     if len(arms) == 1:
         return _attach_exclusions(_resolve_arm(arms[0]), exclusions)
 
-    # A brace or range arm → ordered union: each arm contributes its own
-    # position(s), concatenated. `{{a,A},{b,B}}` is an ordered alphabet of
-    # congruence classes; `{a..z,A..Z}` is two ranges placed in sequence.
-    if any(a.startswith("{") or ".." in a for a in arms):
-        options = [_resolve_arm(a) for a in arms]
-        return _attach_exclusions(t.UnionNode(options=options), exclusions)
+    resolved = [_resolve_arm(a) for a in arms]
+    per_arm = [_arm_group(n) for n in resolved]
+    if all(g is not None for g in per_arm):
+        groups: list[list[str]] = []
+        for arm_groups in per_arm:
+            assert arm_groups is not None
+            for grp in arm_groups:
+                kept = _apply_member_exclusions(grp, exclusions)
+                if kept:
+                    groups.append(kept)
+        return t.GroupClassNode(groups=groups)
 
-    # All bare single symbols/tokens → one congruence class: the members are
-    # interchangeable spellings of a single position (`,` builds `~`), so `[N]`
-    # repetition folds them (`{a,A}[2]` accepts aa, aA, Aa, AA).
-    members = _apply_member_exclusions([_member_value(a) for a in arms], exclusions)
-    return t.GroupClassNode(groups=[members])
+    # A range/value arm → ordered union, kept lazy (`{a..z,A..Z}`, `{@d},{@u}`).
+    return _attach_exclusions(t.UnionNode(options=resolved), exclusions)
 
 
 def _singleton_value(expr: str) -> str | None:

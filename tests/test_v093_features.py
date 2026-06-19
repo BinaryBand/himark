@@ -56,21 +56,46 @@ def test_lazy_extends_until_match():
     assert m("{a}[1..<5]{b}", "aaab") == ["aaab"]
 
 
-# ── Homogeneity: bare is same-string, {{U}} is heterogeneous ──────────────────
+# ── Points: primitives vs objects (comma lists vs nesting) ────────────────────
 
 
-def test_bare_class_is_homogeneous():
+def test_bare_class_is_primitives():
+    # Bare `{a,A}` is two primitive points: a run stays in one, so 'aa'/'AA'.
     assert m("{a,A}[2]", "aa aA Aa AA") == ["aa", "AA"]
 
 
-def test_nested_class_is_heterogeneous():
+def test_nested_class_is_one_object():
+    # `{{a,A}}` is one object (a fold): a run takes any face each position.
     assert m("{{a,A}}[2]", "aa aA Aa AA") == ["aa", "aA", "Aa", "AA"]
 
 
-def test_heterogeneous_no_cross_group():
-    # A heterogeneous run stays within one group: with `-` and `*` as separate
-    # single-member groups, a run never crosses from one to the other.
-    hr = "{{{-},{*}}}[3..]"
+def test_object_run_does_not_flatten():
+    # `{{a,A},{c,C}}[2]` repeats ONE object (&² or %²) with faces free — eight
+    # results, never a cross like 'ac'.
+    assert m("{{a,A},{c,C}}[2]", "aa aA Aa AA cc cC Cc CC ac") == [
+        "aa",
+        "aA",
+        "Aa",
+        "AA",
+        "cc",
+        "cC",
+        "Cc",
+        "CC",
+    ]
+
+
+def test_comma_list_is_ordered_like_range():
+    # `{a,b,c}` is the ordered alphabet `{a..c}`, so a bound rejects out-of-range
+    # 'c' (value 2 > ceiling 'b'); the fold would be `{{a,b,c}}`.
+    assert m("{a:{a,b,c}:b}", "a b c") == ["a", "b"]
+    assert m("{a:{{a,b,c}}:b}", "a b c") == ["a", "b", "c"]
+
+
+def test_no_cross_group():
+    # A run stays within one group: `{{-},{*}}` is an ordered alphabet of two
+    # single-member objects, so a run never crosses from one to the other.
+    # (Folding them into one object would be `{{{-},{*}}}`, which *does* mix.)
+    hr = "{{-},{*}}[3..]"
     assert m(hr, "---") == ["---"]
     assert m(hr, "-*-") == []
 

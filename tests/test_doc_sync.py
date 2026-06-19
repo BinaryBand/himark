@@ -46,3 +46,15 @@ def test_doc_fuzzy_bridge_alphabet_example():
     assert matches("{cat}~1", "c@t") == ["c@t"]
     assert matches("{cat:@l:cat}~1", "c@t") == []
     assert matches("{cat:@l:cat}~1", "cot") == ["cot"]
+
+
+def test_doc_primitives_vs_objects():
+    # Headline model: a comma-list is ordered primitives; nesting makes an object
+    # whose faces are interchangeable. So `{a,A}[2]` stays in one point (aa/AA),
+    # `{{a,A}}[2]` frees the faces (all four), and a run over an alphabet of
+    # objects repeats one object without flattening (`{{a,A},{c,C}}[2]` = 8).
+    assert matches("{a,A}[2]", "aa aA Aa AA") == ["aa", "AA"]
+    assert matches("{{a,A}}[2]", "aa aA Aa AA") == ["aa", "aA", "Aa", "AA"]
+    assert len(matches("{{a,A},{c,C}}[2]", "aa aA Aa AA cc cC Cc CC")) == 8
+    # `{a,b}` is `{a..b}`: ordered, so a bound is value-ordered, not folded.
+    assert matches("{a:{a,b,c}:b}", "a b c") == ["a", "b"]

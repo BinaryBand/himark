@@ -76,34 +76,34 @@ def test_class_to_class_range_unsupported():
 
 
 def test_congruence_single_pair():
-    # {a,A} — a congruence class: one position, two interchangeable spellings.
+    # {a,A} — two primitive points (an ordered alphabet); the fold is {{a,A}}.
     node = first_semantic("{a,A}")
     assert node.type == "group_class"
-    assert node.groups == [["a", "A"]]
+    assert node.groups == [["a"], ["A"]]
 
 
 def test_congruence_n_ary():
-    # {a,A,b} — one congruence class with three members.
+    # {a,A,b} — three primitive points in listing order, not one folded class.
     node = first_semantic("{a,A,b}")
     assert node.type == "group_class"
-    assert node.groups == [["a", "A", "b"]]
+    assert node.groups == [["a"], ["A"], ["b"]]
 
 
 def test_congruence_escaped_space_member():
     # '\ ' is a literal space member; raw whitespace around ',' is rejected.
     node = first_semantic("{-\\ ,-}")
     assert node.type == "group_class"
-    assert node.groups == [["- ", "-"]]
+    assert node.groups == [["- "], ["-"]]
     with pytest.raises(CompileError):
         resolve("{- ,-}")
 
 
-def test_congruence_enumerated_is_union_of_classes():
-    # The enumerated form is an ordered union of single-position congruence
-    # classes — an ordered alphabet of folded positions.
+def test_congruence_enumerated_is_ordered_folds():
+    # The nested form is an ordered alphabet of folded positions: each {a,A} is
+    # one object (a fold), carried through as its own group.
     node = first_semantic("{{a,A},{b,B}}")
-    assert node.type == "union"
-    assert [o.type for o in node.options] == ["group_class", "group_class"]
+    assert node.type == "group_class"
+    assert node.groups == [["a", "A"], ["b", "B"]]
 
 
 def test_single_brace_nesting_is_heterogeneous():
@@ -168,19 +168,22 @@ def test_singleton_single_part_is_literal():
     assert node.content == "abab"
 
 
-# ── Congruence classes (comma folds to one class) ────────────────────────────
+# ── Comma lists (ordered primitives; fold via nesting) ───────────────────────
 
 
-def test_bare_chars_form_one_congruence_class():
+def test_bare_chars_are_ordered_primitives():
+    # A bare comma-list is an ordered alphabet of primitives — {a,b,c} = {a..c};
+    # the fold is the nested {{a,b,c}}.
     node = first_semantic("{a,b,c}")
     assert node.type == "group_class"
-    assert node.groups == [["a", "b", "c"]]
+    assert node.groups == [["a"], ["b"], ["c"]]
 
 
 def test_token_class():
+    # Multi-char primitives are points too: {cat,dog} is two of them in order.
     node = first_semantic("{cat,dog}")
     assert node.type == "group_class"
-    assert node.groups == [["cat", "dog"]]
+    assert node.groups == [["cat"], ["dog"]]
 
 
 # ── Complement ───────────────────────────────────────────────────────────────
@@ -228,7 +231,7 @@ def test_pure_alphabet_braces_stay_arithmetic():
     assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{aa:{a..z}:zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "heterogeneous"  # {{U}} nesting
-    assert first_semantic("{{a,A},{b,B}}").type == "union"
+    assert first_semantic("{{a,A},{b,B}}").type == "group_class"
 
 
 # ── Self-reference {$i} ───────────────────────────────────────────────────────

@@ -8,28 +8,27 @@
 
 ---
 
-A pattern is built from **universes** and a small set of operators over them. A universe `{...}` is a virtual set of strings or characters; as a pattern it matches **exactly one** of its elements -- one position.
+A pattern is built from **universes** and a small set of operators. A universe `{...}` is a virtual set of strings or characters. As a pattern, it matches **exactly one** of its elements and occupies one position.
 
-| Operator    | Role                                                                                                  |
-| ----------- | ----------------------------------------------------------------------------------------------------- |
-| `{...}`     | **Universe** -- a set of strings/characters; matches one element                                      |
-| `,`         | **Union** -- combine universes (`{a,b}` is `a` or `b`)                                                |
-| `..`        | **Range** -- ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)                                |
-| `{X}{Y}`    | **Adjacency** -- concatenation; the Cartesian product of universes (`{a..z}{A..Z}` $\to$ `aA`...`zZ`) |
-| `!{...}`    | **Subtractive universe** -- everything _not_ in `{...}`, from the ambient universe (Unicode)          |
-| `{x:...:y}` | **Bounds** -- the inner universe, restricted to values `x`-`y` inclusive (`{x::y}` = ambient)         |
-| `[count]`   | **Repetition** -- a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)                 |
-| `{...}~k`   | **Fuzzy** -- the universe within edit distance `k` of a token (`{cat}~1`); see [Fuzzy](#fuzzy)        |
-| `=>`        | **Pipe** -- feed each match into the next transformation                                              |
+| Operator    | Name                     | Role                                                                   |
+| ----------- | ------------------------ | ---------------------------------------------------------------------- |
+| `{...}`     | **Universe**             | a set of strings/chars; matches one element                            |
+| `,`         | **Union**                | combine universes (`{a,b}` is `a` or `b`)                              |
+| `..`        | **Range**                | ordered bounds within one alphabet (`{a..z}`, `{aa..zz}`)              |
+| `!{...}`    | **Subtractive universe** | everything _not_ in `{...}`, from the ambient universe (Unicode)       |
+| `{x:...:y}` | **Bounds**               | restricted a universe to values `x`-`y` inclusive (`{x::y}` = ambient) |
+| `[count]`   | **Repetition**           | a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)    |
+| `{...}~k`   | **Fuzzy**                | the universe within edit distance `k` of a token (`{cat}~1`)           |
+| `=>`        | **Pipe**                 | feed each match into the next transformation                           |
 
-**Every `{...}` matches one position**, holding one **point** of the universe. A point is a **primitive** -- a bare character, one spelling -- or an **object** -- a nested universe `{...}` whose members are **interchangeable** (a congruence class). A run is an explicit `[count]` repeating **one point**: a primitive repeats as its spelling, an object lets each position take **any** of its members independently.
+**Every `{...}` matches one position**, holding one **point** of the universe. A point is a **primitive** (one char or string) or an **object** (a nested universe `{...}`) whose members are **interchangeable**. A run is an explicit `[count]` repeating **one point**: a primitive repeats as its spelling, an object lets each position take **any** of its members independently.
 
 ```proto
 {a,A}[2]          // primitives a, A -- 'aa', 'AA'
 {{a,A}}[2]        // one object {a,A} -- members free: 'aa', 'aA', 'Aa', 'AA'
 {a..z}[3]         // primitives -- 'aaa', 'bbb'
 {{a..z}}[3]       // one object -- any three letters: 'abc', 'zzz'
-{{a,A},{c,C}}[2]  // two objects & % -- one repeated: 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC'
+{{a,A},{c,C}}[2]  // two objects -- one repeated: 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC'
 ```
 
 ---
@@ -44,8 +43,8 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `@s`     | `\n,\r, ,\t`                |
 | `@w`     | `{a,A},{b,B},...,{z,Z},_`   |
 | `@x`     | `!{@s}`                     |
-| `@hex`   | `{@d},{{@w}..f}`            |
-| `@b32`   | `{@d},{{@w}..v}`            |
+| `@hex`   | `{@d},{{@w}:f}`             |
+| `@b32`   | `{@d},{{@w}:v}`             |
 | `@b58`   | `{@d},{@u},{@l},!{0,I,O,l}` |
 | `@b64`   | `{@d},{@l},{@u},+,/`        |
 | `@ascii` | U+0000-U+007F               |
@@ -66,14 +65,14 @@ A pattern is built from **universes** and a small set of operators over them. A 
 A universe is a set. Its atoms are characters and strings; `,` unions them, `..` bounds them into an ordered range, and **adjacency** -- writing universes side by side -- concatenates them into their Cartesian product.
 
 ```proto
-{a}               // the one-element universe {a}
-{abc}             // the one-element universe {abc} (one string)
+{a}               // one-element universe {a}
+{abc}             // one-element universe {abc} (one string)
 {a,b,c}           // union: a or b or c
 {cat,dog}         // union of two strings
-{a..z}            // range: the single characters a through z
-{aa..zz}          // range over a two-wide *Unicode* value space -- every string from 'aa' to 'zz' by value
-{a..z}{A..Z}      // adjacency: a lowercase then an uppercase -- the product aA, aB, ..., zZ
-{a..b}{cd}{e..f}  // adjacency of three universes: {acde,acdf,bcde,bcdf}
+{a..z}            // the single chars a through z
+{aa..zz}          // every string from 'aa' to 'zz' by value (Unicode)
+{a..z}{A..Z}      // adjacency: a lowercase then an uppercase (aA,aB,...,zZ)
+{a..b}{cd}{e..f}  // three adjacent universes: {acde,acdf,bcde,bcdf}
 ```
 
 > **Note:** `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected -- write `{a..z}{A..Z}` for the Cartesian product, `{a..z,A..Z}` for either case, or `{{a,A},...,{z,Z}}` for case-folded positions.
@@ -87,28 +86,28 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 A bare `,` **lists points**: `{a,b}` is an alphabet of two primitives -- the same set as `{a..b}` (a range is just a compact list). Congruence -- folding several spellings into **one** interchangeable point -- comes from **nesting**. A `{...}` used as a member of an enclosing universe is an **object**, and its faces are spellings of a single position that share one value. That shared value is what bounds and references compare by:
 
 ```proto
-{a,b}                  // two primitive points -- the alphabet {a, b}, identical to {a..b}
-{{a,A}}                // one object: a single position spelled 'a' or 'A' (case-folded)
-{{a,A},{b,B}}          // an ordered alphabet of folded positions (a < b, each case-folded)
-{{one,ett},{two, två}} // an object's faces can be whole strings, too
+{a,b}                  // two primitive points (identical to {a..b})
+{{a,A}}                // a single position spelled 'a' or 'A'
+{{a,A},{b,B}}          // an ordered alphabet of folded positions
+{{one,ett},{two, två}} // an object's faces can be strings
 ```
 
-> **Note:** the fold lives in the brace depth. Top-level `{a,A}` is just the two-primitive alphabet (`a` or `A`, two distinct values); wrap it -- `{{a,A}}` -- to fold them into one case-insensitive position. Named alphabets already nest where they fold: `{@w}` is `{{a,A},{b,B},…}`, which is why `@w`, `@hex`, and `@b32` are case-insensitive (see [Macros](#macros)).
+> **Note:** the fold lives in the brace depth so a top-level `{a,A}` is just the two-primitive alphabet (`a` or `A`). `{{a,A}}` folds them into a one case-insensitive position. Named alphabets already nest where they fold: `{@w}` is `{{a,A},{b,B},…}`, which is why `@w`, `@hex`, and `@b32` are case-insensitive (see [Macros](#macros)).
 
 ---
 
 ## Bounds
 
-`{x:U:y}` restricts the universe `U` to the values from `x` to `y`, **inclusive**, by positional value (most-significant first). `{x::y}` uses the ambient universe (Unicode). Either bound may be omitted.
+`{x:U:y}` **inclusively** restricts the universe `U` to the values from `x` to `y` by positional value (most-significant first). `{x::y}` uses the ambient universe (Unicode). Either bound may be omitted.
 
 ```proto
 {0:@d:255}    // decimal values 0 through 255
-{0::255}      // omitted middle = @uni: a Unicode *code-point* value, not the decimal above
+{0::255}      // omitted middle = @uni
 {aa:@l:zz}    // two-letter lowercase strings 'aa' through 'zz'
-{000:@d:999}  // fixed three-wide decimals -- '007' matches (the floor sets the width)
+{000:@d:999}  // fixed three-wide decimals (the floor sets the width)
 ```
 
-The two written widths set the field width -- narrower is the minimum, wider the maximum. Equal widths fix it: `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it: `{000:@d:9}` accepts `9` at any width between the two -- `9`, `09`, `009`. So a fixed width is just floor and ceiling at one width; there is no separate padding operator.
+The two written widths set the field width -- narrower is the minimum, wider the maximum. Equal widths fix it: `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it: `{000:@d:9}` accepts `9` at any width between the two. So a fixed width is just floor and ceiling at one width; there is no separate padding operator.
 
 |        | `{0:@d:90}`  | `{000:@d:90}` | `{0:@d:090}` | `{000:@d:090}` |
 | ------ | ------------ | ------------- | ------------ | -------------- |
@@ -119,7 +118,7 @@ The two written widths set the field width -- narrower is the minimum, wider the
 
 ### Subtraction
 
-`!{...}` is the **subtractive universe** -- every value of the ambient universe (Unicode) _not_ in `{...}`. Alone it draws from the full Unicode set; as a union arm it subtracts from the others:
+`!{...}` is the **subtractive universe** -- every value of the ambient universe (Unicode) _not_ in `{...}`. Alone it draws from the full Unicode set. As a union, it subtracts from the others.
 
 ```proto
 !{a}                   // any character except 'a'
@@ -127,13 +126,13 @@ The two written widths set the field width -- narrower is the minimum, wider the
 {@d,@l,@u,!{0,l,I,O}}  // base58: digits and letters, minus the four ambiguous characters
 ```
 
-A subtractive universe matches one position, like any universe; a run is `[count]`, nested for a heterogeneous run (`{!{|,\n}}[1..]` is a run of cell text).
+> Like any universe, a subtractive universe matches one position.
 
 ---
 
 ## Fuzzy
 
-`{token}~k` is the universe of **all strings within edit distance `k`** of a token -- a finite set, so it is an ordinary universe: it matches one element, captures the **actual** matched text, and composes with `[count]`, captures, and references like any `{...}`. `k` is explicit and required -- there is no implicit fuzz.
+`{token}~k` is the universe of **all strings within edit distance `k`** of a token. It matches one element, captures the **actual** matched text, and composes with `[count]`, captures, and references like any `{...}`. `k` is explicit and required -- there is no implicit fuzz.
 
 ```proto
 {cat}~1         // 'cat', 'cap', 'cot', 'at', 'cart', ... (Levenshtein distance <= 1)
@@ -141,17 +140,7 @@ A subtractive universe matches one position, like any universe; a run is `[count
 {cat:@l:cat}~1  // distance <= 1, with only lowercase letters bridging the gap
 ```
 
-The operand is a token, a token union, or an alphabet-annotated token `{token:A:token}` -- a finite set has a well-defined neighborhood; a non-singleton range or subtractive universe does not. The edits draw from the operand's own alphabet: bare `{cat}` is `{cat:@uni:cat}`, so any character may bridge (hence `cap`, `cot`, `cart`); `{cat:@l:cat}~1` narrows that to lowercase, rejecting `c@t`. A token must be spellable in its alphabet, so `{Cat:@l:Cat}` is a compile error. Distance is **Levenshtein**; ties break by smallest distance, then longest span, then leftmost. Like `@uni`, the neighborhood is matched by an automaton, never enumerated.
-
-`~k` is **closeness only**: a token of length `L` within distance `k` spans `L ± k` characters, so the search is bounded. **Extent** -- the nearest match within a window -- lives on the repetition, not the fuzz: a lazy, budgeted run (see [Repetition](#repetition)) plus a `~k` delimiter.
-
-```proto
-{!{|}}[..<100]{|}~1  // up to 100 non-pipes, ending at the nearest fuzzy '|'
-```
-
-The window is the run's budget (`[..<100]`), laziness picks the **nearest**, and closeness is the delimiter's (`~1`) -- three knobs, each meaning one thing.
-
-<!-- Consider dropping lazy operations. -->
+The operand is a token, a token union, or an alphabet-annotated token `{token:A:token}` -- a finite set has a well-defined neighbourhood; a non-singleton range or subtractive universe does not. The edits draw from the operand's own alphabet: bare `{cat}` is `{cat:@uni:cat}`, so any character may bridge (hence `cap`, `cot`, `cart`); `{cat:@l:cat}~1` narrows that to lowercase, rejecting `c@t`. A token must be spellable in its alphabet, so `{Cat:@l:Cat}` is a compile error. Distance is **Levenshtein**; ties break by smallest distance, then longest span, then leftmost. Like `@uni`, the neighbourhood is matched by an automaton, never enumerated.
 
 ---
 
@@ -173,12 +162,12 @@ Only the integer operators carry over: adjacency is meaningless (a count is one 
 
 A run is **greedy** by default: it takes the longest count in range that still lets the rest match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` is **lazy**: shortest first, ending at the **nearest** following match (for a terminator you cannot exclude from the run's class). The ceiling is the search **budget** -- a greedy `[x..y]` backs off no further than `x` -- so `[..]` (open) is the only unbounded scan.
 
-`[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`); an **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an object stays within it -- `{{a,A},{c,C}}[2]` is `&²` or `%²`, never a cross like `ac`. A grouping brace (a `{...}` of concatenated universes) is one point too, repeating by **shape** -- so one pattern walks a block: the cells of a row, the rows of a table.
+`[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`). An **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an object stays within universe `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`.
 
 ```proto
-{a..z}[3]                    // primitive: 'aaa', 'bbb' -- the same letter three times
-{{a..z}}[3]                  // object: 'abc', 'xyz' -- any three letters, each free
-{{a,A},{c,C}}[2]             // one object repeated: 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC'
+{a..z}[3]                    // primitive: the same letter three times (e.g. 'aaa','bbb')
+{{a..z}}[3]                  // object: any three letters, each free (e.g. 'abc','xyz')
+{{a,A},{c,C}}[2]             // one object repeated (e.g. 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC')
 {a..z}[2,4,6]                // the same letter 2, 4, or 6 times -- a union, not a step
 {{|}{!{|,\n}}[1..]}[2..]{|}  // two or more '|'+cell units, each cell different
 ```

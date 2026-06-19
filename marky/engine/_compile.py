@@ -344,12 +344,11 @@ class _Complement(_Base):
 
 
 class _Group(_Base):
-    """Congruence class — interchangeable spellings of one position. A bare
-    `{U}[n]` repeats **homogeneously** (same matched string each rep, so
-    `{a,A}[2]` is aa/AA — the loop checks string equality). Its `equal_unit` is
-    the **heterogeneous** continuation used by `{{U}}[n]`: the same group
-    *sequence* with free spelling (`{{a,A}}[2]` is all four), but no crossing to
-    a different group (`{{-,*}}` never mixes `-` and `*`)."""
+    """An ordered alphabet of congruence groups — each group a set of
+    interchangeable faces of one point. A run stays in the matched member's
+    group, with faces free: `{a,A}` is two singleton groups (so `{a,A}[2]` is
+    aa/AA), while `{{a,A}}` is one two-face group (so `{{a,A}}[2]` is all four)
+    and `{{a,A},{c,C}}[2]` is `&²`/`%²` — never crossing to another group."""
 
     __slots__ = ("members", "_singles")
 
@@ -627,8 +626,11 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
                 # `{{U}}`: repeat the inner heterogeneously (a fresh match per rep).
                 elements.append(GroupEl(lower(child.semantic.inner), reps, het=True))
             else:
-                # A complement run is heterogeneous too (any non-inner char each).
-                het = isinstance(child.semantic, t.ComplementNode)
+                # A run repeats one **point**, faces free within it: a congruence
+                # class (`GroupClassNode`) stays in the matched member's group
+                # (`{{a,A},{c,C}}[2]` is `&²`/`%²`), and a complement draws any
+                # non-inner char each rep. Both are the group-based continuation.
+                het = isinstance(child.semantic, (t.ComplementNode, t.GroupClassNode))
                 elements.append(GroupEl(lower(child.semantic), reps, het=het))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")

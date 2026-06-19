@@ -285,8 +285,9 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
     # The first unit need not be greedy-maximal: a shorter first unit may let the
     # remainder split into equal repetitions ("2525" -> 25+25). Try unit lengths
     # longest-first; within each, the run's acceptable counts in priority order.
-    # A bare `{U}[n]` repeats **homogeneously** (the same string); a heterogeneous
-    # `{{U}}[n]` / complement repeats via the matcher's `equal_unit`.
+    # A run repeats **one point**: a range/literal is a primitive (same string
+    # each rep), while a congruence class or complement is an object whose faces
+    # are free within the matched group — its `equal_unit` continuation.
     het = el.het
     for unit_len in range(greedy_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
