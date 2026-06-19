@@ -3,7 +3,7 @@
 import pytest
 
 from marky.engine.alphabet import Alphabet
-from marky.macros import MACROS
+from marky.parser.macros import MACROS
 from marky.models.exceptions import CompileError
 
 try:

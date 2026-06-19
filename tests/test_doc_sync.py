@@ -5,7 +5,7 @@ from pathlib import Path
 
 from marky import parser
 from marky.engine import find_matches
-from marky.macros import MACROS
+from marky.parser.macros import MACROS
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
 

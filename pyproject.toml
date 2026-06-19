@@ -18,6 +18,25 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 
+# Architecture guard: a strict layering. Higher layers may import lower ones;
+# the two middle siblings (parser, engine) are independent and may not import
+# each other — they communicate only through the `models` AST. `macros` lives
+# inside `parser` (it is parser-only preprocessing), so it needs no own entry.
+[tool.importlinter]
+root_package = "marky"
+include_external_packages = false
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture (main > tools > {parser, engine} > models)"
+type = "layers"
+layers = [
+    "marky.main",
+    "marky.tools",
+    "marky.parser | marky.engine",
+    "marky.models",
+]
+exhaustive = false
+
 
 [project.scripts]
 marky = "marky.main:main"
@@ -27,4 +46,4 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
-dev = ["ruff (>=0.15.16,<0.16.0)", "ty (>=0.0.44,<0.0.45)", "pytest (>=9.0.3,<10.0.0)", "hypothesis (>=6.155.2,<7.0.0)", "vulture (>=2.16,<3.0)"]
+dev = ["ruff (>=0.15.16,<0.16.0)", "ty (>=0.0.44,<0.0.45)", "pytest (>=9.0.3,<10.0.0)", "hypothesis (>=6.155.2,<7.0.0)", "vulture (>=2.16,<3.0)", "import-linter (>=2.0,<3.0)"]

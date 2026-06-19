@@ -132,7 +132,7 @@ def _count_top_groups(text: str) -> int:
 
 def _load_rules() -> list[tuple]:
     """The `[[rewrites]]` rules: each pairs a tool with its keyword parameters."""
-    path = Path(__file__).parent.parent / "macros.toml"
+    path = Path(__file__).parent / "macros.toml"
     if not path.exists():
         return []
     out: list[tuple] = []

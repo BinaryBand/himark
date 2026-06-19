@@ -13,7 +13,7 @@ Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
 import re
 
-from marky.macros import MACROS
+from marky.parser.macros import MACROS
 from marky.models.exceptions import CompileError
 from marky.parser import rewrites
 
