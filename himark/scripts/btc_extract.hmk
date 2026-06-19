@@ -1,0 +1,35 @@
+// ============================================================================
+//  btc_extract.hmk — tag every legacy Bitcoin address in a text file.
+//
+//  Run it like any pipeline:
+//      himark transpile addresses.txt --script himark/scripts/btc_extract.hmk
+//
+//  Each P2PKH (`1…`) address is wrapped in <btc>…</btc> in place; everything
+//  else is left verbatim. To pull the addresses out as a plain list instead,
+//  run the same pattern as a query:
+//      himark execute '{!@b58}{{1}{…:@b58:…}}' addresses.txt
+//
+//  How the match works (see docs/IN_BRIEF.md "Aspirational examples"):
+//    * The address is a `1` prefix (the 0x00 version byte) followed by a base58
+//      value bounded between the smallest and largest 25-byte address — the two
+//      endpoints set both the value range and the field-width window, so only a
+//      base58 run of address length *and* magnitude matches.
+//    * `{!@b58}` is a leading boundary: a non-base58 char (space, newline,
+//      punctuation) must sit before the `1`. That word-anchors the match, so an
+//      interior `1` inside a longer base58 run (e.g. a `3…` P2SH address) is not
+//      mistaken for the start of an address. The boundary char is re-emitted via
+//      `{{$0}}`; the address itself is the grouping brace `{{1}{…}}` = `{{$1}}`.
+//
+//  Scope & limits (honest, by construction):
+//    * SHAPE, not validity — the engine matches in one pass and cannot run the
+//      base58check double-SHA256, so a random base58 word that happens to be a
+//      `1`-led, address-length, in-range value is a false positive. (The
+//      checksum *can* be computed in a template: `{{ $1 | b256(25) | sha256 |
+//      sha256 }}` — but verifying it needs comparison the matcher cannot do.)
+//    * P2PKH only — `3…` P2SH and `bc1…` bech32 are out of scope.
+//    * The leading boundary means an address at the very first byte of the file
+//      is missed; keep a newline or space ahead of it.
+// ============================================================================
+
+{!@b58}{{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}}
+    => "{{$0}}<btc>{{$1}}</btc>"
