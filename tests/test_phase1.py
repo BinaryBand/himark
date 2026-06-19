@@ -156,15 +156,6 @@ def test_self_binding_count_leaves_count_ref_alone():
     assert apply(r"{{a}[#0]}[1..]") == r"{{a}[#0]}[1..]"
 
 
-def test_rewrite_tool_is_parameterized():
-    # The tool is generic — marker/free/bound come from data, so a different
-    # marker drives the same unroll.
-    from himark.parser.rewrites import unroll_on_marker
-
-    out = unroll_on_marker(r"{{a}[~]}[1..]", marker="[~]", free="[..]", bound="[#@]")
-    assert out == r"{a}[..]{{a}[#0]}[1..]"
-
-
 def test_substitute_pipe_repeat_shortcut():
     # The TOML-described substitution: {|..} is sugar for {|}[..].
     from himark.parser.rewrites import apply

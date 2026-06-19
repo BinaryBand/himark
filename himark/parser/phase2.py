@@ -11,7 +11,7 @@ import re
 
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
-from himark.parser._text import ESCAPES, unescape
+from himark.parser._text import ESCAPES, brace_end, unescape
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")
@@ -22,15 +22,10 @@ _FUZZ_SRC = re.compile(r"~(\d+)")
 
 def _scan_braces(text: str, pos: int) -> int:
     """Return the end index (exclusive) of the brace group starting at pos."""
-    depth = 0
-    for i in range(pos, len(text)):
-        if text[i] == "{":
-            depth += 1
-        elif text[i] == "}":
-            depth -= 1
-        if depth == 0:
-            return i + 1
-    raise CompileError(f"Unclosed '{{' at position {pos}")
+    span = brace_end(text[pos:])
+    if span is None:
+        raise CompileError(f"Unclosed '{{' at position {pos}")
+    return pos + span
 
 
 def _scan_string(text: str, pos: int) -> int:

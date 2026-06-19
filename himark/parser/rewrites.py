@@ -15,10 +15,9 @@ Two layers keep the specifics in data, not code:
 """
 
 import re
-import tomllib
-from pathlib import Path
 
 from himark.parser._text import brace_end
+from himark.parser.macros import REWRITES
 
 _COUNT = re.compile(r"\[[^\]]*\]")
 # A self-binding count token: a `[…]` count holding a lone `#` (not `#N`, which is
@@ -34,21 +33,6 @@ def substitute(src: str, *, find: str, into: str) -> str:
     """Replace every literal occurrence of `find` with `into` — the simplest
     rewrite, for fixed sugar like `{|..}` → `{|}[..]`."""
     return src.replace(find, into)
-
-
-def unroll_on_marker(src: str, *, marker: str, free: str, bound: str) -> str:
-    """'Bind on first repeat' unroll. Where `marker` (a count token such as `[#]`)
-    sits inside a repeated grouping brace `{BODY}[N]`, emit a free first copy
-    (`marker` → `free`) then the repeats (`marker` → `bound`, with `@` the bound
-    group index): `{BODY[#]…}[N]` → `BODY[..]… {BODY[#G]…}[N]`."""
-    while True:
-        h = src.find(marker)
-        if h == -1:
-            return src
-        out = _unroll(src, h, marker, free, bound)
-        if out is None:
-            return src
-        src = out
 
 
 def bind_count(src: str) -> str:
@@ -92,7 +76,6 @@ def _unroll(src: str, marker_at: int, marker: str, free: str, bound: str) -> str
 
 _TOOLS = {
     "substitute": substitute,
-    "unroll_on_marker": unroll_on_marker,
     "bind_count": bind_count,
 }
 
@@ -127,16 +110,13 @@ def _count_top_groups(text: str) -> int:
     return n
 
 
-# ── Rules (data, from shortcuts.toml) ─────────────────────────────────────────
+# ── Rules (data, from macros.toml's [[rewrites]]) ─────────────────────────────
 
 
 def _load_rules() -> list[tuple]:
     """The `[[rewrites]]` rules: each pairs a tool with its keyword parameters."""
-    path = Path(__file__).parent / "macros.toml"
-    if not path.exists():
-        return []
     out: list[tuple] = []
-    for rule in tomllib.loads(path.read_text("utf-8")).get("rewrites", []):
+    for rule in REWRITES:
         tool = _TOOLS.get(rule.get("tool", ""))
         if tool is not None:
             out.append((tool, {k: v for k, v in rule.items() if k != "tool"}))
