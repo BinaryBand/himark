@@ -22,13 +22,14 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `{...}~k`   | **Fuzzy** -- the universe within edit distance `k` of a token (`{cat}~1`); see [Fuzzy](#fuzzy)        |
 | `=>`        | **Pipe** -- feed each match into the next transformation                                              |
 
-**Every `{...}` matches one position.** A run is always an explicit `[count]`. A bare `{U}[n]` repeats **homogeneously** -- the _same_ matched value, `n` times. To repeat **heterogeneously** -- a fresh match each time -- nest the universe in a group: `{{U}}[n]`.
+**Every `{...}` matches one position**, holding one **point** of the universe. A point is a **primitive** -- a bare character, one spelling -- or an **object** -- a nested universe `{...}` whose members are **interchangeable** (a congruence class). A run is an explicit `[count]` repeating **one point**: a primitive repeats as its spelling, an object lets each position take **any** of its members independently.
 
 ```proto
-{a,A}[2]     // homogeneous: 'aa', 'AA'
-{{a,A}}[2]   // heterogeneous: 'aa', 'aA', 'Aa', 'AA'
-{a..z}[3]    // homogeneous: 'aaa', 'bbb'
-{{a..z}}[3]  // heterogeneous: any three letters, 'abc'
+{a,A}[2]          // primitives a, A -- 'aa', 'AA'
+{{a,A}}[2]        // one object {a,A} -- members free: 'aa', 'aA', 'Aa', 'AA'
+{a..z}[3]         // primitives -- 'aaa', 'bbb'
+{{a..z}}[3]       // one object -- any three letters: 'abc', 'zzz'
+{{a,A},{c,C}}[2]  // two objects & % -- one repeated: 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC'
 ```
 
 ---
@@ -79,17 +80,20 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 
 A universe always matches **one** of its elements (one position). `{a..z}` matches one letter; `{cat,dog}` matches one of the two words. A run is an explicit `[count]` (see [Repetition](#repetition)).
 
-> **Note:** an unnamed multi-character range is over **ambient Unicode**, not over letters. `{aa..zz}` is `{aa:@uni:zz}`, so it is the whole value band from `aa` to `zz` -- every two-wide string whose value falls between them, including non-letter ones like 'b:fire:' (its first position `b` lands inside `a`-`z`). To mean "two lowercase letters," name the alphabet: `{aa:@l:zz}`.
+> **Note:** an unnamed multi-character range is over **ambient Unicode**, not letters. `{aa..zz}` is `{aa:@uni:zz}` -- the whole value band from `aa` to `zz`, including non-letter strings whose value falls between. For "two lowercase letters," name the alphabet: `{aa:@l:zz}`.
 
 ### Congruence
 
-`,` makes its members **interchangeable** -- one position with several spellings. This matters under bounds and references, where congruent spellings share a value:
+A bare `,` **lists points**: `{a,b}` is an alphabet of two primitives -- the same set as `{a..b}` (a range is just a compact list). Congruence -- folding several spellings into **one** interchangeable point -- comes from **nesting**. A `{...}` used as a member of an enclosing universe is an **object**, and its faces are spellings of a single position that share one value. That shared value is what bounds and references compare by:
 
 ```proto
-{a,A}                  // one position, two spellings: 'a' or 'A'
+{a,b}                  // two primitive points -- the alphabet {a, b}, identical to {a..b}
+{{a,A}}                // one object: a single position spelled 'a' or 'A' (case-folded)
 {{a,A},{b,B}}          // an ordered alphabet of folded positions (a < b, each case-folded)
-{{one,ett},{two, två}} // congruence can fold multiple characters, too
+{{one,ett},{two, två}} // an object's faces can be whole strings, too
 ```
+
+> **Note:** the fold lives in the brace depth. Top-level `{a,A}` is just the two-primitive alphabet (`a` or `A`, two distinct values); wrap it -- `{{a,A}}` -- to fold them into one case-insensitive position. Named alphabets already nest where they fold: `{@w}` is `{{a,A},{b,B},…}`, which is why `@w`, `@hex`, and `@b32` are case-insensitive (see [Macros](#macros)).
 
 ---
 
@@ -104,7 +108,7 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 {000:@d:999}  // fixed three-wide decimals -- '007' matches (the floor sets the width)
 ```
 
-The two bounds' written widths set the field width: the narrower is the minimum, the wider the maximum. Equal widths fix it -- `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it -- `{000:@d:9}` accepts the value `9` at any width from the ceiling's up to the floor's: `9`, `09`, and `009`. A fixed width is therefore a floor and ceiling written at the same width; there is no separate padding operator.
+The two written widths set the field width -- narrower is the minimum, wider the maximum. Equal widths fix it: `{000:@d:999}` is exactly three wide, so `007` and `042` match but `7` does not. A narrower ceiling relaxes it: `{000:@d:9}` accepts `9` at any width between the two -- `9`, `09`, `009`. So a fixed width is just floor and ceiling at one width; there is no separate padding operator.
 
 |        | `{0:@d:90}`  | `{000:@d:90}` | `{0:@d:090}` | `{000:@d:090}` |
 | ------ | ------------ | ------------- | ------------ | -------------- |
@@ -137,9 +141,9 @@ A subtractive universe matches one position, like any universe; a run is `[count
 {cat:@l:cat}~1  // distance <= 1, with only lowercase letters bridging the gap
 ```
 
-The operand is a token, a token union, or a single **alphabet-annotated** token `{token:A:token}` -- a finite set with a well-defined neighborhood (a non-singleton range or subtractive universe has none). The alphabet the edits draw from is simply the operand universe's own: a bare `{cat}` is over ambient Unicode (it is `{cat:@uni:cat}`), so `~1` may insert or substitute **any** character -- this is why `cap`, `cot`, and `cart` above all match. Annotate the alphabet to narrow that: `{cat:@l:cat}~1` lets only lowercase letters bridge the gap, so it rejects a span like `c@t` that no `@l` edit can reach. Because a token must be spellable in its own alphabet, `{Cat:@l:Cat}` is a compile error -- there is no `@l` symbol to stand in for `C`. Distance is **Levenshtein** (insert, delete, substitute); ties resolve by smallest distance, then longest span, then leftmost. Like `@uni`, a fuzzy universe is recognized by an automaton, not enumerated -- so even a Unicode-wide neighborhood is matched, never enumerated.
+The operand is a token, a token union, or an alphabet-annotated token `{token:A:token}` -- a finite set has a well-defined neighborhood; a non-singleton range or subtractive universe does not. The edits draw from the operand's own alphabet: bare `{cat}` is `{cat:@uni:cat}`, so any character may bridge (hence `cap`, `cot`, `cart`); `{cat:@l:cat}~1` narrows that to lowercase, rejecting `c@t`. A token must be spellable in its alphabet, so `{Cat:@l:Cat}` is a compile error. Distance is **Levenshtein**; ties break by smallest distance, then longest span, then leftmost. Like `@uni`, the neighborhood is matched by an automaton, never enumerated.
 
-`~k` is **closeness only** -- a quality threshold on one element, inherently bounded: a token of length `L` within distance `k` spans `L ± k` characters, so there is no open-ended search. "Find the nearest fuzzy match within a window" is the other half -- **extent** -- which lives on the repetition, not the fuzz: a lazy, budgeted run (see [Repetition](#repetition)) plus a `~k` delimiter.
+`~k` is **closeness only**: a token of length `L` within distance `k` spans `L ± k` characters, so the search is bounded. **Extent** -- the nearest match within a window -- lives on the repetition, not the fuzz: a lazy, budgeted run (see [Repetition](#repetition)) plus a `~k` delimiter.
 
 ```proto
 {!{|}}[..<100]{|}~1  // up to 100 non-pipes, ending at the nearest fuzzy '|'
@@ -165,20 +169,21 @@ The window is the run's budget (`[..<100]`), laziness picks the **nearest**, and
 | `[a,b,c]` | exactly `a`, `b`, or `c` times  |
 | `[..<y]`  | lazy: up to `y`, shortest first |
 
-Only the integer operators carry over. **Adjacency** is meaningless -- a count is one number, not a concatenation. A run of specific counts is usually a union (`[2,4,6]`); a long arithmetic run may take a bounded stride instead (see the note below), but an **unbounded** stride is out of scope -- a stepped scan with no end is expensive. A non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, a reference fits too: `[#i]` is the count group `i` matched (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
+Only the integer operators carry over: adjacency is meaningless (a count is one number), and a non-integer count alphabet (`[a..z]`, `[!{@s}]`) is a compile error. Because the count is a universe, references fit: `[#i]` repeats as group `i` did (see [Self-references](#self-references)), and `[#0..#1]` ranges between two captured counts.
 
-A run is **greedy** by default: it takes the longest count in range that still lets the rest of the pattern match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` makes it **lazy** -- the shortest count first, extending only as needed, so the run ends at the **nearest** following match (the niche case: a terminator you cannot simply exclude from the run's class). Either way the ceiling is the search **budget**: a greedy `[x..y]` tries `y` and backs off no further than `x`, capping the backtracking at `y - x` steps. `[..]` (open) is the only unbounded scan -- give it a ceiling when an open search's cost matters.
+A run is **greedy** by default: it takes the longest count in range that still lets the rest match, backing off toward the floor if the tail fails -- so `{!\ }[1..]` is a whole word. `[..<y]` is **lazy**: shortest first, ending at the **nearest** following match (for a terminator you cannot exclude from the run's class). The ceiling is the search **budget** -- a greedy `[x..y]` backs off no further than `x` -- so `[..]` (open) is the only unbounded scan.
 
-A bare `{U}[n]` repeats **homogeneously** -- the same matched value. A nested `{{U}}[n]` repeats **heterogeneously** -- a fresh match per rep. A grouping brace (a `{...}` holding a concatenation of universes) likewise repeats by **shape**, so one pattern can walk a homogeneous block -- the cells of a row, the rows of a table.
+`[n]` repeats **one point**. A **primitive** repeats verbatim (`{a..z}[3]` is `aaa`); an **object**'s members are interchangeable, so each position takes any of them (`{{a..z}}[3]` is any three letters). Repeating an object stays within it -- `{{a,A},{c,C}}[2]` is `&²` or `%²`, never a cross like `ac`. A grouping brace (a `{...}` of concatenated universes) is one point too, repeating by **shape** -- so one pattern walks a block: the cells of a row, the rows of a table.
 
 ```proto
-{a..z}[3]                    // 'aaa', 'bbb' -- the same letter three times
-{{a..z}}[3]                  // 'abc', 'xyz' -- any three letters
+{a..z}[3]                    // primitive: 'aaa', 'bbb' -- the same letter three times
+{{a..z}}[3]                  // object: 'abc', 'xyz' -- any three letters, each free
+{{a,A},{c,C}}[2]             // one object repeated: 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC'
 {a..z}[2,4,6]                // the same letter 2, 4, or 6 times -- a union, not a step
 {{|}{!{|,\n}}[1..]}[2..]{|}  // two or more '|'+cell units, each cell different
 ```
 
-> **Note:** A range may carry a **stride** as an optional third segment -- `[0..100..2]` is every second count, and `{a..z..2}` every second letter (`a, c, e, ...`). A stride needs both bounds, so it is always finite; an open-ended stride is not allowed (a stepped scan with no end is the cost to avoid). It is a quiet shorthand, not a first reach: for a handful of values a union (`[2,4,6]`, `{a,c,e}`) reads better -- use `..s` only when enumerating would be unwieldy.
+> **Note:** A range may take a **stride** as a third segment -- `[0..100..2]` is every second count, `{a..z..2}` every second letter. A stride needs both bounds (always finite); an open-ended stride is not allowed. Prefer a union (`[2,4,6]`, `{a,c,e}`) for a handful of values; reach for `..s` only when enumerating would be unwieldy.
 
 ---
 
@@ -225,8 +230,8 @@ A pattern can refer back to what an earlier capture matched. Groups are numbered
 
 `=>` runs a chain of steps. Each step is a **query** (a matcher) or a **template** (plain text with no matchable `{...}`); the first step is a query. Each match of the first query starts a **branch**, and the rest of the chain transforms that branch's text independently. A branch's output is **whatever it has committed**:
 
-- a **query** matches within the branch's text and commits each match's transform in place, keeping the text between matches. A query that matches nothing commits nothing and **stops** the branch. If nothing has been committed yet, the branch produces no output -- so a query placed before the work is a **guard**: a non-match drops the branch before anything is written (this is how a chain filters).
-- a **template** renders and **commits** that render. A later query that finds nothing leaves the committed render untouched -- a committed template is **never rolled back**. Templates are **not** terminal: a later query matches the rendered text, and a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
+- a **query** matches within the branch and commits each match's transform in place, keeping the text between. A query that matches nothing **stops** the branch; if nothing is committed yet, it produces no output -- so a query before the work is a **guard** that filters out non-matches.
+- a **template** renders and **commits** it -- never rolled back. Templates are **not** terminal: a later query matches the rendered text, a later template wraps it. `{{.}}` is the flowing text, so templates compose (`... => "<b>{{.}}</b>" => "<i>{{.}}</i>"` yields `<i><b>...</b></i>`).
 
 By default a template's whole render both writes to the document and flows downstream. To split the two, mark one accessor with `{{> ... }}`: that part is what the next stage sees, while the full render still lands in the document. At most one `{{> ... }}` may appear per template.
 
