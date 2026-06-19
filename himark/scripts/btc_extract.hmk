@@ -1,40 +1,59 @@
 // ============================================================================
-//  btc_extract.hmk -- find legacy Bitcoin addresses and recompute their checksum.
+//  btc_extract.hmk -- extract checksum-valid legacy Bitcoin addresses.
 //
 //  Run it like any pipeline:
 //      himark transpile addresses.txt --script himark/scripts/btc_extract.hmk
 //
-//  Each P2PKH (1...) address is rewritten in place as
-//      <btc addr=1A1zP1eP... expect=c29b7d93 actual=c29b7d93/>
-//  where actual is the 4-byte checksum carried inside the address and expect is
-//  the checksum recomputed from the address body. They are equal for a genuine
-//  address and differ for a base58 word that merely looks like one -- so filter
-//  the output to the lines whose expect equals actual to drop the false
-//  positives this shape-matcher cannot reject on its own.
+//  Output: every genuine P2PKH (1...) address becomes <btc>1A1zP1eP...</btc>;
+//  a base58 word that only looks like an address is left as plain text. So the
+//  checksum actually filters the false positives -- no manual step needed.
 //
-//  How it works (see docs/IN_BRIEF.md, Aspirational examples):
+//  It runs in three passes, each spliced over the whole document in turn:
+//
+//   1. TAG every address-shaped run with its recomputed and embedded checksums:
+//        <btc addr="1A1zP1eP..." expect=c29b7d93 actual=c29b7d93/>
+//      `expect` is base58check recomputed from the body, `actual` is the 4-byte
+//      checksum carried inside the address (see the filter chain below).
+//
+//   2. KEEP the valid ones. The pattern captures `expect` (group 3) and then
+//      requires `actual` to be the *same* text with the back-reference {$3} --
+//      HMK's equality test. A match (expect == actual) is rewritten to the final
+//      <btc>address</btc>. A mismatch fails the pattern and is left untouched.
+//
+//   3. REVERT the rest. Whatever <btc addr=.../> tags survive pass 2 are exactly
+//      the checksum mismatches, so they are rewritten back to the bare address.
+//
+//  The ordering is the whole trick: handling expect == actual first leaves the
+//  mismatches as the only <btc addr=.../> tags for pass 3 to undo -- so "not
+//  equal" needs no separate operator.
+//
+//  How the match and checksum work (see docs/IN_BRIEF.md, Aspirational examples):
 //    * The address is a 1 prefix (the 0x00 version byte) followed by a base58
-//      value bounded between the smallest and largest 25-byte address -- the two
-//      endpoints set the value range and the field-width window, so only a
-//      base58 run of address length and magnitude matches. Group 2 is that value
-//      (it carries the b58 alphabet); group 1 ++ group 2 is the printed address.
+//      value bounded between the smallest and largest 25-byte address -- the
+//      endpoints set the value range and the field-width window. Group 2 is that
+//      value (it carries the b58 alphabet); group 1 ++ group 2 is the address.
 //    * The leading boundary [!@b58] (a non-base58 char before the 1) word-anchors
 //      the match, so an interior 1 inside a longer base58 run -- a 3... P2SH
 //      address, say -- is not read as an address start. It is re-emitted as $0.
-//    * The checksum is base58check: expect decodes the address to 25 bytes
-//      [b256(25)], takes the 21-byte body [head(21)], double-SHA256s it, and
-//      keeps the leading 4 bytes [head(4)]; actual is the trailing 4 bytes
-//      [tail(4)]. A leading 1 is base58 zero, so the value of group 2 alone
-//      re-encodes to the full 25-byte payload (the version byte is the pad).
+//    * base58check: expect decodes the address to 25 bytes [b256(25)], takes the
+//      21-byte body [head(21)], double-SHA256s it, keeps the leading 4 bytes
+//      [head(4)]; actual is the trailing 4 bytes [tail(4)]. A leading 1 is base58
+//      zero, so group 2's value re-encodes to the full payload (version byte pad).
 //
-//  Scope and limits:
-//    * The matcher finds address SHAPE; the template reports checksum validity
-//      but cannot drop a mismatch itself (a one-pass matcher has no equality
-//      test) -- hence the expect/actual pair for you to filter on.
-//    * P2PKH only -- 3... P2SH and bc1... bech32 are out of scope.
-//    * The leading boundary means an address at the very first byte of the file
-//      is missed; keep a newline or space ahead of it.
+//  Scope: P2PKH only (3... P2SH and bc1... bech32 are out of scope); an address
+//  at the very first byte of the file is missed (keep a space/newline ahead).
 // ============================================================================
 
+// 1. Tag every address-shaped run with its expected and actual checksums.
 {!@b58}{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
     => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"
+
+// 2. Keep the valid ones: {$3} forces actual == expect. Render the final form.
+//    The hex runs are complements ({!\ } / {!/}) so each digit is free; a
+//    constrained {{0..9,a..f}} run would fold to one congruence arm.
+{<btc addr=\"}{!\"}[1..]{\" expect=}{!\ }[1..]{\ actual=}{$3}{/>}
+    => "<btc>{{$1}}</btc>"
+
+// 3. Revert the survivors (checksum mismatches) to the bare address.
+{<btc addr=\"}{!\"}[1..]{\" expect=}{!\ }[1..]{\ actual=}{!/}[1..]{/>}
+    => "{{$1}}"
