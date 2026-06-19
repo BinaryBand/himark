@@ -26,7 +26,8 @@ The branches render two ways, neither privileged:
 from marky.engine._render import is_template as _is_template
 from marky.engine._render import render as _render
 from marky.engine._types import Match
-from marky.engine.backend import Engine, PythonEngine
+from marky.engine.backend import PythonEngine
+from marky.engine.interface import Engine
 from marky.models import nodes_typed as t
 
 __all__ = [

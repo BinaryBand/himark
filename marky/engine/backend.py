@@ -1,39 +1,24 @@
-"""Swappable execution backend for the matching core.
+"""The built-in pure-Python matching backend.
 
-The engine exposes a coarse two-call seam — `compile` a resolved AST into an
-opaque handle, then `run` that handle against text. Only this hot path (compile
-+ scan) sits behind the seam; orchestration (chaining, rendering, branch
-splicing) stays in pure Python and calls `find_matches`.
-
-The seam is deliberately coarse: a native backend (e.g. Rust via PyO3) receives
-the whole AST and text and returns `Match` objects, so the scan loop never
-crosses the FFI boundary per character. The handle is opaque, paired to the
-backend that produced it. The built-in `PythonEngine` wraps `compile_pattern`
-plus the generic run loop.
+`PythonEngine` is the default implementation of the `Engine` seam (defined in
+`interface.py`): it wraps `compile_pattern` plus the generic backtracking loop in
+`_run`. The seam is deliberately coarse — a backend receives the whole AST and
+text and returns `Match` objects, so the scan never crosses an FFI boundary
+per character — which is what lets a native backend (e.g. Rust via PyO3) drop in
+via `set_backend` without touching orchestration (chaining, rendering, splicing).
 """
 
 from __future__ import annotations
 
-from typing import Protocol, cast, runtime_checkable
+from typing import cast
 
 from marky.engine._compile import Element, compile_pattern
 from marky.engine._run import find_matches as _run_find_matches
 from marky.engine._types import Match
+from marky.engine.interface import Engine
 from marky.models import nodes_typed as t
 
-
-@runtime_checkable
-class Engine(Protocol):
-    """An execution backend. `compile` returns an opaque handle that the same
-    backend's `run` consumes."""
-
-    name: str
-
-    def compile(self, tree: t.RootNode) -> object: ...
-
-    def run(
-        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
-    ) -> list[Match]: ...
+__all__ = ["Engine", "PythonEngine"]
 
 
 class PythonEngine:
