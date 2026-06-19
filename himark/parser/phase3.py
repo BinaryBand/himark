@@ -19,10 +19,10 @@ the field-width window (`{0:@d:255}`, `{aa:@l:zz}`, `{x::y}` = ambient @uni).
 
 import re
 
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
-from marky.parser import phase2
-from marky.parser._text import (
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
+from himark.parser import phase2
+from himark.parser._text import (
     brace_end,
     inner_of,
     split_top,

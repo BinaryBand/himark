@@ -287,7 +287,7 @@ Worked patterns, in the universe/bounds model.
 {1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
 ```
 
-**Markdown $\to$ HTML** -- a pipeline in a `.hmk` script ([marky/scripts/md_html.hmk](marky/scripts/md_html.hmk)), run with `marky transpile`. For example, headers map the `#` count to the heading level:
+**Markdown $\to$ HTML** -- a pipeline in a `.hmk` script ([himark/scripts/md_html.hmk](himark/scripts/md_html.hmk)), run with `himark transpile`. For example, headers map the `#` count to the heading level:
 
 ```proto
 {#}[1..6]{ }[1..]{!{\n}}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // '##' -> <h2>...</h2>
@@ -295,4 +295,4 @@ Worked patterns, in the universe/bounds model.
 
 ### Script files (.hmk)
 
-A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate -- all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `marky transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).
+A `.hmk` file is a pipeline of HMK statements applied in order. One statement per logical line; a line beginning with `=>` continues the previous statement (multi-line chains), `//` starts a line comment, and blank lines separate -- all read at brace/quote depth 0, so `=>` and `//` inside `{...}` or `"..."` are content. Run one over a document with `himark transpile <doc> --script <file.hmk>` (output to stdout, or `--out <file>`).

@@ -1,5 +1,5 @@
-from marky.models import nodes_typed as t
-from marky.parser import phase0, phase1, phase2, phase3
+from himark.models import nodes_typed as t
+from himark.parser import phase0, phase1, phase2, phase3
 
 
 def parse(text: str) -> list[t.RootNode]:

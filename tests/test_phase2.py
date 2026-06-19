@@ -2,9 +2,9 @@
 
 import pytest
 
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
-from marky.parser.phase2 import parse
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
+from himark.parser.phase2 import parse
 
 _HAS_CONTENT = (t.LeafNode, t.BraceGroupNode)
 

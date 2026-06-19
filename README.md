@@ -1,4 +1,4 @@
-# marky
+# Himark
 
 A pattern-matching and text-transformation language for people who find regex write-only.
 
@@ -29,26 +29,26 @@ poetry install --no-root
 Commands: `execute` (match and transform), `find` (locate matches), `transpile` (run a `.hmk` script over a document), and `pipeline` (pre-compile scripts).
 
 ```sh
-poetry run marky execute '{!\ }[1..]' 'hi there'
+poetry run himark execute '{!\ }[1..]' 'hi there'
 # hi
 # there
 
-poetry run marky find '{0:@d:255}' '192.168.1.1'
+poetry run himark find '{0:@d:255}' '192.168.1.1'
 # 0 3
 # ...
 
 # pattern and target may each be a file path or '-' for stdin
-poetry run marky execute pattern.hmk target.txt
-echo '{!\ }[1..]' | poetry run marky execute - 'hi there'
+poetry run himark execute pattern.hmk target.txt
+echo '{!\ }[1..]' | poetry run himark execute - 'hi there'
 
 # --json emits structured deltas / spans instead of lines
-poetry run marky execute '{!\ }[1..] => "<p>{{.}}</p>"' 'a hi b' --json
+poetry run himark execute '{!\ }[1..] => "<p>{{.}}</p>"' 'a hi b' --json
 
 # run a multi-statement .hmk script over a document (HTML to stdout, or --out file)
-poetry run marky transpile doc.md --script marky/scripts/md_html.hmk
+poetry run himark transpile doc.md --script himark/scripts/md_html.hmk
 ```
 
-You can also run it as a module: `python -m marky execute '<pattern>' '<target>'`.
+You can also run it as a module: `python -m himark execute '<pattern>' '<target>'`.
 
 ---
 
@@ -78,7 +78,7 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 
 ### Repetition
 
-`[N]` exactly N · `[N..]` N or more · `[..N]` up to N · `[N..M]` · `[..]` any. A **class** repeats by _value_ (`{a..z}[3]` is `aaa`, `bbb`, … — three of the _same_ letter, since `{a..z}` is one position); a **grouping brace** repeats by _shape_, so one pattern can walk a whole table.
+`[N]` exactly N · `[N..]` N or more · `[..N]` up to N · `[N..M]` · `[..]` any. A **class** repeats by *value* (`{a..z}[3]` is `aaa`, `bbb`, … — three of the *same* letter, since `{a..z}` is one position); a **grouping brace** repeats by *shape*, so one pattern can walk a whole table.
 
 ### Chaining and transformers
 

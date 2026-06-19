@@ -11,12 +11,12 @@ once with `compile_pipeline`, `dump` the parsed steps to a file, and `load` it
 back to skip parsing entirely. `apply` runs the pipeline over a document.
 
 Portability note: the artifact is a pickle of the typed AST, so it is portable as
-a data file *alongside the marky library* — loading it needs `marky` importable
+a data file *alongside the himark library* — loading it needs `himark` importable
 and broadly version-compatible. It is not a language-agnostic format. The lowered
 matcher program is **not** stored (it recompiles lazily on first use, ~7 µs), so
 the file stays small and free of engine objects.
 
-Run:  python -m marky.tools.precompiled dump out.hmkc "<stmt>" ["<stmt>" …]
+Run:  python -m himark.tools.precompiled dump out.hmkc "<stmt>" ["<stmt>" …]
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ from pathlib import Path
 
 import typer
 
-from marky import parser
-from marky.engine import splice
-from marky.models import nodes_typed as t
+from himark import parser
+from himark.engine import splice
+from himark.models import nodes_typed as t
 
 _MAGIC = b"HMKC\x00"
 _VERSION = 1

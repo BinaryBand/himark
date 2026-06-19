@@ -13,9 +13,9 @@ Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
 import re
 
-from marky.parser.macros import MACROS
-from marky.models.exceptions import CompileError
-from marky.parser import rewrites
+from himark.parser.macros import MACROS
+from himark.models.exceptions import CompileError
+from himark.parser import rewrites
 
 # Only text macros are expanded here; @alphabet references pass through. Longest
 # names first so e.g. @hexi wins over @hex, and \b prevents partial-name hits.
@@ -49,7 +49,7 @@ def _needs_wrap(step: str) -> bool:
 def preprocess(step: str, *, first: bool = True) -> str:
     """Expand text macros, apply advanced rewrites, then wrap a bare expression.
 
-    The rewrites (`marky/parser/rewrites.py`, configured in `macros.toml`) are
+    The rewrites (`himark/parser/rewrites.py`, configured in `macros.toml`) are
     structural sugar that run before tokenizing, so the engine sees only plain
     Himark source. The wrap applies only to the first step (the pattern
     position): a bare step after `=>` is a constant template, rendered as-is.

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from marky.engine._compile import (
+from himark.engine._compile import (
     AnchorEl,
     BackRefEl,
     CountRefEl,
@@ -24,7 +24,7 @@ from marky.engine._compile import (
     SeqGroupEl,
     StageRefEl,
 )
-from marky.engine._types import Capture, Match
+from himark.engine._types import Capture, Match
 
 # A continuation: "match the rest of the pattern from this position", or None.
 Cont = Callable[[int], "int | None"]

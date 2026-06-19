@@ -1,8 +1,8 @@
 """Integration tests — north-star examples from docs/HMK.md."""
 
-from marky import parser
-from marky.engine import execute
-from marky.engine import find_matches
+from himark import parser
+from himark.engine import execute
+from himark.engine import find_matches
 
 
 def matches(pattern, text):

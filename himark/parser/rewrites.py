@@ -18,7 +18,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from marky.parser._text import brace_end
+from himark.parser._text import brace_end
 
 _COUNT = re.compile(r"\[[^\]]*\]")
 # A self-binding count token: a `[…]` count holding a lone `#` (not `#N`, which is

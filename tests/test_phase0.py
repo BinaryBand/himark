@@ -1,6 +1,6 @@
 """Tests for parser/phase0.py — statement splitting on the => transformer chain."""
 
-from marky.parser.phase0 import split_statement as steps
+from himark.parser.phase0 import split_statement as steps
 
 
 # ── Basic shapes ──────────────────────────────────────────────────────────────

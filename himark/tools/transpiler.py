@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Run an HMK `.hmk` script over a text document.
 
-The script is a pipeline of HMK statements (see `marky/scripts/md_html.hmk` for a
+The script is a pipeline of HMK statements (see `himark/scripts/md_html.hmk` for a
 Markdown → HTML example); each is spliced over the document in turn. The parsed
 pipeline is cached to a portable `.hmkc` artifact in `downloads/` and rebuilt when
 the script file changes, so repeat runs skip parsing.
 
-Run:  python -m marky.tools.transpiler doc.md                 # HTML to stdout
-      python -m marky.tools.transpiler doc.md --out page.html # …or to a file
-      python -m marky.tools.transpiler data.txt --script my.hmk
+Run:  python -m himark.tools.transpiler doc.md                 # HTML to stdout
+      python -m himark.tools.transpiler doc.md --out page.html # …or to a file
+      python -m himark.tools.transpiler data.txt --script my.hmk
 """
 
 from pathlib import Path
 
 import typer
 
-from marky.tools import precompiled
+from himark.tools import precompiled
 
 ROOT = Path(__file__).resolve().parents[2]
 DOWNLOADS = ROOT / "downloads"

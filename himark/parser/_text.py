@@ -4,7 +4,7 @@ These operate on raw HMK source fragments — brace-depth-aware splitting,
 escape resolution, and brace scanning — with no knowledge of semantics.
 """
 
-from marky.models.exceptions import CompileError
+from himark.models.exceptions import CompileError
 
 # The single escape table for HMK source. Named control characters plus the
 # metacharacters that need escaping to appear literally; any other escaped

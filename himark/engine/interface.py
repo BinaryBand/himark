@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from marky.engine._types import Match
-from marky.models import nodes_typed as t
+from himark.engine._types import Match
+from himark.models import nodes_typed as t
 
 
 @runtime_checkable

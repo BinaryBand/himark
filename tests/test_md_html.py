@@ -1,5 +1,5 @@
 """Strict, end-to-end tests for the Markdown -> HTML transpiler script
-(`marky/scripts/md_html.hmk`).
+(`himark/scripts/md_html.hmk`).
 
 Each test asserts the *exact* HTML the pipeline emits for a small Markdown input,
 so the script's behaviour -- including its deliberate edge-case handling and its
@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from marky.tools import precompiled
+from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[1] / "marky" / "scripts" / "md_html.hmk"
+SCRIPT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "md_html.hmk"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
 
 

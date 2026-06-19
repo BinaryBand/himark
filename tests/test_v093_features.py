@@ -2,8 +2,8 @@
 homogeneity flip, fuzzy `~k`, and the transformer rework (eager-commit branches,
 `|` filters, `{{> }}` payload, `@^`/`@$` anchors)."""
 
-from marky import parser
-from marky.engine import execute, find_matches
+from himark import parser
+from himark.engine import execute, find_matches
 
 
 def m(pattern, text):
@@ -35,7 +35,7 @@ def test_range_stride():
 def test_strided_count_needs_upper_bound():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         m("{a}[2....2]", "aa")
@@ -150,7 +150,7 @@ def test_fuzzy_empty_alphabet_is_unicode():
 def test_fuzzy_operand_must_be_tokens():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         m("{a..z}~1", "abc")
@@ -160,7 +160,7 @@ def test_fuzzy_token_outside_alphabet_raises():
     # The token must be spellable in its own alphabet: 'C' has no @l symbol.
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         m("{Cat:@l:Cat}~1", "Cat")
@@ -169,7 +169,7 @@ def test_fuzzy_token_outside_alphabet_raises():
 def test_fuzzy_alphabet_annotation_cannot_be_unioned():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         m("{cat:@l:cat,dog}~1", "cat")
@@ -199,7 +199,7 @@ def test_filter_len():
 def test_unknown_filter_raises():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         ex('{a} => "{{ . | nope }}"', "a")
@@ -216,7 +216,7 @@ def test_payload_marker_splits_doc_and_pipe():
 def test_two_payload_markers_raise():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         ex('{a} => "{{> . }}{{> . }}"', "a")

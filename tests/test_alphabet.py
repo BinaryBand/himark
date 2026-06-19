@@ -2,9 +2,9 @@
 
 import pytest
 
-from marky.engine.alphabet import Alphabet
-from marky.parser.macros import MACROS
-from marky.models.exceptions import CompileError
+from himark.engine.alphabet import Alphabet
+from himark.parser.macros import MACROS
+from himark.models.exceptions import CompileError
 
 try:
     from hypothesis import given

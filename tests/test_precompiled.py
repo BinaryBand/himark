@@ -1,10 +1,10 @@
-"""Tests for marky.tools.precompiled — parse-once, dump/load, apply a pipeline."""
+"""Tests for himark.tools.precompiled — parse-once, dump/load, apply a pipeline."""
 
 import pytest
 
-from marky.tools import precompiled
-from marky.engine import splice
-from marky.parser import parse
+from himark.tools import precompiled
+from himark.engine import splice
+from himark.parser import parse
 
 # A small Markdown → HTML-ish pipeline: escape &, then <, then >.
 STATEMENTS = [

@@ -2,7 +2,7 @@
 
 Each command is a plain Typer-typed function; `main.py` registers them on the
 top-level app, and this module exposes its own `app` so the pair can also be run
-standalone (`python -m marky.tools.query …`).
+standalone (`python -m himark.tools.query …`).
 """
 
 import json
@@ -11,9 +11,9 @@ from pathlib import Path
 
 import typer
 
-from marky import parser
-from marky.engine import deltas, execute, find
-from marky.models.exceptions import CompileError
+from himark import parser
+from himark.engine import deltas, execute, find
+from himark.models.exceptions import CompileError
 
 
 def _str_or_file(value: str) -> str:

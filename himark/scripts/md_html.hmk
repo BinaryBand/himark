@@ -5,7 +5,7 @@
 //  order, so later statements see the HTML emitted by earlier ones. The order is
 //  deliberate (see the phase headers). Run it with:
 //
-//      marky transpile doc.md --script marky/scripts/md_html.hmk
+//      himark transpile doc.md --script himark/scripts/md_html.hmk
 //
 //  Scope & known limits (the engine is a single-pass splicer with no token
 //  masking, so a few markdown corners are out of reach by construction):

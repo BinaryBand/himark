@@ -12,11 +12,11 @@ from __future__ import annotations
 
 from typing import cast
 
-from marky.engine._compile import Element, compile_pattern
-from marky.engine._run import find_matches as _run_find_matches
-from marky.engine._types import Match
-from marky.engine.interface import Engine
-from marky.models import nodes_typed as t
+from himark.engine._compile import Element, compile_pattern
+from himark.engine._run import find_matches as _run_find_matches
+from himark.engine._types import Match
+from himark.engine.interface import Engine
+from himark.models import nodes_typed as t
 
 __all__ = ["Engine", "PythonEngine"]
 

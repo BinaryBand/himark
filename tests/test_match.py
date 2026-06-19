@@ -1,7 +1,7 @@
 """Tests for the match engine — match semantics."""
 
-from marky import parser
-from marky.engine import execute, find_matches, splice
+from himark import parser
+from himark.engine import execute, find_matches, splice
 
 
 def matches(pattern, text):
@@ -168,7 +168,7 @@ def test_exclusion_full_alpha_stress():
 def test_duplicate_symbols_in_value_alphabet_raise():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     # The digits appear twice; symbol values would be ambiguous.
     with pytest.raises(CompileError):
@@ -365,7 +365,7 @@ def test_case_fold_class_rejects_non_alpha():
 def test_class_to_class_range_unsupported():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     # The {a..z}..{A..Z} range sugar is gone; enumerate folded pairs instead.
     with pytest.raises(CompileError):
@@ -558,7 +558,7 @@ def test_moustache_splices_in_place():
 def test_moustache_capture_out_of_range_raises():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         execute(parser.parse('{cat} => "{{0$5}}"'), "cat")
@@ -595,7 +595,7 @@ def test_moustache_subcapture_count():
 def test_moustache_subcapture_out_of_range_raises():
     import pytest
 
-    from marky.models.exceptions import CompileError
+    from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
         execute(parser.parse('{{cat}{dog}} => "{{0$0.5}}"'), "catdog")

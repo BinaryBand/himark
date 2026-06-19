@@ -5,8 +5,8 @@ A `=>` chain produces one branch per match. `execute` renders them as a **list**
 matches verbatim (the in-place transform). Both come from the same branches.
 """
 
-from marky import parser
-from marky.engine import execute, splice
+from himark import parser
+from himark.engine import execute, splice
 
 
 def test_execute_returns_list_of_matches():

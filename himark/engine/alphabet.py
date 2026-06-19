@@ -10,7 +10,7 @@ matchers never re-derive it.
 
 from __future__ import annotations
 
-from marky.models.exceptions import CompileError
+from himark.models.exceptions import CompileError
 
 # Largest code-point span materialized into a symbol string. ascii (128) fits;
 # uni (1.1M) does not and is rejected when used as a value bound.

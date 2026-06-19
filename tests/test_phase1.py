@@ -1,8 +1,8 @@
 """Tests for parser/phase1.py — macro expansion and implicit root wrapping."""
 
-from marky import parser
-from marky.engine import find_matches
-from marky.parser import phase1
+from himark import parser
+from himark.engine import find_matches
+from himark.parser import phase1
 
 
 def matches(pattern, text):
@@ -120,7 +120,7 @@ def test_b58_symbol_order_preserved():
 
 
 def test_self_binding_count_unrolls():
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     # {ROW[#]}[1..] -> free first ROW ([#]->[..]) then repeats bound via [#0].
     src = r"{{{|}{!|,\n}}[#]{|\n}}[1..]"
@@ -128,20 +128,20 @@ def test_self_binding_count_unrolls():
 
 
 def test_self_binding_count_noop_without_hash():
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     assert apply("{a..z}[1..]") == "{a..z}[1..]"
 
 
 def test_self_binding_count_group_offset():
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     # A leading group shifts the bound index: the free copy's group is [#1].
     assert apply(r"{x}{{a}[#]}[2..]") == r"{x}{a}[..]{{a}[#1]}[2..]"
 
 
 def test_self_binding_count_bounds():
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     # Bounds around the # constrain the establishing copy and collapse into it.
     assert apply(r"{{a}[2..#]}[1..]") == r"{a}[2..]{{a}[#0]}[1..]"
@@ -150,7 +150,7 @@ def test_self_binding_count_bounds():
 
 
 def test_self_binding_count_leaves_count_ref_alone():
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     # [#0] is a count-reference, not the self-binding marker — never rewritten.
     assert apply(r"{{a}[#0]}[1..]") == r"{{a}[#0]}[1..]"
@@ -159,7 +159,7 @@ def test_self_binding_count_leaves_count_ref_alone():
 def test_rewrite_tool_is_parameterized():
     # The tool is generic — marker/free/bound come from data, so a different
     # marker drives the same unroll.
-    from marky.parser.rewrites import unroll_on_marker
+    from himark.parser.rewrites import unroll_on_marker
 
     out = unroll_on_marker(r"{{a}[~]}[1..]", marker="[~]", free="[..]", bound="[#@]")
     assert out == r"{a}[..]{{a}[#0]}[1..]"
@@ -167,7 +167,7 @@ def test_rewrite_tool_is_parameterized():
 
 def test_substitute_pipe_repeat_shortcut():
     # The TOML-described substitution: {|..} is sugar for {|}[..].
-    from marky.parser.rewrites import apply
+    from himark.parser.rewrites import apply
 
     assert apply("{|..}") == "{|}[..]"
     assert apply("x{|..}y") == "x{|}[..]y"

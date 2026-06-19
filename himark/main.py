@@ -1,4 +1,4 @@
-"""The `marky` CLI — thin Typer wiring over the tools in `marky.tools`.
+"""The `himark` CLI — thin Typer wiring over the tools in `himark.tools`.
 
 No command logic lives here: each tool module owns its commands (and is runnable
 standalone), and this file only assembles them into one app. Add a command by
@@ -7,7 +7,7 @@ writing the tool, then registering it below.
 
 import typer
 
-from marky.tools import precompiled, query, transpiler
+from himark.tools import precompiled, query, transpiler
 
 app = typer.Typer(help="HMK pattern matching and text transformation.")
 

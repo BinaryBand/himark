@@ -2,7 +2,7 @@
 //  fmt.hmk — a best-effort cosmetic tidy for .hmk scripts, written in HMK.
 //
 //  Run it like any pipeline:
-//      marky transpile messy.hmk --script marky/scripts/fmt.hmk --out clean.hmk
+//      himark transpile messy.hmk --script himark/scripts/fmt.hmk --out clean.hmk
 //
 //  This is a dogfooding experiment, NOT a robust formatter. HMK matches by shape
 //  with no nesting stack, so it cannot tell a depth-0 `=>` / `//` / whitespace

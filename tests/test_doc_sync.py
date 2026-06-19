@@ -3,9 +3,9 @@
 import re
 from pathlib import Path
 
-from marky import parser
-from marky.engine import find_matches
-from marky.parser.macros import MACROS
+from himark import parser
+from himark.engine import find_matches
+from himark.parser.macros import MACROS
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
 

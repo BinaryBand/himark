@@ -16,9 +16,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from marky.engine.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
+from himark.engine.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
 
 # ── Matcher interface ─────────────────────────────────────────────────────────
 

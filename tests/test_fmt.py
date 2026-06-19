@@ -1,4 +1,4 @@
-"""The HMK-self-hosted cosmetic tidy (`marky/scripts/fmt.hmk`).
+"""The HMK-self-hosted cosmetic tidy (`himark/scripts/fmt.hmk`).
 
 A dogfooding experiment, not a robust formatter (see the script header). We pin
 the line-local tidies it *can* do and that it stays idempotent. The depth-aware
@@ -8,9 +8,9 @@ deliberately out of scope and not asserted here.
 
 from pathlib import Path
 
-from marky.tools import precompiled
+from himark.tools import precompiled
 
-FMT = Path(__file__).resolve().parents[1] / "marky" / "scripts" / "fmt.hmk"
+FMT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "fmt.hmk"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(FMT))
 
 

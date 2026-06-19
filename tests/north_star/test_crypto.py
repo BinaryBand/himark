@@ -2,8 +2,8 @@
 
 import pytest
 
-from marky import parser
-from marky.engine import find_matches
+from himark import parser
+from himark.engine import find_matches
 
 
 def matches(pattern, text):

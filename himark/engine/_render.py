@@ -21,9 +21,9 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 
 import re
 
-from marky.engine._types import Match
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
+from himark.engine._types import Match
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
 
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 _ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")

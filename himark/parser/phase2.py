@@ -9,9 +9,9 @@ Constructs recognized:
 
 import re
 
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
-from marky.parser._text import ESCAPES, unescape
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
+from himark.parser._text import ESCAPES, unescape
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")

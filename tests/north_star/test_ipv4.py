@@ -1,7 +1,7 @@
 """North Star: IPv4 — docs/HMK.md"""
 
-from marky import parser
-from marky.engine import find_matches
+from himark import parser
+from himark.engine import find_matches
 
 PATTERN = "{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}"
 

@@ -2,9 +2,9 @@
 
 import pytest
 
-from marky.models import nodes_typed as t
-from marky.models.exceptions import CompileError
-from marky.parser import phase2, phase3
+from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
+from himark.parser import phase2, phase3
 
 
 def resolve(pattern):
@@ -118,7 +118,7 @@ def test_single_brace_nesting_is_heterogeneous():
 
 
 def test_singleton_value_helper():
-    from marky.parser.phase3 import _singleton_value
+    from himark.parser.phase3 import _singleton_value
 
     # Singletons (τ): bare literals and {literal}[N] with exact count.
     assert _singleton_value("hello") == "hello"
@@ -269,7 +269,7 @@ def test_count_ref_multi_digit_group():
 
 
 def test_count_position_ref_parses():
-    from marky.parser.phase3 import _parse_count
+    from himark.parser.phase3 import _parse_count
 
     spec = _parse_count("#0")
     assert spec.__class__.__name__ == "CountRefSpec"
@@ -314,7 +314,7 @@ def test_char_range_multi_char_produces_string_range():
 
 def test_invalid_count_raises():
     with pytest.raises(CompileError):
-        from marky.parser.phase3 import _parse_count
+        from himark.parser.phase3 import _parse_count
 
         _parse_count("abc")
 
