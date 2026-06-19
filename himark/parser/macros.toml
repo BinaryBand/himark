@@ -34,6 +34,9 @@ b64 = "{@d},{@l},{@u},+,/"
 # Code-point ranges (endpoints written as \\u escapes).
 ascii = "\u0000..\u007f"
 uni = "\u0000..\U0010FFFF"
+# base-256: every byte, an ordered value alphabet (`{x:@b256:y}`). Distinct from
+# the `b256` template filter (which re-encodes a value as base-256 bytes).
+b256 = "\u0000..\u00ff"
 
 # Advanced rewrites -------------------------------------------------------------
 # Structural shortcuts. A text macro (above) is `@name` -> source; a rewrite

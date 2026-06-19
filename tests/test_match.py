@@ -67,6 +67,12 @@ def test_named_alpha_hex():
     assert result == ["0af"]
 
 
+def test_named_alpha_b256_is_every_byte():
+    # @b256 is the byte alphabet U+0000..U+00FF — one position per byte. 'a' and
+    # 'ÿ' (U+00FF) are in range; 'Ā' (U+0100) is one past the top.
+    assert matches("{@b256}", "aÿĀ") == ["a", "ÿ"]
+
+
 def test_named_alpha_hex_case_insensitive():
     # @w carries the case fold, so 'a' and 'F' are one hex value; "0aF" is a
     # single value of width 3.

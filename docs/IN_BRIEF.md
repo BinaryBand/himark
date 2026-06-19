@@ -60,11 +60,11 @@ Every range normalises to a three-part `{floor:A:ceiling}`: the middle `A` is th
 
 ```proto
 {1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
-  => "{{ ascii(0$0) }}"
+  => "{{ 0$0 | b256(25) }}"
   => {min:@b256:max}{min:@b256:max}
   => "{{ 0$0 | b256(25) | sha256 | sha256 }}."
   => {min:@b256:max}{$0}{min:@b256:max}
   => "{{0$}} is valid!"
 ```
 
-> The `b256` reads `0$0` as base-58 decoded integer with a base-58 decoded '2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG' ceiling, whereas `0$` and `$0` would interpret the results at a raw string.
+> `b256` reads a **group** accessor (`0$0`, or `$0` for the current stage) as the base-58-decoded integer — the alphabet and bounds ride along with the capture — and re-encodes it as 25 big-endian bytes. The **whole-stage** accessor `0$` is a raw string with no alphabet to decode, so a value filter cannot read it.

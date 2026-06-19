@@ -259,6 +259,24 @@ def test_b58_decodes_as_bitcoin_base58_value():
     assert ex('{1:@b58:zz} => "{{ 0$0 | b256(1) | hex }}"', "21") == ["3a"]
 
 
+def test_base58_value_to_double_sha256_pipeline():
+    # The aspirational target, end to end: match a base-58 value, decode it to
+    # bytes, and run Bitcoin's double-SHA256 — checked against an independent
+    # base-58 decode. This is the whole typed-value seam working on real shape.
+    import hashlib
+
+    btc = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    token = "abc"
+    iv = 0
+    for c in token:
+        iv = iv * 58 + btc.index(c)
+    expected = hashlib.sha256(
+        hashlib.sha256(iv.to_bytes(8, "big")).digest()
+    ).hexdigest()
+    out = ex('{1:@b58:zzzzz} => "{{ 0$0 | b256(8) | sha256 | sha256 | hex }}"', token)
+    assert out == [expected]
+
+
 def test_payload_marker_splits_doc_and_pipe():
     # {{> }} sends the full render to the document but only the payload downstream.
     out = ex(

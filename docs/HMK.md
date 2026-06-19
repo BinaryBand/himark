@@ -47,6 +47,7 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `@b32`   | `{@d},{{@w}:v}`             |
 | `@b58`   | `{@d},{@u},{@l},!{0,I,O,l}` |
 | `@b64`   | `{@d},{@l},{@u},+,/`        |
+| `@b256`  | U+0000-U+00FF (every byte)  |
 | `@ascii` | U+0000-U+007F               |
 | `@uni`   | U+0000-U+10FFFF             |
 
@@ -265,7 +266,7 @@ A moustache reference is one of two kinds. A **group** accessor (`{{ i$j }}`, `{
 {0:@d:65535} => "{{ 0$0 | b256(2) }}"     // '256' (value 256) → bytes 0x01 0x00
 ```
 
-Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed and pure -- there are no user-defined filters and no I/O. The byte filters (`hex`, `sha256`, `b256`) work in a one-byte-per-code-point domain, so they chain (`… | b256(25) | sha256 | sha256`); applied to text outside that range they are a compile error. The remaining `ascii` helper extends the same `|` grammar but is **deferred** (see the aspirational Bitcoin pipeline in `docs/IN_BRIEF.md`).
+Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed and pure -- there are no user-defined filters and no I/O. The byte filters (`hex`, `sha256`, `b256`) work in a one-byte-per-code-point domain, so they chain (`… | b256(25) | sha256 | sha256`); applied to text outside that range they are a compile error.
 
 ### Quoting static text
 
