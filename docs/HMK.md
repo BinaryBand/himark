@@ -51,8 +51,12 @@ A pattern is built from **universes** and a small set of operators over them. A 
 | `@uni`   | U+0000-U+10FFFF             |
 
 > **Note:** `@w` enumerates each letter and its capital as one congruence class (`{a,A}`, `{b,B}`, ...), so `a` and `A` share one ordered position. `@hex` and `@b32` (RFC 4648 $\S7$) slice `@w`, so they stay base 16 / base 32 **and** case-insensitive at once (see [Congruence](#congruence)).
->
-> **Anchors.** `@^` / `@$` match the start / end of a **line** (position 0 or just after / just before a `\n`); `@^^` / `@$$` match the start / end of the whole **scope** (the text a stage sees). All four are **not** alphabets -- they are zero-width and capture nothing, so a line-start header is `{@^}{#}[1..6]{ }[1..]{!\n}[1..]`. They are primitives, not macros, so they live here rather than in the table above.
+
+---
+
+## Anchors
+
+`@\^` / `@$` match the start / end of a **line** (position 0 or just after / just before a `\n`); `@^\^` / `@$$` match the start / end of the whole **scope** (the text a stage sees). All four are **not** alphabets -- they are zero-width and capture nothing, so a line-start header is `{@^}{#}[1..6]{ }[1..]{!\n}[1..]`. They are primitives, not macros, so they live here rather than in the table above.
 
 ---
 
@@ -68,7 +72,7 @@ A universe is a set. Its atoms are characters and strings; `,` unions them, `..`
 {a..z}            // range: the single characters a through z
 {aa..zz}          // range over a two-wide *Unicode* value space -- every string from 'aa' to 'zz' by value
 {a..z}{A..Z}      // adjacency: a lowercase then an uppercase -- the product aA, aB, ..., zZ
-{a..b}{cd}{e..f}  // adjacency of three universes: {acde, acdf, bcde, bcdf}
+{a..b}{cd}{e..f}  // adjacency of three universes: {acde,acdf,bcde,bcdf}
 ```
 
 > **Note:** `..` is always a one-axis range; `{a..z}..{A..Z}` (a range between two _sets_) has no single ordering and is rejected -- write `{a..z}{A..Z}` for the Cartesian product, `{a..z,A..Z}` for either case, or `{{a,A},...,{z,Z}}` for case-folded positions.
@@ -84,7 +88,7 @@ A universe always matches **one** of its elements (one position). `{a..z}` match
 ```proto
 {a,A}                  // one position, two spellings: 'a' or 'A'
 {{a,A},{b,B}}          // an ordered alphabet of folded positions (a < b, each case-folded)
-{{one,two},{ett, två}} // congruence can fold multiple characters, too
+{{one,ett},{two, två}} // congruence can fold multiple characters, too
 ```
 
 ---
@@ -128,12 +132,12 @@ A subtractive universe matches one position, like any universe; a run is `[count
 `{token}~k` is the universe of **all strings within edit distance `k`** of a token -- a finite set, so it is an ordinary universe: it matches one element, captures the **actual** matched text, and composes with `[count]`, captures, and references like any `{...}`. `k` is explicit and required -- there is no implicit fuzz.
 
 ```proto
-{cat}~1      // 'cat', 'cap', 'cot', 'at', 'cart', ... (Levenshtein distance <= 1)
-{cat,dog}~1  // within distance 1 of either token
-{cat}~2:@l   // distance <= 2, inserting/substituting only lowercase letters
+{cat}~1         // 'cat', 'cap', 'cot', 'at', 'cart', ... (Levenshtein distance <= 1)
+{cat,dog}~1     // within distance 1 of either token
+{cat:@l:cat}~1  // distance <= 1, with only lowercase letters bridging the gap
 ```
 
-The operand must be a token or token union -- a finite set has a well-defined neighborhood, while a range, bound, or subtractive universe does not. Bound the insertion alphabet with `:@alpha` (default: the operand's own characters) so the neighborhood stays finite. Distance is **Levenshtein** (insert, delete, substitute); ties resolve by smallest distance, then longest span, then leftmost. Like `@uni`, a fuzzy universe is recognized by an automaton, not enumerated.
+The operand is a token, a token union, or a single **alphabet-annotated** token `{token:A:token}` -- a finite set with a well-defined neighborhood (a non-singleton range or subtractive universe has none). The alphabet the edits draw from is simply the operand universe's own: a bare `{cat}` is over ambient Unicode (it is `{cat:@uni:cat}`), so `~1` may insert or substitute **any** character -- this is why `cap`, `cot`, and `cart` above all match. Annotate the alphabet to narrow that: `{cat:@l:cat}~1` lets only lowercase letters bridge the gap, so it rejects a span like `c@t` that no `@l` edit can reach. Because a token must be spellable in its own alphabet, `{Cat:@l:Cat}` is a compile error -- there is no `@l` symbol to stand in for `C`. Distance is **Levenshtein** (insert, delete, substitute); ties resolve by smallest distance, then longest span, then leftmost. Like `@uni`, a fuzzy universe is recognized by an automaton, not enumerated -- so even a Unicode-wide neighborhood is matched, never enumerated.
 
 `~k` is **closeness only** -- a quality threshold on one element, inherently bounded: a token of length `L` within distance `k` spans `L ± k` characters, so there is no open-ended search. "Find the nearest fuzzy match within a window" is the other half -- **extent** -- which lives on the repetition, not the fuzz: a lazy, budgeted run (see [Repetition](#repetition)) plus a `~k` delimiter.
 
@@ -142,6 +146,8 @@ The operand must be a token or token union -- a finite set has a well-defined ne
 ```
 
 The window is the run's budget (`[..<100]`), laziness picks the **nearest**, and closeness is the delimiter's (`~1`) -- three knobs, each meaning one thing.
+
+<!-- Consider dropping lazy operations. -->
 
 ---
 

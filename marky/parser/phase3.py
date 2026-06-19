@@ -66,19 +66,44 @@ def _resolve_brace_node(child: t.BraceGroupNode) -> None:
 
 
 def _resolve_fuzzy(content: str, k: int) -> t.FuzzyNode:
-    """A `{token}~k` fuzzy operand: a token or token union. Each arm must be a
-    plain token (no range/bound/class) — its edit-distance neighborhood is the set."""
+    """A `{token}~k` fuzzy operand: a token, a token union, or a single
+    alphabet-annotated token `{token:A:token}` whose middle `A` is the bridge
+    alphabet the edits draw from (default: ambient Unicode). Each plain arm must
+    be a token; an annotated operand reuses the bounds grammar but must collapse
+    to one token (floor == ceiling)."""
+    arms = split_top(",", content)
     tokens: list[str] = []
-    for arm in split_top(",", content):
-        val = _singleton_value(arm)
-        if val is None:
+    alpha: t.SemanticNode | None = None
+    for arm in arms:
+        colon = split_top(":", arm)
+        if len(colon) == 3:  # {token:A:token} — alphabet-annotated
+            if len(arms) > 1:
+                raise CompileError(
+                    "An alphabet-annotated fuzzy token cannot be part of a union; "
+                    f"write a single {{token:A:token}}~k, got: {content!r}"
+                )
+            bound = _resolve_bounds(colon)
+            if bound.lower is None or bound.lower != bound.upper:
+                raise CompileError(
+                    "A fuzzy alphabet annotation is {token:A:token} with floor "
+                    f"== ceiling (one token), got: {arm!r}"
+                )
+            tokens.append(bound.lower)
+            alpha = bound.alpha
+        elif len(colon) == 1:
+            val = _singleton_value(arm)
+            if val is None:
+                raise CompileError(
+                    f"A fuzzy operand must be a token or token union, got: {arm!r}"
+                )
+            tokens.append(val)
+        else:
             raise CompileError(
-                f"A fuzzy operand must be a token or token union, got: {arm!r}"
+                f"A fuzzy alphabet annotation is token:alphabet:token, got: {arm!r}"
             )
-        tokens.append(val)
     if not tokens:
         raise CompileError(f"Empty fuzzy operand: {{{content}}}~{k}")
-    return t.FuzzyNode(tokens=tokens, k=k)
+    return t.FuzzyNode(tokens=tokens, k=k, alpha=alpha)
 
 
 def parse(node: t.RootNode) -> t.RootNode:

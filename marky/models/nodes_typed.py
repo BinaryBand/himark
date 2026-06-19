@@ -137,10 +137,15 @@ class AnchorNode:
 class FuzzyNode:
     """A fuzzy token `{token}~k` — matches any string within Levenshtein distance
     `k` of one of `tokens` (a token or token union). Membership, captured as the
-    actual matched text."""
+    actual matched text.
+
+    `alpha` is the **bridge alphabet** the edits may draw from, carried by an
+    alphabet-annotated operand `{token:A:token}`. `None` means ambient Unicode
+    (a bare `{token}` is `{token:@uni:token}`), so any character may bridge."""
 
     tokens: list[str]
     k: int
+    alpha: SemanticNode | None = None
     type: Literal["fuzzy"] = "fuzzy"
 
 

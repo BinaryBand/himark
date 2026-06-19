@@ -14,9 +14,9 @@ from marky.parser._text import ESCAPES, unescape
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")
-# Fuzzy suffix `~k`, with an optional (currently informational) insertion
-# alphabet `:@l` / `:{a..z}` — `{cat}~2`, `{cat}~2:@l`.
-_FUZZ_SRC = re.compile(r"~(\d+)(?::(?:[^\[\s{]+|\{[^}]*\}))?")
+# Fuzzy suffix `~k` — just the distance. The bridge alphabet rides on the
+# operand universe (`{cat:@l:cat}~1`), not on a `~k:` suffix.
+_FUZZ_SRC = re.compile(r"~(\d+)")
 
 
 def _scan_braces(text: str, pos: int) -> int:
