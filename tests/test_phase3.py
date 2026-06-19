@@ -305,11 +305,15 @@ def test_back_ref_not_shadowed_by_stage_ref():
 # ── Error cases ───────────────────────────────────────────────────────────────
 
 
-def test_char_range_multi_char_produces_string_range():
+def test_multi_char_range_is_value_bound_over_uni():
+    # HMK.md §Universes: an unnamed multi-char `..` range is a value bound over
+    # ambient Unicode — `{aa..zz}` == `{aa:@uni:zz}`.
     node = first_semantic("{cat..dog}")
-    assert node.type == "string_range"
-    assert node.start == "cat"
-    assert node.end == "dog"
+    assert node.type == "value_range"
+    assert node.lower == "cat"
+    assert node.upper == "dog"
+    assert node.alpha.type == "char_range"
+    assert (node.alpha.start, node.alpha.end) == ("\x00", "\U0010ffff")
 
 
 def test_invalid_count_raises():

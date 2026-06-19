@@ -239,25 +239,6 @@ class _CharRange(_Base):
         return pos + 1
 
 
-class _StringRange(_Base):
-    """Greedy lexicographic range over multi-char endpoints; tries lengths from
-    the longer endpoint down to the shorter."""
-
-    __slots__ = ("start", "end", "_lo", "_hi")
-
-    def __init__(self, node: t.StringRangeNode):
-        self.start, self.end = node.start, node.end
-        self._lo = min(len(node.start), len(node.end))
-        self._hi = max(len(node.start), len(node.end))
-
-    def match(self, text: str, pos: int) -> int | None:
-        for length in range(self._hi, self._lo - 1, -1):
-            s = text[pos : pos + length]
-            if len(s) == length and self.start <= s <= self.end:
-                return pos + length
-        return None
-
-
 class _ValueRange(_Base):
     """Width-window value match for a `{floor:alphabet:ceiling}` bound: the value
     lies in [floor, ceiling] and the written width lies in the bound's width
@@ -478,7 +459,6 @@ def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
 _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.LiteralNode: lambda n: _Literal(n.content),
     t.CharRangeNode: _CharRange,
-    t.StringRangeNode: _StringRange,
     t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,

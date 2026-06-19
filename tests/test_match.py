@@ -201,15 +201,15 @@ def test_width_window_narrow_ceiling_relaxes():
     assert "0009" not in result  # 4 wide > the window
 
 
-# ── string_range ─────────────────────────────────────────────────────────────
+# ── multi-char range (value bound over @uni: {cat..dog} == {cat:@uni:dog}) ────
 
 
-def test_string_range_equal_length():
+def test_multi_char_range_equal_length():
     result = matches("{cat..dog}", "cat cau dof dog elk")
     assert result == ["cat", "cau", "dof", "dog"]
 
 
-def test_string_range_excludes_out_of_range():
+def test_multi_char_range_excludes_out_of_range():
     assert matches("{cat..dog}", "aaa zzz") == []
 
 

@@ -1,7 +1,7 @@
 """Phase 3: Semantic resolution — convert phase2 nodes into typed HMK AST nodes.
 
 Transforms:
-  brace_group  → literal | char_range | string_range | value_range |
+  brace_group  → literal | char_range | value_range |
                  union | complement | group_class |
                  sequence (a grouping brace — a concatenation of constructs)
 
@@ -170,6 +170,13 @@ def _is_sigma_atom(part: str) -> bool:
 # ── Brace resolution ─────────────────────────────────────────────────────────
 
 
+def _ambient_alpha() -> t.SemanticNode:
+    """The ambient Unicode universe (`@uni`): every code point. It is the default
+    alphabet for a bound with an empty middle (`{x::y}`) and for an unnamed
+    multi-char `..` range (`{aa..zz}` == `{aa:@uni:zz}`)."""
+    return t.CharRangeNode(start="\x00", end="\U0010ffff")
+
+
 def _resolve_universe(expr: str) -> t.SemanticNode:
     """Resolve a universe expression — the middle of a bound, or a `{…}` alphabet
     arm. Strips one layer of surrounding braces (`{a..z}` → `a..z`) so a bare
@@ -186,7 +193,7 @@ def _resolve_bounds(parts: list[str]) -> t.ValueRangeNode:
     are kept verbatim — their written widths set the engine's field-width window."""
     floor_s, alpha_s, ceil_s = (strip_unescaped(p) for p in parts)
     if alpha_s == "":
-        alpha: t.SemanticNode = t.CharRangeNode(start="\x00", end="\U0010ffff")
+        alpha: t.SemanticNode = _ambient_alpha()
     else:
         alpha = _resolve_universe(alpha_s)
     # Endpoints may be singleton constructors (`{1}[3]` → '111'), else literal text.
@@ -422,11 +429,13 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         av, bv = svals
         if av is not None and bv is not None:
             # τ..τ — a range between two concrete endpoints. Single chars occupy
-            # one position (`{a..z}`); multi-char endpoints are a lexicographic
-            # string range bounded between the two words (`{cat..dog}`).
+            # one position (`{a..z}`); a multi-char range is a value bound over
+            # ambient Unicode (HMK.md §Universes): `{aa..zz}` == `{aa:@uni:zz}`,
+            # the whole value band between the two words, the written widths
+            # setting the field-width window.
             if len(av) == 1 and len(bv) == 1:
                 return t.CharRangeNode(start=av, end=bv)
-            return t.StringRangeNode(start=av, end=bv)
+            return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
         # An alphabet endpoint means this is a value bound, now spelled with `:`.
         raise CompileError(
             f"A value bound is written '{{floor:alphabet:ceiling}}' with ':', "

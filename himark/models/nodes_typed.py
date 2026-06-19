@@ -91,13 +91,6 @@ class CharRangeNode:
     exclusions: list[str] = field(default_factory=list)
 
 
-@dataclass(slots=True)
-class StringRangeNode:
-    type: Literal["string_range"] = "string_range"
-    start: str = ""
-    end: str = ""
-
-
 @dataclass(slots=True, kw_only=True)
 class ValueRangeNode:
     """A value range over `alpha`. A `None` endpoint is open: no `lower` means a
@@ -225,7 +218,6 @@ class StageRefNode:
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
-    | StringRangeNode
     | ValueRangeNode
     | UnionNode
     | ComplementNode
@@ -244,7 +236,6 @@ Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
 SemanticClasses = (
     LiteralNode,
     CharRangeNode,
-    StringRangeNode,
     ValueRangeNode,
     UnionNode,
     ComplementNode,
