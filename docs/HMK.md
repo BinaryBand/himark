@@ -258,6 +258,8 @@ A moustache reference is one of two kinds. A **group** accessor (`{{ i$j }}`, `{
 | `len`      | string | character count (as a number)                             |
 | `hex`      | string | bytes → hexadecimal                                       |
 | `sha256`   | string | SHA-256 digest of the byte string (32 raw bytes)          |
+| `head(n)`  | string | the first `n` bytes                                       |
+| `tail(n)`  | string | the last `n` bytes                                        |
 | `b256(n)`  | value  | the reference's value as `n` big-endian base-256 bytes    |
 
 ```proto

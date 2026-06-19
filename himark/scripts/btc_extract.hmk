@@ -1,35 +1,40 @@
 // ============================================================================
-//  btc_extract.hmk — tag every legacy Bitcoin address in a text file.
+//  btc_extract.hmk -- find legacy Bitcoin addresses and recompute their checksum.
 //
 //  Run it like any pipeline:
 //      himark transpile addresses.txt --script himark/scripts/btc_extract.hmk
 //
-//  Each P2PKH (`1…`) address is wrapped in <btc>…</btc> in place; everything
-//  else is left verbatim. To pull the addresses out as a plain list instead,
-//  run the same pattern as a query:
-//      himark execute '{!@b58}{{1}{…:@b58:…}}' addresses.txt
+//  Each P2PKH (1...) address is rewritten in place as
+//      <btc addr=1A1zP1eP... expect=c29b7d93 actual=c29b7d93/>
+//  where actual is the 4-byte checksum carried inside the address and expect is
+//  the checksum recomputed from the address body. They are equal for a genuine
+//  address and differ for a base58 word that merely looks like one -- so filter
+//  the output to the lines whose expect equals actual to drop the false
+//  positives this shape-matcher cannot reject on its own.
 //
-//  How the match works (see docs/IN_BRIEF.md "Aspirational examples"):
-//    * The address is a `1` prefix (the 0x00 version byte) followed by a base58
-//      value bounded between the smallest and largest 25-byte address — the two
-//      endpoints set both the value range and the field-width window, so only a
-//      base58 run of address length *and* magnitude matches.
-//    * `{!@b58}` is a leading boundary: a non-base58 char (space, newline,
-//      punctuation) must sit before the `1`. That word-anchors the match, so an
-//      interior `1` inside a longer base58 run (e.g. a `3…` P2SH address) is not
-//      mistaken for the start of an address. The boundary char is re-emitted via
-//      `{{$0}}`; the address itself is the grouping brace `{{1}{…}}` = `{{$1}}`.
+//  How it works (see docs/IN_BRIEF.md, Aspirational examples):
+//    * The address is a 1 prefix (the 0x00 version byte) followed by a base58
+//      value bounded between the smallest and largest 25-byte address -- the two
+//      endpoints set the value range and the field-width window, so only a
+//      base58 run of address length and magnitude matches. Group 2 is that value
+//      (it carries the b58 alphabet); group 1 ++ group 2 is the printed address.
+//    * The leading boundary [!@b58] (a non-base58 char before the 1) word-anchors
+//      the match, so an interior 1 inside a longer base58 run -- a 3... P2SH
+//      address, say -- is not read as an address start. It is re-emitted as $0.
+//    * The checksum is base58check: expect decodes the address to 25 bytes
+//      [b256(25)], takes the 21-byte body [head(21)], double-SHA256s it, and
+//      keeps the leading 4 bytes [head(4)]; actual is the trailing 4 bytes
+//      [tail(4)]. A leading 1 is base58 zero, so the value of group 2 alone
+//      re-encodes to the full 25-byte payload (the version byte is the pad).
 //
-//  Scope & limits (honest, by construction):
-//    * SHAPE, not validity — the engine matches in one pass and cannot run the
-//      base58check double-SHA256, so a random base58 word that happens to be a
-//      `1`-led, address-length, in-range value is a false positive. (The
-//      checksum *can* be computed in a template: `{{ $1 | b256(25) | sha256 |
-//      sha256 }}` — but verifying it needs comparison the matcher cannot do.)
-//    * P2PKH only — `3…` P2SH and `bc1…` bech32 are out of scope.
+//  Scope and limits:
+//    * The matcher finds address SHAPE; the template reports checksum validity
+//      but cannot drop a mismatch itself (a one-pass matcher has no equality
+//      test) -- hence the expect/actual pair for you to filter on.
+//    * P2PKH only -- 3... P2SH and bc1... bech32 are out of scope.
 //    * The leading boundary means an address at the very first byte of the file
 //      is missed; keep a newline or space ahead of it.
 // ============================================================================
 
-{!@b58}{{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}}
-    => "{{$0}}<btc>{{$1}}</btc>"
+{!@b58}{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
+    => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"

@@ -55,19 +55,9 @@ def _as_bytes(s: str, filt: str) -> bytes:
         ) from None
 
 
-# String filters read the surface text and produce a raw string.
-_STRING_FILTERS = {
-    "upper": str.upper,
-    "lower": str.lower,
-    "trim": str.strip,
-    "len": lambda s: str(len(s)),
-    "hex": lambda s: _as_bytes(s, "hex").hex(),
-    "sha256": lambda s: hashlib.sha256(_as_bytes(s, "sha256")).digest().decode("latin-1"),
-}
-
-
 def _filter_b256(value: _Value, n: int) -> str:
-    """The reference's value as `n` big-endian base-256 bytes (latin-1 string)."""
+    """The reference's value as `n` big-endian base-256 bytes (latin-1 string).
+    The only **value** filter — it needs the alphabet the reference matched under."""
     if value.alphabet is None:
         raise CompileError(
             "b256 needs a value reference (a '{x:A:y}' group), not a raw string"
@@ -79,8 +69,21 @@ def _filter_b256(value: _Value, n: int) -> str:
         raise CompileError(f"b256({n}): value {iv} does not fit in {n} bytes") from None
 
 
-# Value filters read the typed `_Value` (alphabet required) plus literal args.
-_VALUE_FILTERS = {
+# Every filter maps a `_Value` (plus any integer arguments) to a raw string. Most
+# read only the surface text; `b256` additionally needs the value's alphabet. The
+# byte filters (`hex`, `sha256`, `head`, `tail`) work in the one-byte-per-code-point
+# domain, so they chain after `b256`.
+_FILTERS = {
+    "upper": lambda v: v.text.upper(),
+    "lower": lambda v: v.text.lower(),
+    "trim": lambda v: v.text.strip(),
+    "len": lambda v: str(len(v.text)),
+    "hex": lambda v: _as_bytes(v.text, "hex").hex(),
+    "sha256": lambda v: hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode(
+        "latin-1"
+    ),
+    "head": lambda v, n: v.text[:n],
+    "tail": lambda v, n: v.text[-n:] if n else "",
     "b256": _filter_b256,
 }
 
@@ -148,15 +151,17 @@ def _apply_filter(token: str, value: _Value) -> _Value:
     if m is None:
         raise CompileError(f"Malformed template filter: '{token.strip()}'")
     name, arg_src = m.group(1), m.group(2)
-    if name in _STRING_FILTERS:
-        if arg_src:
-            raise CompileError(f"Filter '{name}' takes no arguments")
-        return _Value(_STRING_FILTERS[name](value.text))
-    vfn = _VALUE_FILTERS.get(name)
-    if vfn is None:
+    fn = _FILTERS.get(name)
+    if fn is None:
         raise CompileError(f"Unknown template filter: '{name}'")
-    args = [int(a) for a in arg_src.split(",")] if arg_src else []
-    return _Value(vfn(value, *args))
+    try:
+        args = [int(a) for a in arg_src.split(",")] if arg_src else []
+    except ValueError:
+        raise CompileError(f"Filter '{name}' arguments must be integers: '{arg_src}'") from None
+    try:
+        return _Value(fn(value, *args))
+    except TypeError:
+        raise CompileError(f"Filter '{name}': wrong number of arguments") from None
 
 
 def _resolve(expr: str, stages: list[Match]) -> _Value:
