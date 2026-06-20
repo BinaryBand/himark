@@ -55,6 +55,14 @@ def _as_bytes(s: str, filt: str) -> bytes:
         ) from None
 
 
+def _indent(s: str) -> str:
+    """Prefix every line of `s` with one tab. A line filter (not a scalar one): it
+    reshapes multi-line text rather than the whole string at once, which is what
+    lets indentation **accumulate** under an inside-out wrap — text re-indented by
+    each enclosing pass ends up as deep as its nesting (see scripts/html_indent.hmk)."""
+    return "" if s == "" else "\t" + s.replace("\n", "\n\t")
+
+
 def _filter_b256(value: _Value, n: int) -> str:
     """The reference's value as `n` big-endian base-256 bytes (latin-1 string).
     The only **value** filter — it needs the alphabet the reference matched under."""
@@ -77,6 +85,7 @@ _FILTERS = {
     "upper": lambda v: v.text.upper(),
     "lower": lambda v: v.text.lower(),
     "trim": lambda v: v.text.strip(),
+    "indent": lambda v: _indent(v.text),
     "len": lambda v: str(len(v.text)),
     "hex": lambda v: _as_bytes(v.text, "hex").hex(),
     "sha256": lambda v: hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode(

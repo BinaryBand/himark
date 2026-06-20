@@ -248,6 +248,7 @@ A moustache value is either a **value** or a **raw string**. Only a group access
 | `upper`    | string | uppercase                                                 |
 | `lower`    | string | lowercase                                                 |
 | `trim`     | string | strip leading/trailing space                              |
+| `indent`   | string | prefix every line with one tab                            |
 | `len`      | string | character count (as a number)                             |
 | `hex`      | string | bytes → hexadecimal                                       |
 | `sha256`   | string | SHA-256 digest of the byte string (32 raw bytes)          |

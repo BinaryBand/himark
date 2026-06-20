@@ -107,6 +107,12 @@ def test_filter_len():
     assert ex('{cat}{dog} => "{{ 0$0 | len }}"', "catdog") == ["3"]
 
 
+def test_filter_indent_prefixes_each_line():
+    # `indent` is a line filter: a tab on every line, so it accumulates under an
+    # inside-out wrap (see scripts/html_indent.hmk).
+    assert ex(r'{!x}[1..] => "{{ . | indent }}"', "a\nb\nc") == ["\ta\n\tb\n\tc"]
+
+
 def test_unknown_filter_raises():
     import pytest
 
