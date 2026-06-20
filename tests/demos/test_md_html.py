@@ -256,9 +256,27 @@ def test_table_cells_keep_inline_formatting():
 
 
 def test_prose_with_pipes_is_not_a_table():
-    # Rows must start with '|' to count as a table; plain prose is left alone.
+    # A table needs a separator row; plain prose with '|' is left alone.
     src = "this | that\nfoo | bar"
     assert md(src) == src
+
+
+def test_table_without_leading_pipes():
+    # GitHub also allows tables with no leading/trailing pipes; the separator row
+    # is the signal, and the rows are normalized to the leading-pipe form.
+    src = "H1 | H2\n-- | --\na | b\nc | d"
+    assert md(src) == (
+        "<table><tr><td>H1</td><td>H2</td></tr>\n"
+        "<tr><td>a</td><td>b</td></tr>\n<tr><td>c</td><td>d</td></tr></table>"
+    )
+
+
+def test_table_three_columns_without_leading_pipes():
+    src = "a | b | c\n- | - | -\n1 | 2 | 3"
+    assert md(src) == (
+        "<table><tr><td>a</td><td>b</td><td>c</td></tr>\n"
+        "<tr><td>1</td><td>2</td><td>3</td></tr></table>"
+    )
 
 
 # ── Document-level composition ────────────────────────────────────────────────

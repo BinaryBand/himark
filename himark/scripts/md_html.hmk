@@ -48,6 +48,17 @@
 {⟪}{!{⟫,\[}}[..]{\[} <= "{{$0}}{{$1}}Ⓛ"
 
 // --- Phase 3: block structure (line-anchored) -------------------------------
+// Normalize a no-leading-pipe table to the leading-pipe form *first*, so its rows
+// (and especially a `- | -` separator) are not mistaken for a list or rule by the
+// rules below. A table is a header line, a separator line (only ` :-|`, the signal
+// that tells a table from prose with a stray '|'), then 0+ body lines -- each with
+// a '|'. Every such line not already starting with '|' gets a leading + trailing
+// one; Phase 4 then handles both forms with the same machinery.
+{@^}{!{\n,|}}[..]{|}{!\n}[..]{\n}{@^}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@$}{\n}{{@^}{!{\n,|}}[..]{|}{!\n}[..]{\n}[0,1]}[0..]
+    => "{{>.}}"
+    => {@^}{!{|,\n}}{!\n}[..]
+    => "|{{.}}|"
+
 // Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@^}` is a line
 // start, so a mid-line or in-word '#' (e.g. `a # b`, `[x](#y)`) is never a head.
 {@^}{#}[1..6]{ }[1..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
@@ -74,10 +85,9 @@
     => "<li>{{$3}}</li>"
 
 // --- Phase 4: tables --------------------------------------------------------
-// First drop the separator row (pipes, dashes, colons, spaces) and its newline,
-// then wrap a block of 2+ rows that each start with '|' (GitHub-style leading
-// pipe -- this is what tells a real table from prose that happens to contain a
-// '|'). Each row's cells are split on '|', trimmed, and the outer pipes dropped.
+// Drop the separator row (pipes, dashes, colons, spaces) and its newline, then
+// wrap a block of 2+ rows that each start with '|'. Each row's cells are split on
+// '|', trimmed, and the outer pipes dropped.
 {@^}{ }[0..]{|}{{ ,:,-,|}}[3..]{@$}{\n} => ""
 {{@^}{ }[0..]{|}{!\n}[0..]{\n}[0,1]}[2..]
     => "<table>{{>.}}</table>"

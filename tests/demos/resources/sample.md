@@ -16,6 +16,11 @@ A small **Markdown** demo for the `md_html.hmk` transpiler.
 
 > A blockquote with a **bold** word.
 
+Feature | Status
+------- | ------
+Tables  | works
+Code    | masked
+
 ---
 
 ```python
