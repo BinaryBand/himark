@@ -103,9 +103,7 @@ impl Matcher {
                     return None;
                 }
                 let ch = chars[pos];
-                let lo = lo.chars().next().unwrap();
-                let hi = hi.chars().next().unwrap();
-                if ch < lo || ch > hi {
+                if ch < *lo || ch > *hi {
                     return None;
                 }
                 if let Some(e) = excl {
@@ -141,8 +139,8 @@ impl Matcher {
                     return None;
                 }
                 for (m, _) in members {
-                    if lit_match(chars, pos, m).is_some() {
-                        return Some(pos + m.chars().count());
+                    if let Some(end) = lit_match(chars, pos, m) {
+                        return Some(end);
                     }
                 }
                 None
@@ -168,9 +166,8 @@ impl Matcher {
                     let mut advanced = false;
                     for (m, idx) in members {
                         if *idx == gidx {
-                            let mc: Vec<char> = m.chars().collect();
-                            if starts_with(chars, cur, &mc) {
-                                cur += mc.len();
+                            if let Some(end) = lit_match(chars, cur, m) {
+                                cur = end;
                                 advanced = true;
                                 break;
                             }
@@ -182,9 +179,8 @@ impl Matcher {
                 }
                 Some(cur)
             }
-            // `{{U}}`: any inner member, each position.
-            Matcher::Het { inner } => inner.mtch(chars, pos),
-            // Default (`_Base.equal_unit`): a fresh match — any member.
+            // Default (`_Base.equal_unit`): a fresh match — any member. `Het` lands
+            // here too: its `mtch` is the inner matcher, i.e. any member per position.
             _ => self.mtch(chars, pos),
         }
     }
@@ -198,10 +194,9 @@ fn group_seq(members: &[(String, usize)], first: &[char]) -> Option<Vec<usize>> 
     while i < first.len() {
         let mut found = false;
         for (m, idx) in members {
-            let mc: Vec<char> = m.chars().collect();
-            if starts_with(first, i, &mc) {
+            if let Some(end) = lit_match(first, i, m) {
                 seq.push(*idx);
-                i += mc.len();
+                i = end;
                 found = true;
                 break;
             }

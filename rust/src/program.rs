@@ -51,11 +51,12 @@ pub enum Matcher {
     /// `_Literal`: an exact (possibly multi-char) string.
     #[serde(rename = "lit")]
     Lit { s: String },
-    /// `_CharRange`: one char in `[lo, hi]`, minus exclusions.
+    /// `_CharRange`: one char in `[lo, hi]`, minus exclusions. Bounds are single
+    /// chars (serde decodes a 1-char JSON string straight into `char`).
     #[serde(rename = "range")]
     Range {
-        lo: String,
-        hi: String,
+        lo: char,
+        hi: char,
         excl: Option<Excluder>,
     },
     /// `_Union`: first arm (in order) whose match is not excluded.

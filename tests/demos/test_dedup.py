@@ -25,15 +25,11 @@ import csv
 import io
 from pathlib import Path
 
+from contextlib import nullcontext
+
 import pytest
 
-from himark.engine import (
-    RUST_AVAILABLE,
-    PythonEngine,
-    RustEngine,
-    get_backend,
-    set_backend,
-)
+from himark.engine import RUST_AVAILABLE, RustEngine, using_backend
 from himark.tools import precompiled
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "dedup.hmk"
@@ -151,12 +147,8 @@ def test_full_file_reconciles_under_rust():
     # Reconciling all 859 rows is ~quadratic, infeasible on the Python backend but
     # ~4s on the native one — so force RustEngine regardless of the default.
     src = (RESOURCES / "podcasts.csv").read_text("utf-8")
-    prev = get_backend()
-    set_backend(RustEngine())
-    try:
+    with using_backend(RustEngine()):
         parsed = _parse_csv(dedup(src))
-    finally:
-        set_backend(prev)
     assert parsed[0] == ["youtube_title", "podcast_title"]
     body = parsed[1:]
     assert all(len(r) == 2 for r in body)  # valid 2-column CSV throughout
@@ -179,17 +171,21 @@ if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
     rows_in = (RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)
     if RUST_AVAILABLE:
-        set_backend(RustEngine())
-        src, label = "".join(rows_in), "rust, whole file"
-    else:
-        src, label = (
-            "".join(rows_in[:25]),
-            "python, 24-row slice (build himark_rs for the whole file)",
+        src, label, ctx = (
+            "".join(rows_in),
+            "rust, whole file",
+            using_backend(RustEngine()),
         )
-    t0 = time.perf_counter()
-    result = dedup(src)
-    elapsed = time.perf_counter() - t0
-    set_backend(PythonEngine())
+    else:
+        src = "".join(rows_in[:25])
+        label, ctx = (
+            "python, 24-row slice (build himark_rs for the whole file)",
+            nullcontext(),
+        )
+    with ctx:
+        t0 = time.perf_counter()
+        result = dedup(src)
+        elapsed = time.perf_counter() - t0
     (OUTPUT / "deduped_titles.csv").write_text(result, "utf-8")
     matched = sum(1 for r in _parse_csv(result)[1:] if len(r) == 2 and r[0] and r[1])
     print(

@@ -13,7 +13,7 @@ To exercise the *whole* suite under Rust: `HIMARK_RUST=1 pytest` (see conftest).
 import pytest
 
 from himark import parser
-from himark.engine import PythonEngine, RustEngine, set_backend
+from himark.engine import PythonEngine, RustEngine, using_backend
 from himark.engine.backend.rust import RUST_AVAILABLE
 from himark.tools import precompiled
 
@@ -86,16 +86,13 @@ def test_dedup_pipeline_is_identical_across_backends():
     src = "".join(rows[:25])
 
     def run(engine):
-        set_backend(engine)
-        pipe = precompiled.compile_pipeline(
-            precompiled.load_script("himark/scripts/dedup.hmk")
-        )
-        return precompiled.apply(pipe, src)
+        with using_backend(engine):
+            pipe = precompiled.compile_pipeline(
+                precompiled.load_script("himark/scripts/dedup.hmk")
+            )
+            return precompiled.apply(pipe, src)
 
-    try:
-        assert run(RustEngine()) == run(PY)
-    finally:
-        set_backend(PY)
+    assert run(RustEngine()) == run(PY)
 
 
 # ── Benchmark runbook (not a hard assertion) ──────────────────────────────────
@@ -106,17 +103,16 @@ if __name__ == "__main__":
     src = "".join(rows[:60])  # a slice big enough to show the gap, fast enough to wait
 
     def bench(engine):
-        set_backend(engine)
-        pipe = precompiled.compile_pipeline(
-            precompiled.load_script("himark/scripts/dedup.hmk")
-        )
-        t0 = time.perf_counter()
-        out = precompiled.apply(pipe, src)
+        with using_backend(engine):
+            pipe = precompiled.compile_pipeline(
+                precompiled.load_script("himark/scripts/dedup.hmk")
+            )
+            t0 = time.perf_counter()
+            out = precompiled.apply(pipe, src)
         return time.perf_counter() - t0, out
 
     pt, po = bench(PY)
     rt, ro = bench(RustEngine())
-    set_backend(PY)
     assert po == ro, "outputs diverged!"
     print(
         f"dedup on 60 rows:  python {pt:.2f}s   rust {rt:.2f}s   speedup {pt / rt:.1f}x"

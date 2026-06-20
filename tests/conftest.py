@@ -15,9 +15,8 @@ try:
 
     settings.register_profile("no_deadline", deadline=None)
     settings.load_profile("no_deadline")
-    HAS_HYPOTHESIS = True
 except Exception:
-    HAS_HYPOTHESIS = False
+    pass
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

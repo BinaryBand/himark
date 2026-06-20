@@ -23,6 +23,9 @@ The branches render two ways, neither privileged:
   between branches kept verbatim (in-place transform).
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from himark.engine._render import is_template as _is_template
 from himark.engine._render import render as _render
 from himark.engine.backend import (
@@ -47,6 +50,7 @@ __all__ = [
     "RUST_AVAILABLE",
     "set_backend",
     "get_backend",
+    "using_backend",
 ]
 
 # The active matching backend. Swap it (e.g. for a native engine) via
@@ -63,6 +67,18 @@ def set_backend(engine: Engine) -> None:
 def get_backend() -> Engine:
     """The currently installed matching backend."""
     return _backend
+
+
+@contextmanager
+def using_backend(engine: Engine) -> Iterator[Engine]:
+    """Install `engine` for the duration of the `with` block, restoring the
+    previously installed backend on exit (even on error)."""
+    prev = get_backend()
+    set_backend(engine)
+    try:
+        yield engine
+    finally:
+        set_backend(prev)
 
 
 def _compiled(tree: t.RootNode) -> object:
