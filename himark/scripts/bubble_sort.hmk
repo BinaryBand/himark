@@ -15,10 +15,10 @@
 //  `{0:@d:$0}` matches the right number only when it is ≤ the left one, and it is
 //  width-agnostic: the ceiling's width caps the field, and a value with more
 //  digits than `a` is larger (no leading zeros), so it is excluded. When the pair
-//  is out of order the template swaps it — `=> "{{$1}},{{$0}},"`. One splice
-//  reorders every non-overlapping out-of-order pair at once; repeating the sweep
-//  (× budget) drains the list toward sorted. A K-value list needs ≤ K sweeps;
-//  this file budgets 10. Add SORT lines for longer lists.
+//  is out of order the template swaps it. The `<=` arrow re-splices the rule to a
+//  **fixed point** — every non-overlapping out-of-order pair is reordered each
+//  pass, and passes repeat until the list stops changing (i.e. is sorted), for a
+//  list of any length. (With `=>` you would unroll one sweep per pass yourself.)
 //
 //  The leading PAD appends a comma after the last value so every value is
 //  comma-terminated (the SORT rule matches whole, comma-delimited tokens — so a
@@ -29,17 +29,8 @@
 // ── PAD ── comma-terminate the last value (so every value has a trailing comma)
 {@d}[1..]{@$} => "{{$0}},"
 
-// ── SORT ── one compare-and-swap sweep per line (× a 10-sweep budget) ─────────
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
-{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+// ── SORT ── compare-and-swap, re-spliced to a fixed point (`<=`) ─────────────
+{0:@d:},{0:@d:$0}, <= "{{$1}},{{$0}},"
 
 // ── UNPAD ── remove the trailing comma the PAD added ─────────────────────────
 {\,}{@$} => ""

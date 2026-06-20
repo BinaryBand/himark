@@ -45,6 +45,11 @@ CountSpec: TypeAlias = CountRange | CountSet | CountRefSpec
 class RootNode:
     type: Literal["root"] = "root"
     children: list[Node] = field(default_factory=list)
+    # Set by the pipeline compiler on a statement's first step when the statement
+    # uses the `<=` fixed-point arrow: the runner re-splices it until the document
+    # settles. A plain `=>` statement leaves it False. Excluded from equality (it
+    # is a runner directive, not part of the matched shape).
+    fixed_point: bool = field(default=False, compare=False)
     # Engine compile cache: the lowered program and the backend that produced it
     # (so a swapped backend recompiles). Excluded from equality/repr — pure
     # memoization, tied to this tree's lifetime. Populated lazily by the engine.

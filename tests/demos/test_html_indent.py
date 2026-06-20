@@ -12,8 +12,6 @@ when nesting exceeds the budget.
 
 from pathlib import Path
 
-from himark import parser
-from himark.engine import splice
 from himark.tools import precompiled
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "html_indent.hmk"
@@ -72,27 +70,14 @@ def test_strip_whitespace_recovers_source():
         assert out.replace("\n", "").replace("\t", "") == src
 
 
-def test_full_depth_within_budget():
-    # Six levels — well inside the 12-level budget — indent completely.
-    src = "<a><b><c><d><e><f>x</f></e></d></c></b></a>"
+def test_arbitrary_depth_indents_completely():
+    # The `<=` fixed point peels until no tag pair is left, so there is no depth
+    # limit — a 16-deep document (past the old 12-pass budget) indents fully.
+    names = [chr(ord("a") + i) for i in range(16)]
+    src = "".join(f"<{n}>" for n in names) + "x" + "".join(f"</{n}>" for n in reversed(names))
     out = run(src)
-    assert out.splitlines()[5].strip() == "<f>"
-    assert out.splitlines()[6] == "\t" * 6 + "x"
-    assert out.replace("\n", "").replace("\t", "") == src
-
-
-def test_over_budget_degrades_gracefully_not_corrupts():
-    # A tiny 2-pass budget against a 4-deep document: the two innermost levels
-    # format, the outer two are left un-indented — never garbled. Whitespace
-    # still strips back to the source.
-    tiny = [parser.parse(s) for s in precompiled.load_script(SCRIPT)[:2]]
-    tiny += [parser.parse(s) for s in ("{⟦} => \"<\"", "{⟧} => \">\"")]
-    src = "<a><b><c><d>x</d></c></b></a>"
-    out = src
-    for steps in tiny:
-        out = splice(steps, out)
-    assert "⟦" not in out and "⟧" not in out  # sentinels fully restored
-    assert out.replace("\n", "").replace("\t", "") == src  # lossless structure
+    assert out.splitlines()[16] == "\t" * 16 + "x"  # the innermost text, 16 tabs deep
+    assert out.replace("\n", "").replace("\t", "") == src  # lossless
 
 
 def test_inline_mixed_content_splits_at_child_boundaries():

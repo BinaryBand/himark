@@ -29,6 +29,7 @@ import typer
 from himark import parser
 from himark.engine import splice
 from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
 
 _MAGIC = b"HMKC\x00"
 _VERSION = 1
@@ -38,8 +39,50 @@ Pipeline = list[list[t.RootNode]]
 
 def compile_pipeline(statements: list[str]) -> Pipeline:
     """Parse each HMK statement into its ordered step trees — the costly one-time
-    work this module exists to cache. The result runs with `apply`."""
-    return [parser.parse(s) for s in statements]
+    work this module exists to cache. The result runs with `apply`.
+
+    A statement whose arrow is `<=` (fixed-point) is parsed like its `=>` form,
+    and its first step is flagged so `apply` re-splices it until the document
+    settles (see `_split_fixed_point`)."""
+    pipeline: Pipeline = []
+    for s in statements:
+        converted, loop = _split_fixed_point(s)
+        steps = parser.parse(converted)
+        if loop and steps:
+            steps[0].fixed_point = True
+        pipeline.append(steps)
+    return pipeline
+
+
+def _split_fixed_point(statement: str) -> tuple[str, bool]:
+    """Rewrite each top-level `<=` arrow to `=>`, returning `(text, used_<=)`.
+
+    Depth-aware over `{…}` / `[…]` and skipping `\\`-escapes, like the `=>`
+    splitter — so a `<=` inside a brace or count is left alone. (A `<=` inside a
+    quoted template is not distinguished, the same limitation `=>` has.)"""
+    out: list[str] = []
+    depth = 0
+    found = False
+    i = 0
+    n = len(statement)
+    while i < n:
+        ch = statement[i]
+        if ch == "\\" and i + 1 < n:
+            out.append(statement[i : i + 2])
+            i += 2
+            continue
+        if ch == "<" and statement[i + 1 : i + 2] == "=" and depth == 0:
+            out.append("=>")
+            found = True
+            i += 2
+            continue
+        if ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth = max(0, depth - 1)
+        out.append(ch)
+        i += 1
+    return "".join(out), found
 
 
 # ── .hmk script files ─────────────────────────────────────────────────────────
@@ -146,10 +189,35 @@ def _strip_comment(line: str) -> str:
 
 def apply(pipeline: Pipeline, text: str) -> str:
     """Run each statement's in-place splice over `text` in turn, returning the
-    transformed document. The compile cache warms on the first document."""
+    transformed document. The compile cache warms on the first document. A
+    `<=` (fixed-point) statement is re-spliced until the text stops changing."""
     for steps in pipeline:
-        text = splice(steps, text)
+        if steps and steps[0].fixed_point:
+            text = _splice_to_fixed_point(steps, text)
+        else:
+            text = splice(steps, text)
     return text
+
+
+def _splice_to_fixed_point(steps: list[t.RootNode], text: str) -> str:
+    """Re-splice `steps` over `text` until a pass changes nothing (the fixed
+    point). A contracting rule settles in at most a few passes per unit of input,
+    so the guards only trip on a rule that does not converge — a `CompileError`.
+    Two guards: a pass count (catches oscillators), and a size bound (catches a
+    grower like `{a} <= "aa"` before it exhausts memory)."""
+    cap = 8 * len(text) + 1024
+    size_limit = 64 * len(text) + 65536
+    for _ in range(cap):
+        nxt = splice(steps, text)
+        if nxt == text:
+            return text
+        if len(nxt) > size_limit:
+            break
+        text = nxt
+    raise CompileError(
+        "a `<=` statement did not settle: the rule is not contracting toward a "
+        "fixed point (it grows or oscillates). Use `=>` for a single pass."
+    )
 
 
 def dump(pipeline: Pipeline, path: str | Path) -> None:

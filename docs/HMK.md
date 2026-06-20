@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.5-experimental  
+**Version:** 0.9.6-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -20,6 +20,7 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `{x:...:y}` | **Bounds**               | restricted a universe to values `x`-`y` inclusive (`{x::y}` = ambient) |
 | `[count]`   | **Repetition**           | a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)    |
 | `=>`        | **Pipe**                 | feed each match into the next transformation                           |
+| `<=`        | **Fixed point**          | re-apply the statement over the document until it settles              |
 
 **Every `{...}` matches one position**, holding one **point** of the universe. A point is a **primitive** (one char or string) or an **object** (a nested universe `{...}`) whose members are **interchangeable**. A run is an explicit `[count]` repeating **one point**: a primitive repeats as its spelling, an object lets each position take **any** of its members independently.
 
@@ -243,6 +244,17 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 {cat} => "<b>{{.}}</b>"             // wrap each match
 {table} => "<table>{{.}}</table>" => {{!{\n}}}[1..] => "<tr>{{.}}</tr>"   // nest: wrap, then wrap rows
 ```
+
+### Fixed point
+
+A statement written with `<=` instead of `=>` is **re-spliced over the whole document until the result stops changing** -- the splice version of a `while` loop. Each pass is an ordinary `=>` splice; passes repeat until one makes no change. It expresses an iteration whose length depends on the input: peel the innermost tag pair until none remain, mask an interior newline until none are left, swap an out-of-order pair until the list is sorted.
+
+```proto
+{\(}{!{\(,\)}}[..]{\)} <= "{{$1}}"       // strip the innermost (…), deepest first, until no parentheses remain
+{0:@d:},{0:@d:$0}, <= "{{$1}},{{$0}},"   // bubble-sort a comma list: swap adjacent out-of-order pairs to a fixed point
+```
+
+The rule must **contract** toward a fixed point. A rule that grows the document (`{a} <= "aa"`) or oscillates never settles and is a compile-time error -- use `=>` for a single pass. `<=` is an arrow only at top level; inside `{…}` or `[…]` it is plain text. (A whole _group_ of statements cannot yet be looped together -- only a single statement.)
 
 ### Filters
 

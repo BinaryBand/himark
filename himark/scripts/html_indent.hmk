@@ -40,11 +40,10 @@
 //  leading newline so siblings land on their own lines; `trim` drops that stray
 //  edge newline from the body before it is re-indented.
 //
-//  THE BUDGET (a feature, not a bug): HMK has no repeat-until-stable, so depth is
-//  bounded by how many wrap passes you write -- you declare your own budget. This
-//  file budgets 12 levels; add identical lines to format deeper documents. Input
-//  deeper than the budget degrades gracefully: the outermost over-budget levels
-//  are simply left un-indented (never corrupted).
+//  ITERATION: the `<=` arrow re-splices the wrap to a **fixed point** — it peels
+//  one layer per pass and repeats until no raw tag pair is left, so a document of
+//  any depth is fully indented (with `=>` you would unroll one pass per level
+//  yourself, capping the depth you can handle).
 //
 //  Scope: block-structured, well-formed HTML. No tag attributes, no self-closing
 //  tags, no literal `<`/`>` in text, and `trim` collapses leading/trailing
@@ -52,19 +51,8 @@
 //  assumed absent from the input.
 // ============================================================================
 
-// ── wrap one innermost layer (×12 = a 12-level budget; each line buys a level) ──
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
-{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} => "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
+// ── wrap each innermost layer, re-spliced to a fixed point (`<=`) ────────────
+{<}{!{<,>,/}}[1..]{>}{!<}[..]{</}{$1}{>} <= "\n⟦{{$1}}⟧\n{{ $3 | trim | indent }}\n⟦/{{$1}}⟧"
 
 // ── strip the single leading newline the outermost block carries ──────────────
 {@^^}{\n}[1..] => ""

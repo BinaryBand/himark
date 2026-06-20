@@ -4,9 +4,9 @@ The script sorts a comma-separated list of base-10 values with no loop and no
 arithmetic. The whole comparison is one range — a value bound whose ceiling is a
 **reference** to the pair's first value (`{0:@d:$0}` matches "≤ a"), which is
 width-agnostic. A comma-terminating PAD makes every value a complete token, the
-SORT sweep is unrolled to a 10-sweep budget, and an UNPAD strips the pad. These
-tests pin the sort on the sample, a worst-case reversed list, mixed widths,
-duplicates, and a list with no trailing newline.
+SORT sweep uses the `<=` fixed-point arrow (re-spliced until sorted, for a list
+of any length), and an UNPAD strips the pad. These tests pin the sort on the
+sample, a long reversed list, mixed widths, duplicates, and no trailing newline.
 """
 
 from pathlib import Path
@@ -32,8 +32,12 @@ def test_mixed_widths_compare_by_value_not_lexicographically():
     assert sort("100,9,90\n") == "9,90,100\n"
 
 
-def test_worst_case_reversed():
-    assert sort("60,50,40,30,20,10\n") == "10,20,30,40,50,60\n"
+def test_long_reversed_list_no_budget_limit():
+    # 20 values reversed — past any fixed budget; the `<=` fixed point sorts a
+    # list of any length.
+    vals = list(range(200, 0, -10))
+    src = ",".join(str(v) for v in vals) + "\n"
+    assert sort(src) == ",".join(str(v) for v in sorted(vals)) + "\n"
 
 
 def test_already_sorted_is_unchanged():
