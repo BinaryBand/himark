@@ -2,7 +2,7 @@
 
 import pytest
 
-from himark.engine.alphabet import Alphabet
+from himark.engine.backend import Alphabet
 from himark.parser.macros import MACROS
 from himark.models.exceptions import CompileError
 

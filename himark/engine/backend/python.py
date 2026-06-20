@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from typing import cast
 
-from himark.engine._compile import Element, compile_pattern
-from himark.engine._run import find_matches as _run_find_matches
-from himark.engine._types import Match
-from himark.engine.interface import Engine
+from himark.engine.backend._compile import Element, compile_pattern
+from himark.engine.backend._run import find_matches as _run_find_matches
+from himark.engine.backend._types import Match
+from himark.engine.backend.interface import Engine
 from himark.models import nodes_typed as t
 
 __all__ = ["Engine", "PythonEngine"]

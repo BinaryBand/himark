@@ -16,7 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from himark.engine.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
+from himark.engine.backend.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 

@@ -7,14 +7,14 @@ on the shared AST (`models`) and the `Match` result type — never on `_compile`
 in the pure-Python core. Because it is a `@runtime_checkable Protocol`, a backend
 is matched structurally and need not even import this module.
 
-The built-in implementation lives in `backend.py` (`PythonEngine`).
+The built-in implementation lives in `python.py` (`PythonEngine`).
 """
 
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from himark.engine._types import Match
+from himark.engine.backend._types import Match
 from himark.models import nodes_typed as t
 
 

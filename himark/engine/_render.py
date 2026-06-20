@@ -23,7 +23,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
-from himark.engine._types import Match
+from himark.engine.backend import Match
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 
