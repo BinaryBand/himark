@@ -38,10 +38,6 @@ class Match:
         return [c.text for c in self.captures]
 
     @property
-    def group_spans(self) -> list[tuple[int, int]]:
-        return [c.span for c in self.captures]
-
-    @property
     def sub_groups(self) -> list[list[str]]:
         return [[s.text for s in c.subs] for c in self.captures]
 

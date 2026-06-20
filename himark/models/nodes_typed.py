@@ -221,18 +221,3 @@ SemanticNode: TypeAlias = (
 )
 
 Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
-
-SemanticClasses = (
-    LiteralNode,
-    CharRangeNode,
-    ValueRangeNode,
-    UnionNode,
-    ComplementNode,
-    HeterogeneousNode,
-    AnchorNode,
-    GroupClassNode,
-    SequenceNode,
-    BackRefNode,
-    CountRefNode,
-    StageRefNode,
-)
