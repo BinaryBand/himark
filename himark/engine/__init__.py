@@ -25,7 +25,13 @@ The branches render two ways, neither privileged:
 
 from himark.engine._render import is_template as _is_template
 from himark.engine._render import render as _render
-from himark.engine.backend import Engine, Match, PythonEngine
+from himark.engine.backend import (
+    RUST_AVAILABLE,
+    Engine,
+    Match,
+    PythonEngine,
+    RustEngine,
+)
 from himark.models import nodes_typed as t
 
 __all__ = [
@@ -37,6 +43,8 @@ __all__ = [
     "Match",
     "Engine",
     "PythonEngine",
+    "RustEngine",
+    "RUST_AVAILABLE",
     "set_backend",
     "get_backend",
 ]

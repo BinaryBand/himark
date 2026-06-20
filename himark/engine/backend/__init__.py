@@ -21,11 +21,14 @@ from himark.engine.backend.alphabet import (
 )
 from himark.engine.backend.interface import Engine
 from himark.engine.backend.python import PythonEngine
+from himark.engine.backend.rust import RUST_AVAILABLE, RustEngine
 from himark.engine.backend._types import Capture, Match
 
 __all__ = [
     "Engine",
     "PythonEngine",
+    "RustEngine",
+    "RUST_AVAILABLE",
     "Match",
     "Capture",
     "Alphabet",

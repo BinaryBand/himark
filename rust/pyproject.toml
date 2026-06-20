@@ -1,0 +1,15 @@
+# Isolated maturin build for the optional native backend. This does NOT replace
+# the project's poetry-core build — `himark_rs` is an opt-in extension module:
+#   maturin develop --release -m rust/Cargo.toml
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "himark_rs"
+version = "0.1.0"
+description = "Native (Rust) matching backend for himark — structural subset."
+requires-python = ">=3.11"
+
+[tool.maturin]
+module-name = "himark_rs"
