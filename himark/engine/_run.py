@@ -16,6 +16,7 @@ from himark.engine._compile import (
     AnchorEl,
     BackRefEl,
     CountRefEl,
+    DynValueRangeEl,
     Element,
     GroupEl,
     LiteralEl,
@@ -275,9 +276,16 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
     reps = _resolve_reps(el.reps, state)
     if reps is None:
         return None
-    caps = state.captures
+    return _run_matcher(
+        el.matcher, el.het, reps, el.matcher.value_alphabet, text, pos, state, cont
+    )
 
-    alphabet = el.matcher.value_alphabet  # set only for `{x:A:y}` bounds
+
+def _run_matcher(matcher, het, reps, alphabet, text, pos, state, cont):
+    """Match `matcher` per `reps` (longest-first unit splitting for equal-rep runs),
+    capture with `alphabet` as the value type, then the continuation. Shared by the
+    static `GroupEl` and the dynamic value bound (whose matcher is built per match)."""
+    caps = state.captures
 
     def attempt(end: int, rep_list: list[str]) -> int | None:
         mark = len(caps)
@@ -288,7 +296,7 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
         del caps[mark:]
         return None
 
-    greedy_end = el.matcher.match(text, pos)
+    greedy_end = matcher.match(text, pos)
     if greedy_end is None or greedy_end == pos:
         return attempt(pos, []) if reps.accepts(0) else None
 
@@ -298,17 +306,16 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
     # A run repeats **one point**: a range/literal is a primitive (same string
     # each rep), while a congruence class or complement is an object whose faces
     # are free within the matched group — its `equal_unit` continuation.
-    het = el.het
     for unit_len in range(greedy_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
-        if not el.matcher.accepts(first):
+        if not matcher.accepts(first):
             continue
         rep_list = [first]
         ends = [pos + unit_len]
         current = pos + unit_len
         while reps.max is None or len(rep_list) < reps.max:
             if het:
-                nxt = el.matcher.equal_unit(text, current, first)
+                nxt = matcher.equal_unit(text, current, first)
             elif text.startswith(first, current):
                 nxt = current + len(first)
             else:
@@ -326,11 +333,45 @@ def _match_group(el: GroupEl, text: str, pos: int, state: _State, cont: Cont):
     return attempt(pos, []) if reps.accepts(0) else None
 
 
+# ── Value bound with a reference endpoint `{0:@d:$0}` ─────────────────────────
+
+
+def _endpoint_text(desc: tuple, state: _State) -> str | None:
+    """Resolve a reference-endpoint descriptor to its captured text (or None if the
+    referenced group/stage is undefined)."""
+    caps = state.root.captures
+    kind = desc[0]
+    if kind == "back":
+        return caps[desc[1]].text if desc[1] < len(caps) else None
+    if kind == "count":
+        return str(len(caps[desc[1]].reps)) if desc[1] < len(caps) else None
+    return _stage_referent(state.root.stages, desc[1], desc[2])  # "stage"
+
+
+def _match_dyn_value_range(
+    el: DynValueRangeEl, text: str, pos: int, state: _State, cont: Cont
+):
+    reps = _resolve_reps(el.reps, state)
+    if reps is None:
+        return None
+    lower = el.lower if el.lower_ref is None else _endpoint_text(el.lower_ref, state)
+    upper = el.upper if el.upper_ref is None else _endpoint_text(el.upper_ref, state)
+    if (el.lower_ref is not None and lower is None) or (
+        el.upper_ref is not None and upper is None
+    ):
+        return None  # a referenced endpoint is undefined — the bound cannot match
+    matcher = el.build(lower, upper)
+    if matcher is None:
+        return None
+    return _run_matcher(matcher, False, reps, el.alphabet, text, pos, state, cont)
+
+
 # Continuation-passing dispatch; GroupEl is the generic fall-through.
 _DISPATCH: dict[type, Callable[..., int | None]] = {
     SeqGroupEl: _match_seq_group,
     BackRefEl: _match_back_ref,
     CountRefEl: _match_count_ref,
     StageRefEl: _match_stage_ref,
+    DynValueRangeEl: _match_dyn_value_range,
     GroupEl: _match_group,
 }

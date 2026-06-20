@@ -1,10 +1,12 @@
 """End-to-end tests for the bubble-sort demo (`himark/scripts/bubble_sort.hmk`).
 
-The script sorts a comma-separated list of single base-10 digits with no loop and
-no arithmetic: each *sweep* is nine range-based compare-and-swap rules, and the
-sweep is unrolled to a fixed budget (9 sweeps — enough for any 10-value list).
-These tests pin the sort on the shipped sample and a worst-case reversed list,
-and check that already-sorted input is a no-op.
+The script sorts a comma-separated list of base-10 values with no loop and no
+arithmetic. The whole comparison is one range — a value bound whose ceiling is a
+**reference** to the pair's first value (`{0:@d:$0}` matches "≤ a"), which is
+width-agnostic. A comma-terminating PAD makes every value a complete token, the
+SORT sweep is unrolled to a 10-sweep budget, and an UNPAD strips the pad. These
+tests pin the sort on the sample, a worst-case reversed list, mixed widths,
+duplicates, and a list with no trailing newline.
 """
 
 from pathlib import Path
@@ -22,25 +24,30 @@ def sort(text: str) -> str:
 
 
 def test_sorts_the_sample():
-    assert sort("5,2,8,1,9,3,7,0,6,4") == "0,1,2,3,4,5,6,7,8,9"
+    assert sort("42,5,317,8,90,256,73,1,640,29\n") == "1,5,8,29,42,73,90,256,317,640\n"
 
 
-def test_sorts_worst_case_reversed_ten():
-    assert sort("9,8,7,6,5,4,3,2,1,0") == "0,1,2,3,4,5,6,7,8,9"
+def test_mixed_widths_compare_by_value_not_lexicographically():
+    # 9 < 90 < 100 by value (a naive lexicographic sort would put 100 before 90).
+    assert sort("100,9,90\n") == "9,90,100\n"
+
+
+def test_worst_case_reversed():
+    assert sort("60,50,40,30,20,10\n") == "10,20,30,40,50,60\n"
 
 
 def test_already_sorted_is_unchanged():
-    assert sort("0,1,2,3,4,5,6,7,8,9") == "0,1,2,3,4,5,6,7,8,9"
+    assert sort("1,5,8,42,640\n") == "1,5,8,42,640\n"
 
 
 def test_duplicates_and_short_lists():
-    assert sort("3,3,1,2,1") == "1,1,2,3,3"
-    assert sort("2,1") == "1,2"
-    assert sort("7") == "7"
+    assert sort("30,7,30,7,12\n") == "7,7,12,30,30\n"
+    assert sort("2,1\n") == "1,2\n"
+    assert sort("7\n") == "7\n"
 
 
-def test_trailing_newline_is_preserved():
-    assert sort("3,1,2\n") == "1,2,3\n"
+def test_works_without_trailing_newline():
+    assert sort("30,4,100,7") == "4,7,30,100"
 
 
 # Runbook: sort the sample file into `tests/demos/output` for manual inspection.

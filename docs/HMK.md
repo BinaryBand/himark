@@ -117,6 +117,13 @@ The two written widths set the field width -- narrower is the minimum, wider the
 | `090`  |              | $\checkmark$  | $\checkmark$ | $\checkmark$   |
 | `0090` |              |               |              |                |
 
+An endpoint is a value, so a **reference** ([Self-references](#self-references)) may stand in for one — resolved at match time against what the reference captured. This compares one capture against another by magnitude: `{0:@d:$0}` matches a decimal `≤` the value group 0 captured (width-agnostic — a value with more digits than the referent is larger, so it falls outside the field window), and `{$0:@d:}` matches one `≥` it. A reference to a group that has not captured does not match; a referent outside the alphabet (`$0` resolves to non-digits under `@d`) does not match. `\$` is a literal, not a reference.
+
+```proto
+{@d}[1..],{0:@d:$0}    // two decimals where the second is ≤ the first
+{aa:@l:$0}             // a lowercase string ≤ the one group 0 captured
+```
+
 ### Subtraction
 
 `!{...}` is the **subtractive universe** -- every value of the ambient universe (Unicode) _not_ in `{...}`. Alone it draws from the full Unicode set. As a union, it subtracts from the others.

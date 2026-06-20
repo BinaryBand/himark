@@ -1,124 +1,45 @@
 // ============================================================================
-//  bubble_sort.hmk — sort a comma-separated list of single base-10 digits.
+//  bubble_sort.hmk — sort a comma-separated list of base-10 values.
 //
 //  Run it like any pipeline:
 //      himark transpile numbers.txt --script himark/scripts/bubble_sort.hmk
 //
-//      5,2,8,1,9,3,7,0,6,4   ->   0,1,2,3,4,5,6,7,8,9
+//      42,5,317,8,90   ->   5,8,42,90,317
 //
-//  HOW: a bubble sort with no loop and no arithmetic — just compare-and-swap by
-//  range. One *sweep* is nine rules; rule `t` matches an adjacent pair whose left
-//  value is `>= t` and right value is `< t` (so left > right) and swaps them into
-//  order by reversing the captured pair — `{a},{b} => "{{$1}},{{$0}}"`. A single
-//  splice reorders *every* non-overlapping out-of-order pair at once.
+//  HOW: a bubble sort with no loop and no arithmetic. The whole comparison is one
+//  range — a value bound whose **ceiling is the first value of the pair**:
 //
-//  Repeating the sweep drains the list toward sorted (like the masking demos,
-//  the iteration is unrolled — you declare the budget). A list of K values needs
-//  up to K-1 sweeps; this file budgets 9, enough for any 10-value list. Add more
-//  sweep blocks for longer lists.
+//      {0:@d:},{0:@d:$0}        a , (a number ≤ a)
+//        a         └─ ceiling $0 is group 0's captured value
 //
-//  Scope: single digits 0-9. Multi-digit values would have to compare unequal
-//  widths (the longer value is larger), and HMK cannot compare two captured
-//  *lengths*, so they are out of scope. Equal-width comparison *is* expressible
-//  (a per-position prefix back-reference — an empty prefix back-references
-//  correctly), so a fixed-width list is a possible extension.
+//  `{0:@d:$0}` matches the right number only when it is ≤ the left one, and it is
+//  width-agnostic: the ceiling's width caps the field, and a value with more
+//  digits than `a` is larger (no leading zeros), so it is excluded. When the pair
+//  is out of order the template swaps it — `=> "{{$1}},{{$0}},"`. One splice
+//  reorders every non-overlapping out-of-order pair at once; repeating the sweep
+//  (× budget) drains the list toward sorted. A K-value list needs ≤ K sweeps;
+//  this file budgets 10. Add SORT lines for longer lists.
+//
+//  The leading PAD appends a comma after the last value so every value is
+//  comma-terminated (the SORT rule matches whole, comma-delimited tokens — so a
+//  prefix like `9` of `90` is never mistaken for a value); the trailing UNPAD
+//  removes it. Equal pairs swap as a harmless no-op, so the bound is inclusive.
 // ============================================================================
 
-// ── sweep 1 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
+// ── PAD ── comma-terminate the last value (so every value has a trailing comma)
+{@d}[1..]{@$} => "{{$0}},"
 
-// ── sweep 2 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
+// ── SORT ── one compare-and-swap sweep per line (× a 10-sweep budget) ─────────
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
+{0:@d:},{0:@d:$0}, => "{{$1}},{{$0}},"
 
-// ── sweep 3 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 4 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 5 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 6 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 7 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 8 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
-
-// ── sweep 9 ──
-{1..9},{0..0} => "{{$1}},{{$0}}"
-{2..9},{0..1} => "{{$1}},{{$0}}"
-{3..9},{0..2} => "{{$1}},{{$0}}"
-{4..9},{0..3} => "{{$1}},{{$0}}"
-{5..9},{0..4} => "{{$1}},{{$0}}"
-{6..9},{0..5} => "{{$1}},{{$0}}"
-{7..9},{0..6} => "{{$1}},{{$0}}"
-{8..9},{0..7} => "{{$1}},{{$0}}"
-{9..9},{0..8} => "{{$1}},{{$0}}"
+// ── UNPAD ── remove the trailing comma the PAD added ─────────────────────────
+{\,}{@$} => ""

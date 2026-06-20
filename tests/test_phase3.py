@@ -68,6 +68,24 @@ def test_bounded_range():
     assert node.alpha.type == "char_range"
 
 
+def test_bound_reference_endpoint():
+    # `{0:@d:$0}` — the ceiling is a back-reference, resolved at match time. The
+    # literal `upper` is None; `upper_ref` carries the reference node.
+    node = first_semantic("{0:@d:$0}")
+    assert node.type == "value_range"
+    assert node.lower == "0"
+    assert node.upper is None
+    assert node.upper_ref.type == "back_ref"
+    assert node.upper_ref.group == 0
+
+
+def test_escaped_dollar_endpoint_is_literal_not_reference():
+    # `\$0` is the literal text "$0", not a reference (so `upper_ref` is None).
+    node = first_semantic(r"{0:@d:\$0}")
+    assert node.upper == "$0"
+    assert node.upper_ref is None
+
+
 def test_class_to_class_range_unsupported():
     # {{a..z}..{A..Z}} — a class-to-class range has no ordering; enumerate the
     # folded pairs as a class of classes instead.

@@ -96,6 +96,10 @@ class ValueRangeNode:
     type: Literal["value_range"] = "value_range"
     lower: str | None = None
     upper: str | None = None
+    # A reference endpoint (`{0:@d:$0}`) resolves to a captured value at match
+    # time; when set, the matching `lower`/`upper` string is None (dynamic).
+    lower_ref: "SemanticNode | None" = None
+    upper_ref: "SemanticNode | None" = None
     exclusions: list[str] = field(default_factory=list)
 
 

@@ -189,26 +189,37 @@ class _ValueView:
     wmax: int | None
 
 
-def _value_view(node: t.ValueRangeNode) -> _ValueView:
-    """The value-arithmetic view of a `{floor:alphabet:ceiling}` bound.
+def _build_value_view(
+    alph: "Alphabet | RangeAlphabet",
+    lower: str | None,
+    upper: str | None,
+    exclusions: list[str],
+) -> _ValueView:
+    """The value-arithmetic view for an alphabet and resolved endpoint strings.
 
     The two written endpoint widths set the field-width window: with both present
     it is `[min, max]` of the widths; an omitted ceiling opens the top (wmax None),
     an omitted floor lets the value start at width 1. Leading zero-padding inside
     the window is allowed, so `{000:@d:9}` matches `9`, `09`, and `009`.
     """
-    alph = _value_alphabet(node.alpha)
-    lo = alph.value(node.lower) if node.lower is not None else None
-    hi = alph.value(node.upper) if node.upper is not None else None
-    wf = len(node.lower) if node.lower is not None else None
-    wc = len(node.upper) if node.upper is not None else None
+    lo = alph.value(lower) if lower is not None else None
+    hi = alph.value(upper) if upper is not None else None
+    wf = len(lower) if lower is not None else None
+    wc = len(upper) if upper is not None else None
     if wf is not None and wc is not None:
         wmin, wmax = min(wf, wc), max(wf, wc)
     elif wf is not None:  # open ceiling — any width at or above the floor's
         wmin, wmax = wf, None
     else:  # open floor — value starts at 0, up to the ceiling's width
         wmin, wmax = 1, wc
-    return _ValueView(alph, lo, hi, _ValueExcluder(node.exclusions, alph), wmin, wmax)
+    return _ValueView(alph, lo, hi, _ValueExcluder(exclusions, alph), wmin, wmax)
+
+
+def _value_view(node: t.ValueRangeNode) -> _ValueView:
+    """The value-arithmetic view of a static `{floor:alphabet:ceiling}` bound."""
+    return _build_value_view(
+        _value_alphabet(node.alpha), node.lower, node.upper, node.exclusions
+    )
 
 
 # ── Concrete matchers ─────────────────────────────────────────────────────────
@@ -527,9 +538,66 @@ class StageRefEl:
     reps: Reps
 
 
+@dataclass(slots=True)
+class DynValueRangeEl:
+    """A value bound with a **reference endpoint** (`{0:@d:$0}`): the floor and/or
+    ceiling resolve to a captured value at match time, so — like a back-reference —
+    the loop builds the view from running state. `lower_ref`/`upper_ref` are
+    resolver descriptors (`("back", i)`, `("count", i)`, `("stage", n, path)`); the
+    other endpoint is a literal string. `alphabet` doubles as the captured value's
+    type for downstream filters."""
+
+    alphabet: "Alphabet | RangeAlphabet"
+    lower: str | None
+    upper: str | None
+    lower_ref: tuple | None
+    upper_ref: tuple | None
+    exclusions: list[str]
+    reps: Reps
+
+    def build(self, lower: str | None, upper: str | None) -> "_ValueRange | None":
+        """A concrete matcher for resolved endpoint strings, or None if a resolved
+        endpoint is not expressible in `alphabet` (so the bound cannot match)."""
+        try:
+            view = _build_value_view(self.alphabet, lower, upper, self.exclusions)
+        except (KeyError, ValueError):
+            return None
+        return _ValueRange(view)
+
+
 Element = (
-    LiteralEl | AnchorEl | GroupEl | SeqGroupEl | BackRefEl | CountRefEl | StageRefEl
+    LiteralEl
+    | AnchorEl
+    | GroupEl
+    | SeqGroupEl
+    | BackRefEl
+    | CountRefEl
+    | StageRefEl
+    | DynValueRangeEl
 )
+
+
+def _ref_descriptor(ref: t.SemanticNode) -> tuple:
+    """A loop-resolvable descriptor for a reference-endpoint node."""
+    if isinstance(ref, t.BackRefNode):
+        return ("back", ref.group)
+    if isinstance(ref, t.CountRefNode):
+        return ("count", ref.group)
+    if isinstance(ref, t.StageRefNode):
+        return ("stage", ref.stage, ref.path)
+    raise CompileError(f"Unsupported bound reference: {type(ref).__name__}")
+
+
+def _dyn_value_range_el(node: t.ValueRangeNode, reps: Reps) -> DynValueRangeEl:
+    return DynValueRangeEl(
+        alphabet=_value_alphabet(node.alpha),
+        lower=node.lower,
+        upper=node.upper,
+        lower_ref=_ref_descriptor(node.lower_ref) if node.lower_ref else None,
+        upper_ref=_ref_descriptor(node.upper_ref) if node.upper_ref else None,
+        exclusions=node.exclusions,
+        reps=reps,
+    )
 
 
 def _reps(count: t.CountSpec | None) -> Reps:
@@ -568,6 +636,12 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
                 elements.append(
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
+            elif isinstance(child.semantic, t.ValueRangeNode) and (
+                child.semantic.lower_ref or child.semantic.upper_ref
+            ):
+                # A bound with a reference endpoint (`{0:@d:$0}`) resolves at match
+                # time from captures, so it lowers to a loop-handled element.
+                elements.append(_dyn_value_range_el(child.semantic, reps))
             elif isinstance(child.semantic, t.HeterogeneousNode):
                 # `{{U}}`: one object, repeated with every member free per position
                 # (`_Het` makes each rep a fresh match, even over a folded union).

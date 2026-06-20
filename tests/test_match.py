@@ -155,6 +155,31 @@ def test_bounded_range():
     assert "5" not in result
 
 
+# ── Reference as a bound endpoint `{0:@d:$0}` ─────────────────────────────────
+
+
+def test_value_bound_with_reference_ceiling():
+    # `{0:@d:$0}` matches a value ≤ group 0's captured value — resolved at match
+    # time. Width-agnostic: a value with more digits than the first is excluded.
+    P = r"{0:@d:},{0:@d:$0}"
+    assert matches(P, "5,3") == ["5,3"]  # 3 ≤ 5
+    assert matches(P, "3,5") == []  # 5 ≤ 3 is false
+    assert matches(P, "42,9") == ["42,9"]  # 9 ≤ 42 (different widths)
+    assert matches(P, "7,7") == ["7,7"]  # equal is included
+
+
+def test_value_bound_with_reference_floor():
+    # A reference may also be the floor: `{$0:@d:}` matches a value ≥ the first.
+    P = r"{0:@d:},{$0:@d:}"
+    assert matches(P, "3,5") == ["3,5"]  # 5 ≥ 3
+    assert matches(P, "5,3") == []  # 3 ≥ 5 is false
+
+
+def test_value_bound_reference_undefined_fails():
+    # A ceiling referencing a group that has not captured cannot match.
+    assert matches(r"{0:@d:$3}", "5") == []
+
+
 # ── Value exclusion on char-range classes ─────────────────────────────────────
 
 

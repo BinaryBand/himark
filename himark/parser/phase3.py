@@ -113,12 +113,25 @@ def _resolve_bounds(parts: list[str]) -> t.ValueRangeNode:
         alpha: t.SemanticNode = _ambient_alpha()
     else:
         alpha = _resolve_universe(alpha_s)
-    # Endpoints may be singleton constructors (`{1}[3]` → '111'), else literal text.
-    lower = _member_value(floor_s) if floor_s else None
-    upper = _member_value(ceil_s) if ceil_s else None
-    if lower is None and upper is None:
+    # An endpoint may be a reference (`$i` / `N$M` / `#i`), resolved to a captured
+    # value at match time; else a singleton constructor (`{1}[3]` → '111') or
+    # literal text whose written width sets the field window.
+    lower, lower_ref = _bound_endpoint(floor_s)
+    upper, upper_ref = _bound_endpoint(ceil_s)
+    if lower is None and upper is None and lower_ref is None and upper_ref is None:
         raise CompileError("A bound needs a floor or a ceiling: got '{:U:}'")
-    return t.ValueRangeNode(alpha=alpha, lower=lower, upper=upper)
+    return t.ValueRangeNode(
+        alpha=alpha, lower=lower, upper=upper, lower_ref=lower_ref, upper_ref=upper_ref
+    )
+
+
+def _bound_endpoint(s: str) -> tuple[str | None, t.SemanticNode | None]:
+    """Resolve one bound endpoint into `(literal, reference)`. A `$i` / `N$M` /
+    `#i` endpoint is a reference node (dynamic); anything else is literal text."""
+    if not s:
+        return None, None
+    ref = _resolve_reference(s)
+    return (None, ref) if ref is not None else (_member_value(s), None)
 
 
 def _resolve_reference(content: str) -> t.SemanticNode | None:
