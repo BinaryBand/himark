@@ -53,6 +53,13 @@ def test_tab_before_arrow_becomes_one_space():
     assert tidy('{a}\t=> "x"\n') == '{a} => "x"\n'
 
 
+def test_arrow_inside_comment_is_left_alone():
+    # An inline `=>` is normalized only after a step end (`}` `»` `]`), so a `=>`
+    # in a comment keeps its spacing.
+    assert tidy('//  step =>   then\n') == '//  step =>   then\n'
+    assert tidy('//        =>\n') == '//        =>\n'
+
+
 # ── Masking: template interiors are protected ─────────────────────────────────
 
 

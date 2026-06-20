@@ -93,8 +93,13 @@ def test_escape_brace():
     assert "}" in contents
 
 
-def test_multiple_groups():
-    assert children_types("{a}{b}{c}") == ["brace_group", "brace_group", "brace_group"]
+def test_escaped_brace_inside_group_is_not_a_delimiter():
+    # `{\}}` is one group whose member is a literal `}` — the escaped brace must
+    # not be scanned as the group's closing delimiter (regression: brace_end and
+    # split_top once counted `\}`/`\{` as real braces).
+    assert children_types(r"{\}}") == ["brace_group"]
+    assert content_at(parse(r"{\}}"), 0) == r"\}"
+    assert children_types(r"{\{,\}}") == ["brace_group"]  # union of `{` and `}`
 
 
 def test_unclosed_brace_raises():

@@ -39,6 +39,14 @@ def test_literal_multiple():
     assert result == ["hi", "hi"]
 
 
+def test_literal_closing_brace():
+    # A literal `}` inside a group (`{\}}`) must match — the escaped brace is a
+    # member, not the group's delimiter (regression for brace_end/split_top).
+    assert matches(r"{\}}", "a}b}c") == ["}", "}"]
+    assert matches(r"{\{}", "a{b") == ["{"]
+    assert matches(r"{\{,\}}", "a{b}c") == ["{", "}"]  # union of `{` and `}`
+
+
 # ── char_range ───────────────────────────────────────────────────────────────
 
 

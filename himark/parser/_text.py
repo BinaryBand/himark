@@ -66,15 +66,24 @@ def strip_unescaped(s: str) -> str:
 
 
 def brace_end(expr: str) -> int | None:
-    """Index just past the '}' matching the '{' at position 0, or None if unbalanced."""
+    """Index just past the '}' matching the '{' at position 0, or None if
+    unbalanced. A backslash-escaped brace (`\\{`, `\\}`) is a literal and does not
+    affect depth."""
     depth = 0
-    for i, ch in enumerate(expr):
+    i = 0
+    n = len(expr)
+    while i < n:
+        ch = expr[i]
+        if ch == "\\":
+            i += 2  # skip the escaped char — it is literal, never a delimiter
+            continue
         if ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1
             if depth == 0:
                 return i + 1
+        i += 1
     return None
 
 
@@ -87,7 +96,8 @@ def inner_of(part: str) -> str:
 def split_top(sep: str, text: str) -> list[str]:
     """Split `text` on `sep` only at top level — outside every `{…}` brace and
     `[…]` count. Tracking count brackets keeps a range count like `[1..3]` from
-    being mistaken for a top-level `..` range operator."""
+    being mistaken for a top-level `..` range operator. A backslash-escaped
+    bracket (`\\{`, `\\}`, …) is a literal and does not affect depth."""
     parts: list[str] = []
     depth = 0
     cur: list[str] = []
@@ -95,7 +105,10 @@ def split_top(sep: str, text: str) -> list[str]:
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch in "{[":
+        if ch == "\\" and i + 1 < len(text):
+            cur.append(text[i : i + 2])  # keep the escape pair intact, never a delimiter
+            i += 2
+        elif ch in "{[":
             depth += 1
             cur.append(ch)
             i += 1

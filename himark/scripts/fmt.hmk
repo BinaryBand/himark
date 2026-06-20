@@ -15,12 +15,10 @@
 //  collapse blank runs, and canonicalize arrows — one space around an inline
 //  `=>`, a four-space indent + single space for a continuation `=>` at line start.
 //
-//  Still out of scope (would need a full lexer): only *templates* are masked, so
-//  arrow spacing inside a `//` comment is still normalized (a cosmetic effect —
-//  avoid lone `=>` glyphs in comments), multi-line *brace* groups are not
-//  protected (their interior trailing whitespace / blank lines may be touched),
-//  and a stray `"` inside a comment fools the template matcher. Keep brace groups
-//  on one line where you can.
+//  Still out of scope (would need a full lexer): multi-line *brace* groups are
+//  not protected (their interior trailing whitespace / blank lines may be
+//  touched), and a stray `"` inside a comment fools the template matcher. Keep
+//  brace groups on one line where you can.
 // ============================================================================
 
 // ── MASK ── protect template interiors so the tidies below never touch them ──
@@ -47,12 +45,11 @@
 {{ ,\t,\n}}[1..]{@$$} => "\n"
 // Strip trailing whitespace at the end of every line.
 {{ ,\t}}[1..]{\n} => "\n"
-// One space before an arrow, one space after — canonical `… => …`.
-{{ ,\t}}[1..]{=>} => " \=>"
-{=>}{{ ,\t}}[1..] => "\=> "
-// A continuation `=>` at line start gets a four-space indent (overrides the
-// single space above, which this anchored rule re-applies on top of).
-{@^}{{ ,\t}}[0..]{=>} => "    \=>"
+// Canonical arrow spacing. An inline `=>` follows a step end (`}` `»` `]`, where
+// `»` is a masked template) — anchoring on that leaves a `=>` inside a comment
+// alone. A continuation `=>` at line start gets a four-space indent instead.
+{{\},»,\]}}{{ ,\t}}[0..]{=>}{{ ,\t}}[0..] => "{{$0}} \=> "
+{@^}{{ ,\t}}[0..]{=>}{{ ,\t}}[0..] => "    \=> "
 // Collapse runs of blank lines down to a single blank line.
 {\n}[3..] => "\n\n"
 
