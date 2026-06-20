@@ -1,12 +1,12 @@
 """End-to-end tests for the HTML formatter (`himark/scripts/html_format.hmk`).
 
 The script pretty-prints and normalizes HTML one tab per nesting level using a
-stackless, inside-out fixed point (`<=`): leaf constructs (comments, DOCTYPE,
-void/self-closing tags) are marked as `⟦ ⟧` sentinel blocks, then the WRAP rule
-peels each *innermost* tag pair until none remain, re-tabbing the body each pass
-so depth accumulates. Inter-tag whitespace is normalized away and re-derived, so
-the formatter is idempotent. These tests pin the structure, the real-markup
-features (attributes, voids, comments, DOCTYPE), and idempotence.
+stackless, inside-out fixed point (`<=`). Inline elements (<b>, <a>, <code>, …)
+and their text are masked into `‹…›` sentinels so they stay on one line; only
+block elements are broken out and indented. Leaf constructs (comments, DOCTYPE,
+block-level void tags) are marked as `⟦…⟧`. Inter-tag whitespace is normalized
+away and re-derived, so the formatter is idempotent. These tests pin the
+structure, the real-markup features, the inline/block split, and idempotence.
 """
 
 from pathlib import Path
@@ -22,69 +22,94 @@ def run(text: str) -> str:
     return precompiled.apply(_PIPELINE, text)
 
 
-# ── Structure ─────────────────────────────────────────────────────────────────
+# ── Block structure ───────────────────────────────────────────────────────────
 
 
 def test_single_leaf():
     assert run("<p>hi</p>") == "<p>\n\thi\n</p>"
 
 
-def test_nested_pair_indents_one_level():
-    assert run("<a><b>x</b></a>") == "<a>\n\t<b>\n\t\tx\n\t</b>\n</a>"
+def test_nested_block_indents_one_level():
+    assert run("<div><p>x</p></div>") == "<div>\n\t<p>\n\t\tx\n\t</p>\n</div>"
 
 
-def test_siblings_land_on_their_own_lines():
-    assert run("<a><b>x</b><c>y</c></a>") == (
-        "<a>\n\t<b>\n\t\tx\n\t</b>\n\t<c>\n\t\ty\n\t</c>\n</a>"
+def test_block_siblings_each_on_own_lines():
+    assert run("<ul><li>a</li><li>b</li></ul>") == (
+        "<ul>\n\t<li>\n\t\ta\n\t</li>\n\t<li>\n\t\tb\n\t</li>\n</ul>"
     )
 
 
 def test_depth_accumulates():
-    out = run("<html><body><p>hi</p></body></html>")
-    assert out == (
+    assert run("<html><body><p>hi</p></body></html>") == (
         "<html>\n\t<body>\n\t\t<p>\n\t\t\thi\n\t\t</p>\n\t</body>\n</html>"
     )
 
 
 def test_arbitrary_depth_indents_completely():
-    # The `<=` fixed point peels until no tag pair is left — no depth limit.
-    names = [chr(ord("a") + i) for i in range(16)]
+    # The `<=` fixed point peels until no pair is left — no depth limit. Names are
+    # non-inline (`t0`…`t15`) so every level is a block that breaks out.
+    names = [f"t{i}" for i in range(16)]
     src = "".join(f"<{n}>" for n in names) + "x" + "".join(f"</{n}>" for n in reversed(names))
-    out = run(src)
-    assert out.splitlines()[16] == "\t" * 16 + "x"
+    assert run(src).splitlines()[16] == "\t" * 16 + "x"
 
 
 def test_backref_requires_matching_tag_names():
-    # `<x>..</y>` is not a pair, so it is left untouched (no `{$1}` match).
     assert run("<x>oops</y>") == "<x>oops</y>"
 
 
-# ── Real markup ───────────────────────────────────────────────────────────────
+# ── Real markup: attributes, voids, comments, DOCTYPE ─────────────────────────
 
 
-def test_attributes_are_preserved_and_not_matched_in_the_close():
-    assert run('<a href="/x" class="y">hi</a>') == '<a href="/x" class="y">\n\thi\n</a>'
+def test_block_attributes_preserved_not_matched_in_close():
+    assert run('<section id="intro">hi</section>') == '<section id="intro">\n\thi\n</section>'
 
 
-def test_void_elements_are_leaves_on_their_own_line():
+def test_block_void_elements_on_their_own_line():
     assert run('<head><meta charset="utf-8"><hr></head>') == (
         '<head>\n\t<meta charset="utf-8">\n\t<hr>\n</head>'
     )
 
 
-def test_self_closing_tag_is_a_leaf():
+def test_self_closing_tag():
     assert run('<div><img src="x"/></div>') == '<div>\n\t<img src="x"/>\n</div>'
 
 
-def test_comment_is_preserved_as_a_leaf():
+def test_comment_preserved_as_leaf():
     assert run("<div><!-- note --><p>x</p></div>") == (
         "<div>\n\t<!-- note -->\n\t<p>\n\t\tx\n\t</p>\n</div>"
     )
 
 
-def test_doctype_stays_on_the_top_line():
+def test_doctype_on_top_line():
     assert run("<!DOCTYPE html><html><body>x</body></html>") == (
         "<!DOCTYPE html>\n<html>\n\t<body>\n\t\tx\n\t</body>\n</html>"
+    )
+
+
+# ── Inline vs block ───────────────────────────────────────────────────────────
+
+
+def test_inline_element_stays_on_one_line():
+    assert run('<a href="/x">hi</a>') == '<a href="/x">hi</a>'
+
+
+def test_inline_inside_block_is_not_split():
+    assert run("<p>Some <b>bold</b> here.</p>") == "<p>\n\tSome <b>bold</b> here.\n</p>"
+
+
+def test_nested_inline_kept_together():
+    assert run("<p>A <b>x <i>y</i></b> z.</p>") == "<p>\n\tA <b>x <i>y</i></b> z.\n</p>"
+
+
+def test_inline_void_stays_inline():
+    assert run("<p>one<br>two</p>") == "<p>\n\tone<br>two\n</p>"
+
+
+def test_inline_element_wrapping_block_falls_through_to_block():
+    # An inline tag (`<a>`) whose body is block content can't be masked inline, so
+    # it is formatted as a block instead.
+    assert run('<a href="/x"><div>x</div></a>') == (
+        '<a href="/x">\n\t<div>\n\t\tx\n\t</div>\n</a>'
     )
 
 
@@ -92,27 +117,13 @@ def test_doctype_stays_on_the_top_line():
 
 
 def test_inter_tag_whitespace_is_normalized():
-    # Pre-existing indentation/newlines between tags are collapsed and re-derived.
-    assert run("<ul>\n  <li>a</li>\n  <li>b</li>\n</ul>") == (
-        "<ul>\n\t<li>\n\t\ta\n\t</li>\n\t<li>\n\t\tb\n\t</li>\n</ul>"
-    )
+    assert run("<ul>\n  <li>a</li>\n</ul>") == "<ul>\n\t<li>\n\t\ta\n\t</li>\n</ul>"
 
 
 def test_is_idempotent():
     src = (RESOURCES / "sample.html").read_text("utf-8").strip()
     once = run(src)
     assert run(once) == once
-
-
-def test_strip_whitespace_recovers_source():
-    # The pipeline only adds tabs/newlines around a compact, well-formed tree, so
-    # removing them returns the input (spaces inside attributes are kept).
-    for src in [
-        "<p>hi</p>",
-        '<a href="/x">hi</a>',
-        "<ul><li>a</li><li>b</li></ul>",
-    ]:
-        assert run(src).replace("\n", "").replace("\t", "") == src
 
 
 # ── Runbook ───────────────────────────────────────────────────────────────────

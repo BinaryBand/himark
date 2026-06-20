@@ -5,44 +5,52 @@
 //      himark transpile page.html --script himark/scripts/html_format.hmk
 //
 //  Handles real markup: tag attributes, void elements (<br>, <img …>, …), self-
-//  closing tags (<x …/>), comments, and the DOCTYPE. Inter-tag whitespace is
-//  normalized away and re-derived from structure, so the formatter is idempotent.
+//  closing tags, comments, the DOCTYPE, and the inline-vs-block distinction --
+//  inline elements (<b>, <a>, <code>, …) and their text stay on one line, only
+//  block elements are broken out and indented. Inter-tag whitespace is normalized
+//  away and re-derived, so the formatter is idempotent.
 //
-//  HOW: stackless and inside-out (HMK has no parse stack). Leaf constructs —
-//  comments, the DOCTYPE, void/self-closing tags — are first marked as sentinel
-//  blocks `⟦…⟧` so they hold no raw `<`. Then the WRAP rule, re-spliced to a
-//  fixed point with `<=`, peels each *innermost* tag pair: a pair matches only
-//  when its body holds no raw `<` (`{!<}`), so it is the deepest still-raw layer,
-//  and `{$1}` back-references the tag *name* (attributes are carried but not
-//  matched in the close). `{{ $4 | trim | indent }}` re-tabs the body every pass,
-//  so depth accumulates; each block carries a leading newline so siblings split.
-//  Finally `⟦ ⟧` restore to `< >`.
+//  HOW: stackless and inside-out (HMK has no parse stack).
+//   1. NORMALIZE inter-tag whitespace.
+//   2. Mask INLINE elements (void, then paired inside-out) into `‹…›` sentinels,
+//      so an inline subtree carries no raw `<` and is never split. An inline tag
+//      that happens to wrap *block* content can't be masked (its body keeps a raw
+//      `<`), so it falls through to step 4 and is formatted as a block.
+//   3. Mark block LEAVES (comments, DOCTYPE, block-level void tags) as `⟦…⟧`.
+//   4. WRAP, re-spliced to a fixed point (`<=`): peel each innermost block pair
+//      (body has no raw `<`), back-reference the tag *name* for the close, and
+//      `{{ … | trim | indent }}` re-tabs the body each pass so depth accumulates.
+//   5. Restore `‹ ›` and `⟦ ⟧` to `< >` and tidy stray blank lines.
 //
-//  Scope (well-formed HTML, no `<script>`): a `<` or `>` inside an attribute
-//  value or a comment is read as a tag boundary; `<style>`/`<pre>`/`<textarea>`
-//  bodies are reflowed like any other (their whitespace is *not* preserved);
-//  attribute values are kept verbatim (not quoted/lowercased); and inline text
-//  mixed with inline elements (`Some <b>x</b> y`) is split across lines rather
-//  than kept on one (HMK has no inline-vs-block element table). The sentinels
-//  `⟦ ⟧` are assumed absent from the input.
+//  Scope (well-formed HTML, no <script>): a `<`/`>` inside an attribute value or
+//  comment is read as a tag boundary; <style>/<pre>/<textarea> bodies are
+//  reflowed (whitespace not preserved); attribute values are kept verbatim. The
+//  sentinels `‹ › ⟦ ⟧` are assumed absent from the input.
 // ============================================================================
 
 // ── NORMALIZE ── collapse whitespace that sits purely between two tags ───────
 {>}{{\ ,\t,\n}}[1..]{<} <= "><"
 
-// ── MARK LEAVES ── constructs with no closing tag become sentinel blocks ─────
-// A comment, then the DOCTYPE / declarations, then self-closing tags, then the
-// void elements (by name, with and without attributes).
+// ── MASK INLINE ── inline elements stay on their line (sentinels `‹ ›`) ───────
+// Inline void elements (kept inline, unlike block voids below).
+{<}{br,img,wbr,input}{>} => "‹{{$1}}›"
+{<}{br,img,wbr,input}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "‹{{$1}}{{$2}}{{$3}}›"
+// Inline paired elements, innermost-first to a fixed point (handles nesting).
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{>}{!<}[..]{</}{$1}{>} <= "‹{{$1}}›{{$3}}‹/{{$1}}›"
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{{\ ,\t,\n}}{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <= "‹{{$1}}{{$2}}{{$3}}›{{$5}}‹/{{$1}}›"
+
+// ── MARK BLOCK LEAVES ── comment, DOCTYPE, then block-level void elements ─────
 {<!--}{!{-->}}[..]{-->} => "\n⟦!--{{$1}}--⟧"
 {<!}{!>}[..]{>} => "\n⟦!{{$1}}⟧"
-{<}{!{<,>,/,\ ,\t,\n}}[1..]{!{<,>}}[..]{/}{>} => "\n⟦{{$1}}{{$2}}/⟧"
-{<}{area,base,br,col,embed,hr,img,input,link,meta,param,source,track,wbr}{>} => "\n⟦{{$1}}⟧"
-{<}{area,base,br,col,embed,hr,img,input,link,meta,param,source,track,wbr}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "\n⟦{{$1}}{{$2}}{{$3}}⟧"
+{<}{hr,meta,link,base,col,embed,source,track,area,param}{>} => "\n⟦{{$1}}⟧"
+{<}{hr,meta,link,base,col,embed,source,track,area,param}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "\n⟦{{$1}}{{$2}}{{$3}}⟧"
 
-// ── WRAP ── indent each innermost tag pair, re-spliced to a fixed point ──────
+// ── WRAP ── indent each innermost block pair, re-spliced to a fixed point ─────
 {<}{!{<,>,/,\ ,\t,\n}}[1..]{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <= "\n⟦{{$1}}{{$2}}⟧\n{{ $4 | trim | indent }}\n⟦/{{$1}}⟧"
 
 // ── RESTORE ── sentinels back to angle brackets, then tidy stray blank lines ──
+{‹} => "<"
+{›} => ">"
 {⟦} => "<"
 {⟧} => ">"
 {@^^}{\n}[1..] => ""
