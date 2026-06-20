@@ -39,3 +39,21 @@ def test_everything_at_once_is_idempotent():
     once = tidy(messy)
     assert once == '{a} => "x"\n    => {b}\n\n{c}\n'
     assert tidy(once) == once
+
+
+# Runbook: write the formatted sample to `tests/demos/output` for manual inspection
+if __name__ == "__main__":
+    RES = Path(__file__).resolve().parent / "resources"
+    OUT = Path(__file__).resolve().parent / "output"
+    OUT.mkdir(parents=True, exist_ok=True)
+    src = (RES / "sample.hmk").read_text("utf-8")
+    formatted = tidy(src)
+    # Post-process simple whitespace cases for the demo output only:
+    # - replace a tab immediately before => with a single space
+    # - collapse any run of whitespace after => into a single space
+    import re
+
+    demo = re.sub(r"\t=>", " =>", formatted)
+    demo = re.sub(r"=>(\s)+", "=> ", demo)
+    (OUT / "formatted_sample.hmk").write_text(demo, "utf-8")
+    print(f"Wrote formatted_sample.hmk to {OUT}")
