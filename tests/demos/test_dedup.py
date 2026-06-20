@@ -14,14 +14,25 @@ commas inside quoted fields, restored at the end.
 These tests pin each pass and the merge on small crafted inputs — cross-column
 (both orders), unmatched fall-through, quoted fields, and the case/punctuation
 near-misses the script documents as out of scope — then a slice of the real
-`podcasts.csv`. The cross-document self-reference scan is ~quadratic, so the
-runbook reconciles a *slice*, not all 859 rows.
+`podcasts.csv` (fast on any backend). The cross-document self-reference scan is
+~quadratic, so reconciling all 859 rows is only feasible on the native backend:
+`test_full_file_reconciles_under_rust` forces `RustEngine` (~11s) and is skipped
+when the extension isn't built, and the runbook does the whole file there too.
 """
 
 import csv
 import io
 from pathlib import Path
 
+import pytest
+
+from himark.engine import (
+    RUST_AVAILABLE,
+    PythonEngine,
+    RustEngine,
+    get_backend,
+    set_backend,
+)
 from himark.tools import precompiled
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "dedup.hmk"
@@ -43,7 +54,9 @@ def rows(text: str) -> list[list[str]]:
 
 
 def test_keeps_the_header():
-    assert dedup(HEADER + "Alpha,Beta\n").splitlines()[0] == "youtube_title,podcast_title"
+    assert (
+        dedup(HEADER + "Alpha,Beta\n").splitlines()[0] == "youtube_title,podcast_title"
+    )
 
 
 def test_matches_align_on_one_row_cross_column():
@@ -101,7 +114,10 @@ def test_quoted_field_with_embedded_comma_stays_one_valid_cell():
 def test_near_miss_is_left_distinct():
     # Case/punctuation differences are not normalized away (documented scope), so
     # the two variants stay on separate rows rather than reconciling.
-    src = HEADER + "Episode 9: MAY BONUS EPISODE- Breaking Dawn,X\nY,May Bonus Episode: Breaking Dawn\n"
+    src = (
+        HEADER
+        + "Episode 9: MAY BONUS EPISODE- Breaking Dawn,X\nY,May Bonus Episode: Breaking Dawn\n"
+    )
     out = rows(src)
     assert ["Episode 9: MAY BONUS EPISODE- Breaking Dawn", ""] in out
     assert ["", "May Bonus Episode: Breaking Dawn"] in out
@@ -110,7 +126,9 @@ def test_near_miss_is_left_distinct():
 def test_real_slice_reconciles_a_known_twin():
     # YouTube row 1's "Martha Moxley (Part 1)" twins a later (quoted-row) feed
     # title; after MASK + normalization they reconcile onto one row.
-    src = "".join((RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)[:9])
+    src = "".join(
+        (RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)[:9]
+    )
     out = rows(src)
     assert [
         "Episode 791: The Murder of Martha Moxley (Part 1)",
@@ -120,14 +138,59 @@ def test_real_slice_reconciles_a_known_twin():
     assert all(len(r) == 2 for r in out)
 
 
+def _parse_csv(text: str) -> list[list[str]]:
+    """CSV-parse `text` directly (no second dedup pass, unlike `rows`)."""
+    return list(csv.reader(io.StringIO(text)))
+
+
+@pytest.mark.skipif(
+    not RUST_AVAILABLE, reason="whole-file dedup needs the native backend"
+)
+def test_full_file_reconciles_under_rust():
+    # Reconciling all 859 rows is ~quadratic, infeasible on the Python backend but
+    # ~11s on the native one — so force RustEngine regardless of the default.
+    src = (RESOURCES / "podcasts.csv").read_text("utf-8")
+    prev = get_backend()
+    set_backend(RustEngine())
+    try:
+        parsed = _parse_csv(dedup(src))
+    finally:
+        set_backend(prev)
+    assert parsed[0] == ["youtube_title", "podcast_title"]
+    body = parsed[1:]
+    assert all(len(r) == 2 for r in body)  # valid 2-column CSV throughout
+    matched = [r for r in body if r[0] and r[1]]
+    assert len(matched) >= 60  # ~66 cross-column episode twins recovered
+    assert [
+        "Episode 791: The Murder of Martha Moxley (Part 1)",
+        "The Murder of Martha Moxley (Part 1)",
+    ] in matched
+
+
 # ── Runbook ───────────────────────────────────────────────────────────────────
-# Run this file directly to reconcile a slice of the real CSV into
-# `tests/demos/output/deduped_titles.csv` for manual inspection. (A slice, not all
-# 859 rows: the cross-document self-reference scan is ~quadratic — see the header.)
+# Run this file directly to reconcile the real CSV into
+# `tests/demos/output/deduped_titles.csv` for manual inspection. The whole file is
+# only feasible on the native backend (the self-reference scan is ~quadratic), so
+# this uses RustEngine when built, else a fast slice on Python.
 if __name__ == "__main__":
+    import time
+
     OUTPUT.mkdir(parents=True, exist_ok=True)
     rows_in = (RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)
-    result = dedup("".join(rows_in[:25]))  # header + 24 rows (~0.6s)
+    if RUST_AVAILABLE:
+        set_backend(RustEngine())
+        src, label = "".join(rows_in), "rust, whole file"
+    else:
+        src, label = (
+            "".join(rows_in[:25]),
+            "python, 24-row slice (build himark_rs for the whole file)",
+        )
+    t0 = time.perf_counter()
+    result = dedup(src)
+    elapsed = time.perf_counter() - t0
+    set_backend(PythonEngine())
     (OUTPUT / "deduped_titles.csv").write_text(result, "utf-8")
-    matched = sum(1 for r in rows(result) if r[0] and r[1])
-    print(f"Wrote deduped_titles.csv to {OUTPUT} ({matched} reconciled pairs)")
+    matched = sum(1 for r in _parse_csv(result)[1:] if len(r) == 2 and r[0] and r[1])
+    print(
+        f"Wrote deduped_titles.csv to {OUTPUT} ({label}, {elapsed:.1f}s): {matched} reconciled pairs"
+    )
