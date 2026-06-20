@@ -257,15 +257,9 @@ fn match_seq(
         }
         Element::Group { m, reps, het } => run_matcher(m, *het, reps, els, idx, chars, pos, caps),
         Element::BackRef { g, reps } => {
-            let referent = if *g < caps.len() {
-                Some(
-                    chars[caps[*g].start..caps[*g].end]
-                        .iter()
-                        .collect::<String>(),
-                )
-            } else {
-                None
-            };
+            // The referent is a slice into `chars` (no copy); the per-rep string is
+            // materialised once, lazily, only for a successful match's output.
+            let referent = caps.get(*g).map(|c| &chars[c.start..c.end]);
             match_referent(referent, reps, els, idx, chars, pos, caps)
         }
     }
@@ -322,7 +316,7 @@ fn run_matcher(
         if !m.accepts(chars, pos, unit_len) {
             continue;
         }
-        let first: Vec<char> = chars[pos..pos + unit_len].to_vec();
+        let first: &[char] = &chars[pos..pos + unit_len];
         let mut ends = vec![pos + unit_len];
         let mut current = pos + unit_len;
         loop {
@@ -332,8 +326,8 @@ fn run_matcher(
                 }
             }
             let nxt = if het {
-                m.equal_unit(chars, current, &first)
-            } else if starts_with(chars, current, &first) {
+                m.equal_unit(chars, current, first)
+            } else if starts_with(chars, current, first) {
                 Some(current + first.len())
             } else {
                 None
@@ -377,7 +371,7 @@ fn empty_units(pos: usize) -> RepSpec {
 /// Port of `_run._match_referent`: match `referent` (a value pulled from running
 /// state) per `reps`. `None` = an undefined reference (matches only zero-width).
 fn match_referent(
-    referent: Option<String>,
+    referent: Option<&[char]>,
     reps: &Reps,
     els: &[Element],
     idx: usize,
@@ -386,7 +380,7 @@ fn match_referent(
     caps: &mut Vec<Capture>,
 ) -> Option<usize> {
     // An empty captured referent matches zero-width for any count.
-    if matches!(&referent, Some(r) if r.is_empty()) {
+    if matches!(referent, Some(r) if r.is_empty()) {
         let spec = RepSpec::Copies {
             unit: Rc::new(String::new()),
             k: reps.min,
@@ -394,12 +388,15 @@ fn match_referent(
         return attempt(els, idx, chars, pos, pos, spec, caps);
     }
 
-    let ref_chars: Option<Vec<char>> = referent.as_ref().map(|r| r.chars().collect());
-    let unit = Rc::new(referent.unwrap_or_default());
+    let unit = Rc::new(
+        referent
+            .map(|r| r.iter().collect::<String>())
+            .unwrap_or_default(),
+    );
 
     // Contiguous copies of the referent at `pos`, up to reps.max.
     let mut ends = vec![pos];
-    if let Some(r) = &ref_chars {
+    if let Some(r) = referent {
         let mut current = pos;
         while reps.max.is_none_or(|c| ends.len() - 1 < c) && starts_with(chars, current, r) {
             current += r.len();
