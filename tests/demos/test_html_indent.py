@@ -16,7 +16,8 @@ from himark import parser
 from himark.engine import splice
 from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "html_indent.hmk"
+SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "html_indent.hmk"
+RESOURCES = Path(__file__).resolve().parent / "resources"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
 
 
@@ -100,3 +101,11 @@ def test_inline_mixed_content_splits_at_child_boundaries():
     out = run("<p>text <b>bold</b> more</p>")
     assert "<b>\n\t\tbold\n\t</b>" in out
     assert out.replace("\n", "").replace("\t", "") == "<p>text <b>bold</b> more</p>"
+
+
+# ── Runbook ───────────────────────────────────────────────────────────────────
+# Run this file directly to indent a real HTML file and see the result, for fast
+# manual iteration:  python tests/scripts/test_html_indent.py
+if __name__ == "__main__":
+    html = (RESOURCES / "sample.html").read_text("utf-8").strip()
+    print(run(html))

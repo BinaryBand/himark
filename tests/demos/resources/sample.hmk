@@ -1,0 +1,11 @@
+// A deliberately messy script for fmt.hmk to tidy.
+
+
+
+{!\ }[1..] => "<w>{{.}}</w>"
+=> {next}
+
+
+
+{a}{b}{c} => "x"
+   => {d}

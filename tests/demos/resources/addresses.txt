@@ -1,0 +1,14 @@
+Payment log — mix of valid legacy addresses, a lookalike, and base58 noise.
+
+Genesis coinbase:  1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
+Vanity wallet:     1BoatSLRHtKNngkdXEeobR76b53LETtpyT
+Donations:         12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX
+
+A typo'd copy (bad checksum, should stay plain text):
+  1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNb
+
+A P2SH address (out of scope, must be left alone):
+  3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
+
+Random base58 that merely looks address-shaped:
+  19zHtLR6dWquCJ8pquQ2x8NfkHcg4aN xK pHq23bVe

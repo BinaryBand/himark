@@ -13,7 +13,8 @@ import pytest
 
 from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "md_html.hmk"
+SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "md_html.hmk"
+RESOURCES = Path(__file__).resolve().parent / "resources"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
 
 
@@ -289,3 +290,11 @@ def test_limitation_no_paragraph_wrapping():
 def test_limitation_empty_link_is_literal():
     # A link needs non-empty text and URL runs.
     assert md("[]()") == "[]()"
+
+
+# ── Runbook ───────────────────────────────────────────────────────────────────
+# Run this file directly to transpile a real Markdown file and see the HTML, for
+# fast manual iteration:  python tests/scripts/test_md_html.py
+if __name__ == "__main__":
+    source = (RESOURCES / "sample.md").read_text("utf-8")
+    print(md(source))

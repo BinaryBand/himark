@@ -17,7 +17,9 @@ from pathlib import Path
 
 from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "btc_extract.hmk"
+SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "btc_extract.hmk"
+RESOURCES = Path(__file__).resolve().parent / "resources"
+OUTPUT = Path(__file__).resolve().parent / "output"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
 
 # Real legacy mainnet addresses (the Genesis coinbase and two vanity ones).
@@ -118,3 +120,11 @@ def test_stress_extracts_and_validates_all_planted_addresses_quickly():
     assert _TAG.sub(lambda m: m.group(1), out) == target
     # Generous time bound — a catastrophic-regression guard, not a benchmark.
     assert elapsed < 15.0, f"extraction took {elapsed:.2f}s for {len(target):,} chars"
+
+
+# ── Runbook ───────────────────────────────────────────────────────────────────
+# Run this file directly to apply the shipped script to a real input file and see
+# the result, for fast manual iteration:  python tests/scripts/test_btc_extract.py
+if __name__ == "__main__":
+    text = (RESOURCES / "addresses.txt").read_text("utf-8")
+    print(run(text))

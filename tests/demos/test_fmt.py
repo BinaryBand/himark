@@ -10,7 +10,7 @@ from pathlib import Path
 
 from himark.tools import precompiled
 
-FMT = Path(__file__).resolve().parents[1] / "himark" / "scripts" / "fmt.hmk"
+FMT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "fmt.hmk"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(FMT))
 
 
