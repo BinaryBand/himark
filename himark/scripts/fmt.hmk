@@ -1,63 +1,65 @@
 // ============================================================================
-//  fmt.hmk — a best-effort cosmetic tidy for .hmk scripts, written in HMK.
+//  fmt.hmk — a cosmetic tidy for .hmk scripts, written entirely in HMK.
 //
 //  Run it like any pipeline:
 //      himark transpile messy.hmk --script himark/scripts/fmt.hmk --out clean.hmk
 //
-//  This is a dogfooding experiment, NOT a robust formatter. HMK matches by shape
-//  with no nesting stack, so it cannot tell a depth-0 `=>` / `//` / whitespace
-//  from one inside a `{…}` class or a "…" template. So it sticks to the
-//  line-local tidies that are safe in practice for ordinary scripts, and leaves
-//  comment spacing and `=>` alignment alone (those need depth-awareness). A `=>`
-//  or a run of real newlines living *inside* a multi-line brace could still be
-//  mis-touched — keep such content on one line, or reach for a real parser.
+//  HMK matches by shape with no nesting stack, so a naive formatter cannot tell a
+//  real `=>` arrow or stray whitespace from one living inside a "…" template. We
+//  fix that the HMK way — with a **masking pre-pass**: the dangerous tokens
+//  inside templates are swapped for private sentinels, the line-local tidies run
+//  on the safe skeleton, and a final pass restores the sentinels. The sentinels
+//  (`§ ¤ « » ⟶ ␤`) are assumed absent from the input.
+//
+//  Tidies applied (all idempotent): trim file edges, strip trailing whitespace,
+//  collapse blank runs, and canonicalize arrows — one space around an inline
+//  `=>`, a four-space indent + single space for a continuation `=>` at line start.
+//
+//  Still out of scope (would need a full lexer): only *templates* are masked, so
+//  arrow spacing inside a `//` comment is still normalized (a cosmetic effect —
+//  avoid lone `=>` glyphs in comments), multi-line *brace* groups are not
+//  protected (their interior trailing whitespace / blank lines may be touched),
+//  and a stray `"` inside a comment fools the template matcher. Keep brace groups
+//  on one line where you can.
 // ============================================================================
 
+// ── MASK ── protect template interiors so the tidies below never touch them ──
+// 1. Neutralize escapes so every remaining `"` is a real template delimiter.
+{\\}[2] => "§"        // `\\`  → §  (a literal backslash pair)
+{\\}{\"} => "¤"       // `\"`  → ¤  (an escaped quote)
+// 2. Wrap each template in private brackets « » (captures multi-line templates).
+{\"}{!\"}[..]{\"} => "«{{$1}}»"
+// 3. Mask arrows inside a template (× a small budget; one per template per pass).
+//    The multi-char break !{»,=>} stops the run at the close bracket OR an arrow.
+{«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
+{«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
+{«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
+{«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
+// 4. Mask newlines inside a (multi-line) template so the line rules skip them.
+{«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+
+// ── FORMAT ── safe line-local tidies (templates are masked away) ─────────────
 // Trim leading, then trailing, blank lines (and stray indent) of the whole file.
 {@^^}{{ ,\t,\n}}[1..] => ""
 {{ ,\t,\n}}[1..]{@$$} => "\n"
-
 // Strip trailing whitespace at the end of every line.
 {{ ,\t}}[1..]{\n} => "\n"
-
+// One space before an arrow, one space after — canonical `… => …`.
+{{ ,\t}}[1..]{=>} => " \=>"
+{=>}{{ ,\t}}[1..] => "\=> "
+// A continuation `=>` at line start gets a four-space indent (overrides the
+// single space above, which this anchored rule re-applies on top of).
+{@^}{{ ,\t}}[0..]{=>} => "    \=>"
 // Collapse runs of blank lines down to a single blank line.
 {\n}[3..] => "\n\n"
 
-// Normalize `=>` continuation lines (a `=>` at the very start of a line) to a
-// canonical four-space indent and a single space after the arrow. This is a
-// conservative, line-local transform and intentionally only targets a `=>`
-// that appears at line-start (anchored with `{@^}`) so we avoid touching
-// `=>` occurrences that appear mid-line (which are more likely to be inside
-// templates or values).
-//
-// Match: optional leading whitespace, `=>`, optional whitespace after it.
-// Replace with: four spaces + `=> ` so continuation lines are visually
-// consistent: `    => <rest>`.
-{@^}{{ ,\t}}[0..]{=>} => "    {{$1}}"
-
-// ---------------------------------------------------------------------------
-// Limitations & potential bugs (what `fmt.hmk` CANNOT SAFELY DO):
-// - Depth-awareness: HMK matches are purely shape-based with no nesting
-//   stack. This script works only at depth-0 (top-level) and can be fooled by
-//   `=>`, `//`, or literal newlines that live inside `{...}`, `"..."`, or
-//   triple-backtick fences. Formatting will be incorrect if such tokens
-//   appear inside those constructs.
-// - Comment normalization: we do not reflow or align `//` comments. Spacing
-//   inside comments is left alone to avoid accidental content changes.
-// - `=>` alignment across multi-step chains: we canonicalize continuation
-//   indentation, but we do not attempt to align `=>` relative to the first
-//   step of a chain (that requires nesting knowledge).
-// - Template and code-fence preservation: multi-line templates or fenced code
-//   may contain sequences that resemble HMK syntax; this script can alter
-//   them incorrectly. Keep such content on one line when possible.
-// - Idempotence caveats: most safe transforms are idempotent, but edge-case
-//   inputs with mixed whitespace characters may produce non-obvious rewrites.
-// - Atomicity: this is a cosmetic tool — it does not back up files or provide
-//   a `--check` mode. Use with caution in automated pipelines.
-//
-// Suggested future improvements (non-trivial):
-// - A small depth-aware pre-pass (lexer) to skip regions inside braces,
-//   quotes, and fences, allowing safer intra-line normalization.
-// - `--check` / `--in-place` CLI wrapper and a Python harness to apply these
-//   HMK passes without risk to file contents.
-// ---------------------------------------------------------------------------
+// ── RESTORE ── put the masked tokens back ────────────────────────────────────
+{⟶} => "\=>"          // sentinel arrow → `=>`  (\= keeps phase0 from splitting)
+{␤} => "\n"
+{«} => "\""
+{»} => "\""
+{¤} => "\\\""         // ¤ → `\"`
+{§} => "\\\\"         // § → `\\`

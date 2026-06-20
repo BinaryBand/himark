@@ -1,9 +1,10 @@
 """The HMK-self-hosted cosmetic tidy (`himark/scripts/fmt.hmk`).
 
-A dogfooding experiment, not a robust formatter (see the script header). We pin
-the line-local tidies it *can* do and that it stays idempotent. The depth-aware
-work — comment spacing, `=>` alignment, anything inside a `{…}`/`"…"` — is
-deliberately out of scope and not asserted here.
+A dogfooding experiment written entirely in HMK. We pin the line-local tidies
+(trailing whitespace, blank runs, file edges, arrow spacing) and that they stay
+idempotent — and, crucially, that the script's **masking pre-pass** protects
+template interiors: an inline `=>`, odd spacing, or an escaped quote inside a
+`"…"` template is left untouched while real arrows are canonicalized.
 """
 
 from pathlib import Path
@@ -41,19 +42,43 @@ def test_everything_at_once_is_idempotent():
     assert tidy(once) == once
 
 
+# ── Arrow spacing (canonicalized via the masking pre-pass) ────────────────────
+
+
+def test_inline_arrow_spacing_collapses_to_one_space():
+    assert tidy('{a}   =>   "x"\n') == '{a} => "x"\n'
+
+
+def test_tab_before_arrow_becomes_one_space():
+    assert tidy('{a}\t=> "x"\n') == '{a} => "x"\n'
+
+
+# ── Masking: template interiors are protected ─────────────────────────────────
+
+
+def test_arrow_inside_template_is_untouched():
+    # A literal `=>` inside a "…" template is not a pipeline arrow; the mask
+    # pre-pass hides it, so its surrounding spacing is preserved verbatim.
+    assert tidy('{x} => "a => b"\n') == '{x} => "a => b"\n'
+    assert tidy('{x} => "a  =>  b"\n') == '{x} => "a  =>  b"\n'
+
+
+def test_escaped_quote_inside_template_survives():
+    assert tidy('{z} => "say \\"hi\\""\n') == '{z} => "say \\"hi\\""\n'
+
+
+def test_multiline_brace_interior_is_preserved():
+    # A brace group spanning lines keeps its interior indentation (the arrow and
+    # whitespace rules are line-local and do not reach inside it).
+    src = '{a,\n    {b,c}\n} => "x"\n'
+    assert tidy(src) == src
+
+
 # Runbook: write the formatted sample to `tests/demos/output` for manual inspection
 if __name__ == "__main__":
     RES = Path(__file__).resolve().parent / "resources"
     OUT = Path(__file__).resolve().parent / "output"
     OUT.mkdir(parents=True, exist_ok=True)
     src = (RES / "sample.hmk").read_text("utf-8")
-    formatted = tidy(src)
-    # Post-process simple whitespace cases for the demo output only:
-    # - replace a tab immediately before => with a single space
-    # - collapse any run of whitespace after => into a single space
-    import re
-
-    demo = re.sub(r"\t=>", " =>", formatted)
-    demo = re.sub(r"=>(\s)+", "=> ", demo)
-    (OUT / "formatted_sample.hmk").write_text(demo, "utf-8")
+    (OUT / "formatted_sample.hmk").write_text(tidy(src), "utf-8")
     print(f"Wrote formatted_sample.hmk to {OUT}")

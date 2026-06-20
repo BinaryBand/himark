@@ -8,7 +8,7 @@
 //  same markup indented one tab per nesting level:
 //
 //      <html><body><p>hi</p></body></html>
-//        =>
+//      ⇩
 //      <html>
 //          <body>
 //              <p>
