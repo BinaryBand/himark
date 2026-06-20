@@ -269,9 +269,9 @@ def test_count_ref_multi_digit_group():
 
 
 def test_count_position_ref_parses():
-    from himark.parser.phase3 import _parse_count
+    from himark.parser._count import parse_count
 
-    spec = _parse_count("#0")
+    spec = parse_count("#0")
     assert spec.__class__.__name__ == "CountRefSpec"
     assert spec.group == 0
 
@@ -318,9 +318,9 @@ def test_multi_char_range_is_value_bound_over_uni():
 
 def test_invalid_count_raises():
     with pytest.raises(CompileError):
-        from himark.parser.phase3 import _parse_count
+        from himark.parser._count import parse_count
 
-        _parse_count("abc")
+        parse_count("abc")
 
 
 # ── Whitespace enforcement ────────────────────────────────────────────────────

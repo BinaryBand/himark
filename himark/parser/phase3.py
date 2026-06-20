@@ -22,6 +22,8 @@ import re
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 from himark.parser import phase2
+from himark.parser._count import parse_count
+from himark.parser._shape import is_sequence_brace
 from himark.parser._text import (
     brace_end,
     inner_of,
@@ -54,12 +56,12 @@ def _resolve_brace_node(child: t.BraceGroupNode) -> None:
     """Resolve a brace group in place: a `{…}` is an alphabet expression unless
     its interior concatenates constructs, in which case it is a grouping brace
     (`SequenceNode`). Any `[count]` suffix is parsed too."""
-    if _is_sequence_brace(child.content):
+    if is_sequence_brace(child.content):
         child.semantic = _resolve_sequence_brace(child.content)
     else:
         child.semantic = _resolve_brace(child.content)
     if child.count_src is not None:
-        child.count = _parse_count(child.count_src)
+        child.count = parse_count(child.count_src)
         child.count_src = None
 
 
@@ -76,52 +78,10 @@ def parse(node: t.RootNode) -> t.RootNode:
 
 def _resolve_sequence_brace(content: str) -> t.SequenceNode:
     """Re-tokenize and resolve a grouping brace's interior into one capture group;
-    its nested brace children become the group's sub-captures."""
+    its nested brace children become the group's sub-captures. (The
+    concatenation-vs-alphabet test itself lives in `parser/_shape.py`.)"""
     sub = parse(phase2.parse(content))
     return t.SequenceNode(children=sub.children)
-
-
-def _is_sequence_brace(content: str) -> bool:
-    """True if a brace's interior is a *concatenation* of constructs rather than a
-    single alphabet expression.
-
-    The σ-grammar has no concatenation operator: every `,`/`..`-separated part is
-    bare text or exactly one `{…}` atom. A part that glues a construct onto
-    adjacent text — or holds more than one construct — is a sub-pattern.
-    """
-    if len(split_top(":", content)) == 3:
-        return False  # a `{floor:alphabet:ceiling}` bound is one value universe
-    body = content
-    if body.startswith("!"):
-        body = body[1:]
-    for arm in split_top(",", body):
-        for part in split_top("..", arm):
-            if not _is_sigma_atom(part):
-                return True
-    return False
-
-
-def _is_sigma_atom(part: str) -> bool:
-    """True if `part` is a valid σ atom: bare text, or a single `{…}` (optionally
-    with an exact `[N]` count) surrounded only by whitespace. A construct glued
-    to text, several constructs, or a ranged count is a sub-pattern fragment."""
-    part = strip_unescaped(part)
-    if part.startswith("!"):
-        part = part[1:].strip()  # a `!` complement/exclusion arm, e.g. !{0,l,I,O}
-    if not part:
-        return True
-    children = phase2.parse(part).children
-    constructs = [c for c in children if isinstance(c, t.BraceGroupNode)]
-    if not constructs:
-        return True  # bare token (a..z, cat, etc.)
-    if len(constructs) > 1:
-        return False
-    only = constructs[0]
-    if any(isinstance(c, t.LeafNode) and c.content.strip() for c in children):
-        return False  # a brace glued to adjacent literal text → concatenation
-    if only.count_src is not None and not re.fullmatch(r"\d+", only.count_src.strip()):
-        return False  # a ranged/star count is repetition, not a σ singleton
-    return True
 
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
@@ -424,37 +384,3 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     raise CompileError(f"Too many '..' separators in: {arm!r}")
 
 
-# ── Count parsing ─────────────────────────────────────────────────────────────
-
-
-def _parse_count(src: str) -> t.CountSpec:
-    """Parse a count modifier string into a count descriptor.
-
-    Forms: `[n]`, `[x..]`, `[..y]`, `[x..y]`, `[x..y..s]` (stride),
-    `[a,b,c]` (union), `[#i]` (count-reference)."""
-    src = src.strip()
-    # `[#i]` — repeat exactly group i's repetition count (resolved at match time).
-    m = _COUNTREF_RE.fullmatch(src)
-    if m:
-        return t.CountRefSpec(group=int(m.group(1)))
-    # `[a,b,c]` — an explicit union of exact counts.
-    if "," in src:
-        try:
-            values = sorted({int(p.strip()) for p in src.split(",")})
-        except ValueError:
-            raise CompileError(f"Invalid count expression: [{src}]") from None
-        return t.CountSet(values=values)
-    # `[n]` / `[x..y]` with optional stride `..s`.
-    m = re.fullmatch(r"(\d*)(?:\.\.(\d*)(?:\.\.(\d+))?)?", src)
-    if not m or not (m.group(1) or ".." in src):
-        raise CompileError(f"Invalid count expression: [{src}]")
-    lo, hi, step = m.groups()
-    if ".." not in src:  # exact [n]
-        return t.CountRange(min=int(lo), max=int(lo))
-    step_n = int(step) if step else 1
-    max_n = int(hi) if hi else None
-    if step_n != 1 and max_n is None:
-        raise CompileError(f"A strided count needs an upper bound: [{src}]")
-    return t.CountRange(
-        min=int(lo) if lo else 0, max=max_n, step=step_n
-    )
