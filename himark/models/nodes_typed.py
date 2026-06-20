@@ -10,12 +10,10 @@ from typing import Literal, TypeAlias
 
 @dataclass(slots=True)
 class CountRange:
-    """A repetition count `[x..y]`. `step` > 1 is a stride (`[x..y..s]`, both
-    bounds required)."""
+    """A repetition count `[x..y]` (`max` None is open-ended)."""
 
     min: int
     max: int | None
-    step: int = 1
 
 
 @dataclass(slots=True)

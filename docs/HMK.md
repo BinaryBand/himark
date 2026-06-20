@@ -149,7 +149,6 @@ A subtracted member may be a **multi-character** string, which makes `!{...}` a 
 | `[x..]`     | `x` or more                                               |
 | `[..y]`     | up to `y`                                                 |
 | `[x..y]`    | `x` to `y`                                                |
-| `[x..y..s]` | `x` to `y` in steps of `s` (stride; both bounds required) |
 | `[..]`      | any positive integer                                      |
 | `[a,b,c]`   | exactly `a`, `b`, or `c` times                            |
 
@@ -163,11 +162,11 @@ A run is always **greedy**: it takes the longest count in range that still lets 
 {a..z}[3]                    // primitive: the same letter three times (e.g. 'aaa','bbb')
 {{a..z}}[3]                  // object: any three letters, each free (e.g. 'abc','xyz')
 {{a,A},{c,C}}[2]             // one object repeated (e.g. 'aa','aA','Aa','AA' or 'cc','cC','Cc','CC')
-{a..z}[2,4,6]                // the same letter 2, 4, or 6 times -- a union, not a step
+{a..z}[2,4,6]                // the same letter 2, 4, or 6 times -- a union
 {{|}{!{|,\n}}[1..]}[2..]{|}  // two or more '|'+cell units, each cell different
 ```
 
-> **Note:** A range may take a **stride** as a third segment -- `[0..100..2]` is every second count, `{a..z..2}` every second letter. A stride needs both bounds (always finite); an open-ended stride is not allowed. Prefer a union (`[2,4,6]`, `{a,c,e}`) for a handful of values; reach for `..s` only when enumerating would be unwieldy.
+> **Note:** To repeat by an irregular or stepped set of counts, enumerate them as a union -- `[2,4,6]` (counts) or `{a,c,e}` (letters).
 
 ---
 

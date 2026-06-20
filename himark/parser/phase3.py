@@ -359,28 +359,9 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
             f"not '..': got {arm!r}"
         )
 
-    if len(parts) == 3:
-        av, bv, cv = svals
-        # τ..τ..s — a strided single-char range: `{a..z..2}` is a, c, e, … as one
-        # ordered alphabet of stepped positions.
-        if (
-            av is not None
-            and bv is not None
-            and cv is not None
-            and len(av) == 1
-            and len(bv) == 1
-            and cv.isdigit()
-        ):
-            step = int(cv)
-            if step < 1:
-                raise CompileError(f"A stride must be positive: got {arm!r}")
-            chars = [chr(c) for c in range(ord(av), ord(bv) + 1, step)]
-            return t.GroupClassNode(groups=[[ch] for ch in chars])
-        raise CompileError(
-            f"A 3-part '..' is a stride 'lo..hi..step' ('{{a..z..2}}'); a value "
-            f"bound uses ':' ('{{floor:alphabet:ceiling}}'): got {arm!r}"
-        )
-
-    raise CompileError(f"Too many '..' separators in: {arm!r}")
+    raise CompileError(
+        f"Too many '..' separators (a value bound uses ':', as in "
+        f"'{{floor:alphabet:ceiling}}'): got {arm!r}"
+    )
 
 

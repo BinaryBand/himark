@@ -1,4 +1,4 @@
-"""Tests for the v0.9.3 engine features: count unions/stride, the homogeneity
+"""Tests for the v0.9.3 engine features: count unions, the homogeneity
 flip, and the transformer rework (eager-commit branches, `|` filters,
 `{{> }}` payload, `@^`/`@$` anchors)."""
 
@@ -14,31 +14,12 @@ def ex(pattern, text):
     return execute(parser.parse(pattern), text)
 
 
-# ── Repetition: unions, stride, greedy backoff, laziness ──────────────────────
+# ── Repetition: unions, greedy backoff ────────────────────────────────────────
 
 
 def test_count_union():
     # [a,b,c] repeats exactly a, b, or c times.
     assert m("{a}[1,3]", "a aa aaa aaaa") == ["a", "a", "a", "aaa", "aaa", "a"]
-
-
-def test_count_stride():
-    # [x..y..s] is a strided range of counts.
-    assert m("{a}[2..6..2]", "a aa aaaa aaaaaa") == ["aa", "aaaa", "aaaaaa"]
-
-
-def test_range_stride():
-    # {a..z..2} is every second letter as one ordered alphabet.
-    assert m("{a..z..2}", "abcdef") == ["a", "c", "e"]
-
-
-def test_strided_count_needs_upper_bound():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        m("{a}[2....2]", "aa")
 
 
 def test_greedy_backs_off():

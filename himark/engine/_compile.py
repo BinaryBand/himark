@@ -467,21 +467,18 @@ class AnchorEl:
 @dataclass(slots=True)
 class Reps:
     """A resolved repetition spec on an element. `allowed` (a `[a,b,c]` set)
-    overrides the `min..max` step-range; `count_ref` (a `[#i]`) resolves to a
+    overrides the `min..max` range; `count_ref` (a `[#i]`) resolves to a
     group's rep count at match time."""
 
     min: int = 1
     max: int | None = 1
-    step: int = 1
     allowed: frozenset[int] | None = None
     count_ref: int | None = None
 
     def accepts(self, k: int) -> bool:
         if self.allowed is not None:
             return k in self.allowed
-        if k < self.min or (self.max is not None and k > self.max):
-            return False
-        return (k - self.min) % self.step == 0
+        return k >= self.min and (self.max is None or k <= self.max)
 
 
 @dataclass(slots=True)
@@ -544,7 +541,7 @@ def _reps(count: t.CountSpec | None) -> Reps:
     if isinstance(count, t.CountSet):
         vals = frozenset(count.values)
         return Reps(min=min(vals), max=max(vals), allowed=vals)
-    return Reps(min=count.min, max=count.max, step=count.step)
+    return Reps(min=count.min, max=count.max)
 
 
 def compile_pattern(root: t.RootNode) -> list[Element]:
