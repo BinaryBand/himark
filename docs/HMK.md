@@ -42,7 +42,7 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `@l`     | `a..z`                      |
 | `@u`     | `A..Z`                      |
 | `@s`     | `\n,\r, ,\t`                |
-| `@w`     | `{a,A},{b,B},...,{z,Z},_`   |
+| `@w`     | `{{a,A},{b,B},...,{z,Z}},_` |
 | `@x`     | `!{@s}`                     |
 | `@hex`   | `{@d},{:@w:f}`              |
 | `@b32`   | `{@d},{:@w:v}`              |
@@ -180,18 +180,20 @@ A run is always **greedy**: it takes the longest count in range that still lets 
 
 ## Captures
 
-Every `{...}` creates a capture group, numbered left to right from **0**. A grouping brace nests its inner braces as **sub-captures**. A repeated group (`[count]`) captures its full matched text as one string, not one capture per repetition.
+Every `{...}` creates a capture group, numbered left to right from **0** -- **except a zero-width anchor** (`@^`, `@$`, `@^^`, `@$$`), which matches a position, captures nothing, and is skipped in the numbering. A self-reference (`{$i}`, `{#i}`, `{N$M}`) **is** an ordinary group and takes the next number, so inserting one shifts every later index. A literal brace counts too -- a bare `{ }` (a space) is a group. A grouping brace nests its inner braces as **sub-captures**. A repeated group (`[count]`) captures its full matched text as one string, not one capture per repetition.
 
-Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
+Given the input `"### Sphinx of black quartz, judge my vow!"` and the expression `{#}[1..]{ }{Sphinx}{ }{of {black} {quartz}}`:
 
-| Group | Text                      | Explanation                     |
-| ----- | ------------------------- | ------------------------------- |
-| full  | `### Sphinxofblackquartz` | The full matched text.          |
-| 0     | `###`                     | Group 0                         |
-| 1     | `Sphinx`                  | Group 1                         |
-| 2     | `ofblackquartz`           | Group 2                         |
-| 2.0   | `black`                   | First sub-group inside group 2  |
-| 2.1   | `quartz`                  | Second sub-group inside group 2 |
+| Group | Text                         | Explanation                                         |
+| ----- | ---------------------------- | --------------------------------------------------- |
+| full  | `### Sphinx of black quartz` | the full matched text                               |
+| 0     | `###`                        | the `{#}[1..]` run -- a counted group is one string |
+| 1     | `(space)`                    | the `{ }` brace -- a literal space is still a group |
+| 2     | `Sphinx`                     | group 2                                             |
+| 3     | `(space)`                    | the second `{ }`                                    |
+| 4     | `of black quartz`            | the grouping brace `{of {black} {quartz}}`          |
+| 4.0   | `black`                      | first sub-group inside group 4                      |
+| 4.1   | `quartz`                     | second sub-group inside group 4                     |
 
 > **Note:** Captures are addressable from a template via moustache references -- `{{ i$j }}` for stage `i`'s capture `j`, `{{ i$j.k }}` to descend into sub-captures, `{{ i$ }}` for that stage's whole text as a raw string, and `{{ . }}` for the text flowing into the current step -- a relative shorthand for the previous stage's `{{ i$ }}` (see [Transformers](#transformers)).
 
@@ -285,7 +287,7 @@ Filters take arguments Jinja-style (`{{ 0$0 | b256(25) }}`). The set is fixed an
 
 ### Quoting static text
 
-Literal text may be written in double quotes, which is emitted verbatim with `\"`, `\\`, and `\n` escapes. A lone `'` is an ordinary character -- it is **not** a synonym for `"`.
+Literal text may be written in double quotes, emitted verbatim with the usual escapes (`\"`, `\\`, `\n`, `\t`, `\r`, `\{`, `\}`; any other `\c` is `c` itself). A lone `'` is an ordinary character -- it is **not** a synonym for `"`. Quoted text is **not** arrow-aware: a `=>` or `<=` inside a `"..."` template (at brace depth 0) still splits the statement, so keep arrows out of quoted strings.
 
 ```proto
 {a} => "<b>"   // emits the literal text <b>
