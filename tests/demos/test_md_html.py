@@ -273,13 +273,26 @@ def test_mixed_document():
     )
 
 
-# ── Documented limitations (pinned so the behaviour is defined) ───────────────
+# ── Code content is masked (markdown inside code is left literal) ─────────────
 
 
-def test_limitation_inline_markdown_inside_code_is_transformed():
-    # The engine cannot mask code content, so emphasis inside a fence is still
-    # transformed. This is a known, accepted limitation.
-    assert md("```\n**x**\n```") == "<pre><code><strong>x</strong></code></pre>"
+def test_markdown_inside_fence_is_not_transformed():
+    # Code content is wrapped in `⟪…⟫` and its markdown chars masked, so emphasis
+    # and a line-leading `#` inside a fence stay literal.
+    assert md("```\n# c\n**x**\n```") == "<pre><code># c\n**x**</code></pre>"
+
+
+def test_markdown_inside_inline_code_is_not_transformed():
+    assert md("use `**x**` and `[y](z)`") == "use <code>**x**</code> and <code>[y](z)</code>"
+
+
+def test_emphasis_spans_a_lone_inner_delimiter():
+    # The double delimiter uses a multi-char break, so a lone inner `*` is content.
+    assert md("**a*b**") == "<strong>a*b</strong>"
+    assert md("__a_b__") == "<strong>a_b</strong>"
+
+
+# ── Remaining limitations (pinned so the behaviour is defined) ────────────────
 
 
 def test_limitation_no_paragraph_wrapping():

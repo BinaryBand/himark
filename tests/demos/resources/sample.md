@@ -19,8 +19,9 @@ A small **Markdown** demo for the `md_html.hmk` transpiler.
 ---
 
 ```python
+# not a heading; **not** emphasis, a_b stays a_b
 def hello(name):
-    return f"hi {name}"
+    return f"hi {name}"  # [not](a-link)
 ```
 
-Done.
+Done with `**literal**` markdown left intact.

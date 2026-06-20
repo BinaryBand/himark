@@ -7,16 +7,18 @@
 //
 //      himark transpile doc.md --script himark/scripts/md_html.hmk
 //
-//  Scope & known limits (the engine is a single-pass splicer with no token
-//  masking, so a few markdown corners are out of reach by construction):
-//    * Code content is NOT masked. Markdown that appears *inside* a code span or
-//      fence (e.g. `**x**` or a line-leading `#`) is still transformed by the
-//      inline/heading rules that run after it.
+//  Code content IS protected: a code span/fence is wrapped in `⟪…⟫` and its
+//  markdown-significant characters are masked to sentinels (`Ⓝ Ⓐ Ⓤ Ⓣ Ⓑ Ⓛ`), so
+//  the heading/inline rules skip it; phase 6 restores them. Emphasis may also
+//  span its own single delimiter (`**a*b**`).
+//
+//  Scope & known limits:
 //    * No paragraph wrapping (loose text is left as-is) and no nested or lazy
 //      list/blockquote continuation lines.
-//    * Emphasis does not span its own delimiter (`**a*b**` is left literal), and
-//      a link/image URL may not contain `)`.
-//  These are pinned by tests in tests/test_md_html.py so the behaviour is defined.
+//    * A link/image URL may not contain `)`.
+//    * The sentinels `⟪ ⟫ Ⓝ Ⓐ Ⓤ Ⓣ Ⓑ Ⓛ` are assumed absent from the input.
+//  These are pinned by tests in tests/demos/test_md_html.py so the behaviour is
+//  defined.
 // ============================================================================
 
 // --- Phase 1: escaping ------------------------------------------------------
@@ -26,14 +28,24 @@
 {&} => "&amp;"
 {<} => "&lt;"
 
-// --- Phase 2: fenced code blocks --------------------------------------------
-// The body is a multi-char break: {!{\n```}} matches any char that does not
-// begin the closing fence, so the run stops at the *nearest* `\n``` and adjacent
-// blocks stay separate. An info string becomes a language class; bare omits it.
+// --- Phase 2: code (fenced, then inline), with content masked ---------------
+// Fenced blocks first: the body is a multi-char break {!{\n```}} (any char that
+// does not begin the closing fence), so the run stops at the *nearest* `\n``` and
+// adjacent blocks stay separate. The body is wrapped in `⟪…⟫`.
 {```}{!\n}[1..]{\n}{!{\n```}}[0..]{\n}{```}
-    => "<pre><code class=\"language-{{$1}}\">{{$3}}</code></pre>"
+    => "<pre><code class=\"language-{{$1}}\">⟪{{$3}}⟫</code></pre>"
 {```}{\n}{!{\n```}}[0..]{\n}{```}
-    => "<pre><code>{{$2}}</code></pre>"
+    => "<pre><code>⟪{{$2}}⟫</code></pre>"
+// Mask backticks inside `⟪…⟫` first, so an inline-code span cannot match a fenced
+// backtick; then wrap inline code spans; then mask the remaining significant
+// characters in every `⟪…⟫`. The block/inline rules below skip masked content.
+{⟪}{!{⟫,`}}[..]{`} <= "{{$0}}{{$1}}Ⓑ"
+{`}{!`}[1..]{`} => "<code>⟪{{$1}}⟫</code>"
+{⟪}{!{⟫,\n}}[..]{\n} <= "{{$0}}{{$1}}Ⓝ"
+{⟪}{!{⟫,*}}[..]{*} <= "{{$0}}{{$1}}Ⓐ"
+{⟪}{!{⟫,_}}[..]{_} <= "{{$0}}{{$1}}Ⓤ"
+{⟪}{!{⟫,~}}[..]{~} <= "{{$0}}{{$1}}Ⓣ"
+{⟪}{!{⟫,\[}}[..]{\[} <= "{{$0}}{{$1}}Ⓛ"
 
 // --- Phase 3: block structure (line-anchored) -------------------------------
 // Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@^}` is a line
@@ -75,19 +87,28 @@
     => "<td>{{ $2 | trim }}</td>"
 
 // --- Phase 5: inline spans (after block, so they format inside block tags) ---
-// Inline code (its content is intentionally left literal apart from escaping).
-{`}{!`}[1..]{`} => "<code>{{$1}}</code>"
-
 // Images before links, since `![alt](src)` contains the link shape `[..](..)`.
 {\!}{[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<img alt=\"{{$2}}\" src=\"{{$5}}\"/>"
 {[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<a href=\"{{$4}}\">{{$1}}</a>"
 
-// Emphasis: longest delimiter first so `***` beats `**` beats `*`.
-{***}{!*}[1..]{***} => "<strong><em>{{$1}}</em></strong>"
-{**}{!*}[1..]{**} => "<strong>{{$1}}</strong>"
-{__}{!_}[1..]{__} => "<strong>{{$1}}</strong>"
+// Emphasis: longest delimiter first so `***` beats `**` beats `*`. The double and
+// triple delimiters use a multi-char break, so they span a lone inner delimiter
+// (`**a*b**` -> `<strong>a*b</strong>`); the singles stop at their own character.
+{***}{!{***}}[1..]{***} => "<strong><em>{{$1}}</em></strong>"
+{**}{!{**}}[1..]{**} => "<strong>{{$1}}</strong>"
+{__}{!{__}}[1..]{__} => "<strong>{{$1}}</strong>"
 {*}{!*}[1..]{*} => "<em>{{$1}}</em>"
 {_}{!_}[1..]{_} => "<em>{{$1}}</em>"
 
-// Strikethrough (GFM).
-{~~}{!~}[1..]{~~} => "<del>{{$1}}</del>"
+// Strikethrough (GFM); a multi-char break lets it span a lone inner '~'.
+{~~}{!{~~}}[1..]{~~} => "<del>{{$1}}</del>"
+
+// --- Phase 6: restore masked code content -----------------------------------
+{Ⓝ} => "\n"
+{Ⓐ} => "*"
+{Ⓤ} => "_"
+{Ⓣ} => "~"
+{Ⓑ} => "`"
+{Ⓛ} => "["
+{⟪} => ""
+{⟫} => ""
