@@ -219,5 +219,5 @@ __marimo__/
 .vscode
 static/**/.*
 docs/**/.*
-tests/demos/output/**/.*
+tests/demos/output
 CLAUDE.md

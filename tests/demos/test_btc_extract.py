@@ -123,8 +123,11 @@ def test_stress_extracts_and_validates_all_planted_addresses_quickly():
 
 
 # ── Runbook ───────────────────────────────────────────────────────────────────
-# Run this file directly to apply the shipped script to a real input file and see
-# the result, for fast manual iteration:  python tests/scripts/test_btc_extract.py
+# Run this file directly to apply the shipped script to a real input file and
+# write the result to `tests/demos/output` for manual inspection.
 if __name__ == "__main__":
+    OUTPUT.mkdir(parents=True, exist_ok=True)
     text = (RESOURCES / "addresses.txt").read_text("utf-8")
-    print(run(text))
+    out = run(text)
+    (OUTPUT / "addresses_out.txt").write_text(out, "utf-8")
+    print(f"Wrote addresses_out.txt to {OUTPUT}")

@@ -104,8 +104,12 @@ def test_inline_mixed_content_splits_at_child_boundaries():
 
 
 # ── Runbook ───────────────────────────────────────────────────────────────────
-# Run this file directly to indent a real HTML file and see the result, for fast
-# manual iteration:  python tests/scripts/test_html_indent.py
+# Run this file directly to indent a real HTML file and write the result to
+# `tests/demos/output` for manual inspection.
 if __name__ == "__main__":
+    OUTPUT = Path(__file__).resolve().parent / "output"
+    OUTPUT.mkdir(parents=True, exist_ok=True)
     html = (RESOURCES / "sample.html").read_text("utf-8").strip()
-    print(run(html))
+    out = run(html)
+    (OUTPUT / "indented_sample.html").write_text(out, "utf-8")
+    print(f"Wrote indented_sample.html to {OUTPUT}")

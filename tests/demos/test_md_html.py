@@ -293,8 +293,12 @@ def test_limitation_empty_link_is_literal():
 
 
 # ── Runbook ───────────────────────────────────────────────────────────────────
-# Run this file directly to transpile a real Markdown file and see the HTML, for
-# fast manual iteration:  python tests/scripts/test_md_html.py
+# Run this file directly to transpile a real Markdown file and write the HTML
+# output to `tests/demos/output` for manual inspection.
 if __name__ == "__main__":
+    OUTPUT = Path(__file__).resolve().parent / "output"
+    OUTPUT.mkdir(parents=True, exist_ok=True)
     source = (RESOURCES / "sample.md").read_text("utf-8")
-    print(md(source))
+    out = md(source)
+    (OUTPUT / "sample.html").write_text(out, "utf-8")
+    print(f"Wrote sample.html to {OUTPUT}")
