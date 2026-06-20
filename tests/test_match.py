@@ -510,6 +510,16 @@ def test_back_ref_undefined_group_fails():
     assert matches("{$0}", "anything") == []
 
 
+def test_back_ref_to_empty_capture_matches_zero_width():
+    # A group that captured the empty string back-references as zero-width — a
+    # required (`≥1`) back-ref of "" still matches without consuming. Here the
+    # optional prefix is empty, so `{$0}` between the digits matches nothing.
+    assert matches(r"{@d}[..]{9},{$0}{8}", "9,8") == ["9,8"]
+    # And with a non-empty prefix the back-ref still demands the same text.
+    assert matches(r"{@d}[..]{9},{$0}{8}", "19,18") == ["19,18"]
+    assert matches(r"{@d}[..]{9},{$0}{8}", "19,28") == []
+
+
 # ── Count-reference {#i}: match the decimal repeat count of an earlier group ───
 
 

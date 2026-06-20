@@ -155,6 +155,17 @@ def _match_referent(
     """Match `referent` (a value pulled from running state) per `reps`, then the
     continuation. `referent is None` means the referenced value is undefined."""
     caps = state.captures
+    if referent == "":
+        # An empty captured referent matches zero-width: any count of copies of
+        # "" is still "", so the rep constraint (even a required `≥1`) is met
+        # without consuming input. (`None` — an undefined reference — is falsy but
+        # not `""`, so it falls through to the zero-rep-only behavior below.)
+        mark = len(caps)
+        caps.append(Capture("", (pos, pos), [""] * reps.min))
+        r = cont(pos)
+        if r is None:
+            del caps[mark:]
+        return r
     ends = [pos, *_referent_run(text, pos, referent, reps.max)] if referent else [pos]
 
     def attempt(k: int) -> int | None:

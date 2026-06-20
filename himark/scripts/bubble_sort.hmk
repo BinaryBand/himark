@@ -17,9 +17,11 @@
 //  up to K-1 sweeps; this file budgets 9, enough for any 10-value list. Add more
 //  sweep blocks for longer lists.
 //
-//  Scope: single digits 0-9. Multi-digit values need width-normalization and a
-//  prefix back-reference per position, which HMK cannot express today (a
-//  back-reference to an empty prefix does not match), so they are out of scope.
+//  Scope: single digits 0-9. Multi-digit values would have to compare unequal
+//  widths (the longer value is larger), and HMK cannot compare two captured
+//  *lengths*, so they are out of scope. Equal-width comparison *is* expressible
+//  (a per-position prefix back-reference — an empty prefix back-references
+//  correctly), so a fixed-width list is a possible extension.
 // ============================================================================
 
 // ── sweep 1 ──
