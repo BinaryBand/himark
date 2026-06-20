@@ -189,6 +189,16 @@ class _ValueView:
     wmax: int | None
 
 
+def _endpoint_value(alph: "Alphabet | RangeAlphabet", s: str, which: str) -> int:
+    """The positional value of bound endpoint `s`, or a `CompileError` if any of its
+    symbols is not in the alphabet (a bad literal, or a reference resolved to text
+    outside the bound's universe — `$0` over `@d` resolving to non-digits)."""
+    bad = next((c for c in s if c not in alph), None)
+    if bad is not None:
+        raise CompileError(f"Bound {which} {s!r} has a symbol not in its alphabet: {bad!r}")
+    return alph.value(s)
+
+
 def _build_value_view(
     alph: "Alphabet | RangeAlphabet",
     lower: str | None,
@@ -202,8 +212,8 @@ def _build_value_view(
     an omitted floor lets the value start at width 1. Leading zero-padding inside
     the window is allowed, so `{000:@d:9}` matches `9`, `09`, and `009`.
     """
-    lo = alph.value(lower) if lower is not None else None
-    hi = alph.value(upper) if upper is not None else None
+    lo = _endpoint_value(alph, lower, "floor") if lower is not None else None
+    hi = _endpoint_value(alph, upper, "ceiling") if upper is not None else None
     wf = len(lower) if lower is not None else None
     wc = len(upper) if upper is not None else None
     if wf is not None and wc is not None:
@@ -560,8 +570,8 @@ class DynValueRangeEl:
         endpoint is not expressible in `alphabet` (so the bound cannot match)."""
         try:
             view = _build_value_view(self.alphabet, lower, upper, self.exclusions)
-        except (KeyError, ValueError):
-            return None
+        except CompileError:
+            return None  # a resolved endpoint not expressible in the alphabet
         return _ValueRange(view)
 
 

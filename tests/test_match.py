@@ -180,6 +180,25 @@ def test_value_bound_reference_undefined_fails():
     assert matches(r"{0:@d:$3}", "5") == []
 
 
+def test_value_bound_reference_outside_alphabet_fails_gracefully():
+    # A referent not expressible in the alphabet (a letter as a `@d` ceiling) is a
+    # no-match, not a crash — the dynamic endpoint is resolved at match time.
+    assert matches(r"{a..z},{0:@d:$0}", "x,5") == []
+
+
+def test_invalid_literal_endpoint_is_a_clean_compile_error():
+    # A literal endpoint with a symbol outside its alphabet is a CompileError, not
+    # an uncaught crash. (`\$0` is such a literal — "$" is not a decimal digit.)
+    import pytest
+
+    from himark.models.exceptions import CompileError
+
+    with pytest.raises(CompileError):
+        matches(r"{0:@d:x}", "5")
+    with pytest.raises(CompileError):
+        matches(r"{0:@d:\$0}", "5")
+
+
 # ── Value exclusion on char-range classes ─────────────────────────────────────
 
 
