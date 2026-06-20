@@ -59,7 +59,7 @@ def _indent(s: str) -> str:
     """Prefix every line of `s` with one tab. A line filter (not a scalar one): it
     reshapes multi-line text rather than the whole string at once, which is what
     lets indentation **accumulate** under an inside-out wrap — text re-indented by
-    each enclosing pass ends up as deep as its nesting (see scripts/html_indent.hmk)."""
+    each enclosing pass ends up as deep as its nesting (see scripts/html_format.hmk)."""
     return "" if s == "" else "\t" + s.replace("\n", "\n\t")
 
 

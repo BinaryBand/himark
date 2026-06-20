@@ -109,7 +109,7 @@ def test_filter_len():
 
 def test_filter_indent_prefixes_each_line():
     # `indent` is a line filter: a tab on every line, so it accumulates under an
-    # inside-out wrap (see scripts/html_indent.hmk).
+    # inside-out wrap (see scripts/html_format.hmk).
     assert ex(r'{!x}[1..] => "{{ . | indent }}"', "a\nb\nc") == ["\ta\n\tb\n\tc"]
 
 
