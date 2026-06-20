@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.9.4-experimental  
+**Version:** 0.9.5-experimental  
 **Status:** Draft Specification  
 **License:** CC0 1.0 Universal (Public Domain)
 
@@ -19,7 +19,6 @@ A pattern is built from **universes** and a small set of operators. A universe `
 | `!{...}`    | **Subtractive universe** | everything _not_ in `{...}`, from the ambient universe (Unicode)       |
 | `{x:...:y}` | **Bounds**               | restricted a universe to values `x`-`y` inclusive (`{x::y}` = ambient) |
 | `[count]`   | **Repetition**           | a count universe over base-10 integers (`[n]`, `[x..y]`, `[a,b,c]`)    |
-| `{...}~k`   | **Fuzzy**                | the universe within edit distance `k` of a token (`{cat}~1`)           |
 | `=>`        | **Pipe**                 | feed each match into the next transformation                           |
 
 **Every `{...}` matches one position**, holding one **point** of the universe. A point is a **primitive** (one char or string) or an **object** (a nested universe `{...}`) whose members are **interchangeable**. A run is an explicit `[count]` repeating **one point**: a primitive repeats as its spelling, an object lets each position take **any** of its members independently.
@@ -140,20 +139,6 @@ A subtracted member may be a **multi-character** string, which makes `!{...}` a 
 
 ---
 
-## Fuzzy
-
-`{token}~k` is the universe of **all strings within edit distance `k`** of a token. It matches one element, captures the **actual** matched text, and composes with `[count]`, captures, and references like any `{...}`. `k` is explicit and required -- there is no implicit fuzz.
-
-```proto
-{cat}~1         // 'cat', 'cap', 'cot', 'at', 'cart', ... (Levenshtein distance <= 1)
-{cat,dog}~1     // within distance 1 of either token
-{cat:@l:cat}~1  // distance <= 1, with only lowercase letters bridging the gap
-```
-
-The operand is a token, a token union, or an alphabet-annotated token `{token:A:token}` -- a finite set has a well-defined neighbourhood; a non-singleton range or subtractive universe does not. The edits draw from the operand's own alphabet: bare `{cat}` is `{cat:@uni:cat}`, so any character may bridge (hence `cap`, `cot`, `cart`); `{cat:@l:cat}~1` narrows that to lowercase, rejecting `c@t`. A token must be spellable in its alphabet, so `{Cat:@l:Cat}` is a compile error. Distance is **Levenshtein**; ties break by smallest distance, then longest span, then leftmost. Like `@uni`, the neighbourhood is matched by an automaton, never enumerated.
-
----
-
 ## Repetition
 
 `[count]` repeats the preceding universe. The count is itself a **universe** -- the same algebra as `{...}`, but over the ambient set of **base-10 non-negative integers** instead of Unicode. A bare number is exact, `,` unions counts, and `..` is a range:
@@ -257,7 +242,7 @@ Stages are numbered by `=>` position (templates included), so `{{ i$j }}` and `{
 
 A moustache value may be piped through **filters** -- a fixed standard library of pure, deterministic transforms, in the `=>` spirit: `{{ accessor | f | g }}`. Filters are **template-only** (never in matching position), so the matcher stays declarative.
 
-A moustache value is either a **value** or a **raw string**. Only a group accessor over a `{x:A:y}` **bound** carries the captured text _together with the alphabet it matched under_, and only that is a **value** — a value filter can read it as a number in its alphabet. Every other reference is a **raw string**: a whole-stage accessor (`{{ i$ }}`), the flowing text `{{ . }}`, the output of any string filter, and — crucially — a group accessor with no value alphabet (a plain literal, a bare range like `{a..z}`, a fuzzy `{cat}~1`, or a subtractive `!{a}` capture, none of which carry one). **String** filters read the text of either kind; a **value** filter needs the alphabet, so it is a compile error on a raw string.
+A moustache value is either a **value** or a **raw string**. Only a group accessor over a `{x:A:y}` **bound** carries the captured text _together with the alphabet it matched under_, and only that is a **value** — a value filter can read it as a number in its alphabet. Every other reference is a **raw string**: a whole-stage accessor (`{{ i$ }}`), the flowing text `{{ . }}`, the output of any string filter, and — crucially — a group accessor with no value alphabet (a plain literal, a bare range like `{a..z}`, or a subtractive `!{a}` capture, neither of which carries one). **String** filters read the text of either kind; a **value** filter needs the alphabet, so it is a compile error on a raw string.
 
 | Filter     | Kind   | Effect                                                    |
 | ---------- | ------ | --------------------------------------------------------- |

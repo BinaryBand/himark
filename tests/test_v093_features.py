@@ -1,6 +1,6 @@
-"""Tests for the v0.9.3 engine features: count unions/stride/laziness, the
-homogeneity flip, fuzzy `~k`, and the transformer rework (eager-commit branches,
-`|` filters, `{{> }}` payload, `@^`/`@$` anchors)."""
+"""Tests for the v0.9.3 engine features: count unions/stride, the homogeneity
+flip, and the transformer rework (eager-commit branches, `|` filters,
+`{{> }}` payload, `@^`/`@$` anchors)."""
 
 from himark import parser
 from himark.engine import execute, find_matches
@@ -103,72 +103,6 @@ def test_nested_range_is_heterogeneous():
 def test_complement_run_is_heterogeneous():
     # A bare complement run stays a heterogeneous run of non-X characters.
     assert m(r"{!\ }[1..]", "hi there") == ["hi", "there"]
-
-
-# ── Fuzzy `~k` ────────────────────────────────────────────────────────────────
-
-
-def test_fuzzy_within_distance():
-    assert m("{cat}~1", "cat cot cap bat ct caat") == [
-        "cat",
-        "cot",
-        "cap",
-        "bat",
-        "ct",
-        "caat",
-    ]
-
-
-def test_fuzzy_rejects_far():
-    assert m("{cat}~1", "dog xyz") == []
-
-
-def test_fuzzy_token_union():
-    assert m("{cat,dog}~1", "cat dig") == ["cat", "dig"]
-
-
-def test_fuzzy_default_alphabet_is_unicode():
-    # A bare token is {cat:@uni:cat}, so any character may bridge — 'c@t' matches.
-    assert m("{cat}~1", "c@t") == ["c@t"]
-
-
-def test_fuzzy_alphabet_restricts_edits():
-    # {cat:@l:cat}~1 lets only lowercase letters bridge, so 'c@t' is rejected
-    # while letter-only edits still match.
-    assert m("{cat:@l:cat}~1", "cot cap c@t") == ["cot", "cap"]
-
-
-def test_fuzzy_empty_alphabet_is_unicode():
-    # An omitted middle normalises to @uni, the same as a bare token.
-    assert m("{cat::cat}~1", "c@t") == ["c@t"]
-
-
-def test_fuzzy_operand_must_be_tokens():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        m("{a..z}~1", "abc")
-
-
-def test_fuzzy_token_outside_alphabet_raises():
-    # The token must be spellable in its own alphabet: 'C' has no @l symbol.
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        m("{Cat:@l:Cat}~1", "Cat")
-
-
-def test_fuzzy_alphabet_annotation_cannot_be_unioned():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        m("{cat:@l:cat,dog}~1", "cat")
 
 
 # ── Transformers: eager-commit, filters, payload, anchors ─────────────────────

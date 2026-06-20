@@ -15,9 +15,6 @@ from himark.parser._text import ESCAPES, brace_end, unescape
 
 # Count suffix: [N], [N..], [..N], [N..M], [..]
 _COUNT_SRC = re.compile(r"\[([^\]]*)\]")
-# Fuzzy suffix `~k` — just the distance. The bridge alphabet rides on the
-# operand universe (`{cat:@l:cat}~1`), not on a `~k:` suffix.
-_FUZZ_SRC = re.compile(r"~(\d+)")
 
 
 def _scan_braces(text: str, pos: int) -> int:
@@ -92,10 +89,6 @@ def parse(text: str) -> t.RootNode:
             inner = text[start + 1 : end - 1]
             brace = t.BraceGroupNode(content="!" + inner if complement else inner)
             pos = end
-            fm = _FUZZ_SRC.match(text, pos)
-            if fm:
-                brace.fuzz = int(fm.group(1))
-                pos = fm.end()
             cm = _COUNT_SRC.match(text, pos)
             if cm:
                 brace.count_src = cm.group(1)

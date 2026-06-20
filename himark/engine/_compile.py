@@ -421,71 +421,6 @@ class _Het(_Base):
     # equal_unit inherited from _Base = a fresh match → any member, each position.
 
 
-def _bounded_levenshtein(a: str, b: str, k: int) -> int:
-    """Levenshtein distance between `a` and `b`, capped at `k + 1` (anything over
-    `k` is reported as `k + 1` — we only care whether it is within `k`)."""
-    if abs(len(a) - len(b)) > k:
-        return k + 1
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        lo = max(1, i - k)
-        hi = min(len(b), i + k)
-        for j in range(1, len(b) + 1):
-            if j < lo or j > hi:
-                cur.append(k + 1)
-                continue
-            cost = 0 if ca == b[j - 1] else 1
-            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost))
-        if min(cur) > k:
-            return k + 1
-        prev = cur
-    return prev[len(b)]
-
-
-class _Fuzzy(_Base):
-    """Fuzzy token `{token}~k`: matches a span within Levenshtein distance `k` of
-    some token. A span has length |token| ± k, so the search is bounded; among
-    candidates it picks the smallest distance, then the longest span.
-
-    The optional bridge alphabet (`{token:A:token}~k`) constrains the matched
-    span: every character must be a symbol of `A`, since each one is either kept
-    from the token (which must itself be spellable in `A`) or introduced by an
-    edit drawn from `A`. A `None` alphabet is ambient Unicode — no constraint."""
-
-    __slots__ = ("tokens", "k", "lo", "hi", "alpha")
-
-    def __init__(self, node: t.FuzzyNode):
-        self.tokens = node.tokens
-        self.k = node.k
-        self.lo = min(len(tok) for tok in node.tokens)
-        self.hi = max(len(tok) for tok in node.tokens)
-        self.alpha = _value_alphabet(node.alpha) if node.alpha is not None else None
-        if self.alpha is not None:
-            for tok in self.tokens:
-                outside = [c for c in tok if c not in self.alpha]
-                if outside:
-                    raise CompileError(
-                        f"Fuzzy token {tok!r} is not spellable in its alphabet: "
-                        f"{''.join(sorted(set(outside)))!r} cannot be bridged."
-                    )
-
-    def match(self, text: str, pos: int) -> int | None:
-        k = self.k
-        alpha = self.alpha
-        max_len = min(self.hi + k, len(text) - pos)
-        min_len = max(0, self.lo - k)
-        best: tuple[int, int] | None = None  # (distance, -length)
-        for length in range(min_len, max_len + 1):
-            span = text[pos : pos + length]
-            if alpha is not None and any(c not in alpha for c in span):
-                continue
-            d = min(_bounded_levenshtein(span, tok, k) for tok in self.tokens)
-            if d <= k and (best is None or (d, -length) < best):
-                best = (d, -length)
-        return pos - best[1] if best else None
-
-
 def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
     return _ValueRange(_value_view(node))
 
@@ -499,7 +434,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
-    t.FuzzyNode: _Fuzzy,
     # Nested fallback (e.g. a `{{U}}` arm); the het flag is set at the element
     # level in `compile_pattern`, so here it lowers to the inner matcher.
     t.HeterogeneousNode: lambda n: lower(n.inner),

@@ -67,7 +67,6 @@ class BraceGroupNode:
     semantic: SemanticNode | None = None
     count: CountSpec | None = None
     count_src: str | None = None
-    fuzz: int | None = None  # a `~k` fuzzy modifier (edit distance)
 
 
 # -----------------------------
@@ -122,22 +121,6 @@ class AnchorNode:
 
     at: Literal["line_start", "line_end", "scope_start", "scope_end"]
     type: Literal["anchor"] = "anchor"
-
-
-@dataclass(slots=True, kw_only=True)
-class FuzzyNode:
-    """A fuzzy token `{token}~k` — matches any string within Levenshtein distance
-    `k` of one of `tokens` (a token or token union). Membership, captured as the
-    actual matched text.
-
-    `alpha` is the **bridge alphabet** the edits may draw from, carried by an
-    alphabet-annotated operand `{token:A:token}`. `None` means ambient Unicode
-    (a bare `{token}` is `{token:@uni:token}`), so any character may bridge."""
-
-    tokens: list[str]
-    k: int
-    alpha: SemanticNode | None = None
-    type: Literal["fuzzy"] = "fuzzy"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -220,7 +203,6 @@ SemanticNode: TypeAlias = (
     | UnionNode
     | ComplementNode
     | HeterogeneousNode
-    | FuzzyNode
     | AnchorNode
     | GroupClassNode
     | SequenceNode
@@ -238,7 +220,6 @@ SemanticClasses = (
     UnionNode,
     ComplementNode,
     HeterogeneousNode,
-    FuzzyNode,
     AnchorNode,
     GroupClassNode,
     SequenceNode,

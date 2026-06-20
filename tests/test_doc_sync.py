@@ -39,15 +39,6 @@ def test_doc_captures_example():
     assert ms[0].sub_groups[2] == ["black", "quartz"]
 
 
-def test_doc_fuzzy_bridge_alphabet_example():
-    # The Fuzzy section: a bare {cat}~1 is over ambient Unicode, so any character
-    # may bridge an edit; {cat:@l:cat}~1 narrows the bridge to lowercase letters
-    # and so rejects a span like 'c@t'.
-    assert matches("{cat}~1", "c@t") == ["c@t"]
-    assert matches("{cat:@l:cat}~1", "c@t") == []
-    assert matches("{cat:@l:cat}~1", "cot") == ["cot"]
-
-
 def test_doc_subtractive_universe_examples():
     # The Subtraction section writes the subtractive universe `!{X}` with the
     # bang *outside* the brace, standalone: `!{a}` is any char except 'a',
