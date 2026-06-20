@@ -49,7 +49,11 @@ def test_arbitrary_depth_indents_completely():
     # The `<=` fixed point peels until no pair is left — no depth limit. Names are
     # non-inline (`t0`…`t15`) so every level is a block that breaks out.
     names = [f"t{i}" for i in range(16)]
-    src = "".join(f"<{n}>" for n in names) + "x" + "".join(f"</{n}>" for n in reversed(names))
+    src = (
+        "".join(f"<{n}>" for n in names)
+        + "x"
+        + "".join(f"</{n}>" for n in reversed(names))
+    )
     assert run(src).splitlines()[16] == "\t" * 16 + "x"
 
 
@@ -61,7 +65,10 @@ def test_backref_requires_matching_tag_names():
 
 
 def test_block_attributes_preserved_not_matched_in_close():
-    assert run('<section id="intro">hi</section>') == '<section id="intro">\n\thi\n</section>'
+    assert (
+        run('<section id="intro">hi</section>')
+        == '<section id="intro">\n\thi\n</section>'
+    )
 
 
 def test_block_void_elements_on_their_own_line():

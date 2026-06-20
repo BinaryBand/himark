@@ -106,7 +106,9 @@ def split_top(sep: str, text: str) -> list[str]:
     while i < len(text):
         ch = text[i]
         if ch == "\\" and i + 1 < len(text):
-            cur.append(text[i : i + 2])  # keep the escape pair intact, never a delimiter
+            cur.append(
+                text[i : i + 2]
+            )  # keep the escape pair intact, never a delimiter
             i += 2
         elif ch in "{[":
             depth += 1

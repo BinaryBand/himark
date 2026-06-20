@@ -37,6 +37,9 @@ class Matcher(Protocol):
         """End of the next repetition at `pos`, required to equal `first`."""
         ...
 
+    # The optional value alphabet this matcher carries for captured groups.
+    value_alphabet: "Alphabet | RangeAlphabet | None"
+
 
 class _Base:
     """Default `accepts` (via match). `equal_unit` is the **heterogeneous**
@@ -195,7 +198,9 @@ def _endpoint_value(alph: "Alphabet | RangeAlphabet", s: str, which: str) -> int
     outside the bound's universe — `$0` over `@d` resolving to non-digits)."""
     bad = next((c for c in s if c not in alph), None)
     if bad is not None:
-        raise CompileError(f"Bound {which} {s!r} has a symbol not in its alphabet: {bad!r}")
+        raise CompileError(
+            f"Bound {which} {s!r} has a symbol not in its alphabet: {bad!r}"
+        )
     return alph.value(s)
 
 
@@ -276,7 +281,7 @@ class _ValueRange(_Base):
         self.view = view
 
     @property
-    def value_alphabet(self) -> Alphabet | RangeAlphabet:
+    def value_alphabet(self) -> Alphabet | RangeAlphabet | None:
         return self.view.alphabet
 
     def match(self, text: str, pos: int) -> int | None:

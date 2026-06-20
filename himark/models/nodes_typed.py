@@ -14,6 +14,7 @@ class CountRange:
 
     min: int
     max: int | None
+    group: int | None = None
 
 
 @dataclass(slots=True)
@@ -22,6 +23,7 @@ class CountSet:
     times. `values` is sorted and de-duplicated."""
 
     values: list[int]
+    group: int | None = None
 
 
 @dataclass(slots=True)

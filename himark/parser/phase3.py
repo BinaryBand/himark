@@ -376,5 +376,3 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         f"Too many '..' separators (a value bound uses ':', as in "
         f"'{{floor:alphabet:ceiling}}'): got {arm!r}"
     )
-
-

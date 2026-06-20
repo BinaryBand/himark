@@ -24,6 +24,7 @@ import re
 from dataclasses import dataclass
 
 from himark.engine.backend import Match
+from himark.engine.backend.alphabet import Alphabet, RangeAlphabet
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 
@@ -40,7 +41,7 @@ class _Value:
     any string-filter output carry no alphabet — they are raw strings."""
 
     text: str
-    alphabet: object | None = None
+    alphabet: Alphabet | RangeAlphabet | None = None
 
 
 def _as_bytes(s: str, filt: str) -> bytes:
@@ -88,8 +89,8 @@ _FILTERS = {
     "indent": lambda v: _indent(v.text),
     "len": lambda v: str(len(v.text)),
     "hex": lambda v: _as_bytes(v.text, "hex").hex(),
-    "sha256": lambda v: hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode(
-        "latin-1"
+    "sha256": lambda v: (
+        hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode("latin-1")
     ),
     "head": lambda v, n: v.text[:n],
     "tail": lambda v, n: v.text[-n:] if n else "",
@@ -166,7 +167,9 @@ def _apply_filter(token: str, value: _Value) -> _Value:
     try:
         args = [int(a) for a in arg_src.split(",")] if arg_src else []
     except ValueError:
-        raise CompileError(f"Filter '{name}' arguments must be integers: '{arg_src}'") from None
+        raise CompileError(
+            f"Filter '{name}' arguments must be integers: '{arg_src}'"
+        ) from None
     try:
         return _Value(fn(value, *args))
     except TypeError:

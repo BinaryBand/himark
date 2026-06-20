@@ -50,7 +50,10 @@ def is_valid(addr: str) -> bool:
     for c in addr:
         value = value * 58 + B58.index(c)
     payload = value.to_bytes(25, "big")
-    return hashlib.sha256(hashlib.sha256(payload[:21]).digest()).digest()[:4] == payload[21:]
+    return (
+        hashlib.sha256(hashlib.sha256(payload[:21]).digest()).digest()[:4]
+        == payload[21:]
+    )
 
 
 def test_real_addresses_are_kept():
@@ -70,7 +73,9 @@ def test_lookalike_is_filtered_and_left_as_plain_text():
 
 def test_valid_and_invalid_mixed():
     out = run(" a 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa b " + LOOKALIKE + " c")
-    assert out == " a <btc>1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa</btc> b " + LOOKALIKE + " c"
+    assert (
+        out == " a <btc>1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa</btc> b " + LOOKALIKE + " c"
+    )
 
 
 def test_skips_p2sh_address():
@@ -97,10 +102,14 @@ def _stress_target(seed: int = 0):
     planted: list[str] = []
     for i in range(8000):
         if rng.random() < 0.15:  # `1`-led but too short to be an address
-            parts.append("1" + "".join(rng.choice(B58) for _ in range(rng.randint(3, 20))))
+            parts.append(
+                "1" + "".join(rng.choice(B58) for _ in range(rng.randint(3, 20)))
+            )
         else:  # not `1`-led; varied lengths, including address-length runs
             head = rng.choice("23456789")
-            parts.append(head + "".join(rng.choice(B58) for _ in range(rng.randint(3, 49))))
+            parts.append(
+                head + "".join(rng.choice(B58) for _ in range(rng.randint(3, 49)))
+            )
         if i % 400 == 200:
             a = ADDRS[i % len(ADDRS)]
             parts.append(a)

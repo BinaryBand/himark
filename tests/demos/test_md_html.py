@@ -301,7 +301,10 @@ def test_markdown_inside_fence_is_not_transformed():
 
 
 def test_markdown_inside_inline_code_is_not_transformed():
-    assert md("use `**x**` and `[y](z)`") == "use <code>**x**</code> and <code>[y](z)</code>"
+    assert (
+        md("use `**x**` and `[y](z)`")
+        == "use <code>**x**</code> and <code>[y](z)</code>"
+    )
 
 
 def test_emphasis_spans_a_lone_inner_delimiter():
