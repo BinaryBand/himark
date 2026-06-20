@@ -37,3 +37,20 @@
 // Another chain with messy spacing
 {a}{b}{c} => "x"
    =>    {d}
+
+// A multi-step chain with no spaces around the arrows (each gets one).
+{a}=>{b}=>"squished"
+
+// An arrow inside a comment keeps its spacing:  a  =>  b  (left untouched).
+
+// A pattern matching the literal braces { and } via the \{ \} escapes.
+{\{,\}}[1..] => "braces"
+
+// A multi-line template keeps its interior whitespace verbatim (masking):
+{m} => "line one
+    indented body
+line three"
+
+// A hand-indented top-level statement IS out-dented now: the brace-newline mask
+// lets fmt tell a real statement line from a brace-continuation line.
+   {indented} => "outdented"

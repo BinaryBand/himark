@@ -81,6 +81,29 @@ def test_multiline_brace_interior_is_preserved():
     assert tidy(src) == src
 
 
+def test_multistep_chain_spaces_each_arrow():
+    assert tidy('{a}=>{b}=>"x"\n') == '{a} => {b} => "x"\n'
+
+
+def test_literal_brace_pattern_is_preserved():
+    # `{\{,\}}` (a union of literal `{` and `}`) is a pattern, not a template;
+    # fmt only canonicalizes the arrow after its `]`.
+    assert tidy('{\\{,\\}}[1..]=>"x"\n') == '{\\{,\\}}[1..] => "x"\n'
+
+
+def test_leading_whitespace_on_statement_is_outdented():
+    # The brace-newline mask lets fmt tell a real statement line from a
+    # brace-continuation line, so a hand-indented statement is out-dented.
+    assert tidy('{a} => "x"\n   {b} => "y"\n') == '{a} => "x"\n{b} => "y"\n'
+
+
+def test_multiline_brace_indentation_is_protected_when_outdenting():
+    # The out-dent rule must NOT reach inside a multi-line brace: its interior
+    # newlines are masked, so the indented `{d,e}` line keeps its indentation.
+    src = '{a,{b,c,\n    {d,e}\n}}[1..] => "x"\n'
+    assert tidy(src) == src
+
+
 # Runbook: write the formatted sample to `tests/demos/output` for manual inspection
 if __name__ == "__main__":
     RES = Path(__file__).resolve().parent / "resources"

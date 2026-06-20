@@ -5,30 +5,31 @@
 //      himark transpile messy.hmk --script himark/scripts/fmt.hmk --out clean.hmk
 //
 //  HMK matches by shape with no nesting stack, so a naive formatter cannot tell a
-//  real `=>` arrow or stray whitespace from one living inside a "…" template. We
-//  fix that the HMK way — with a **masking pre-pass**: the dangerous tokens
-//  inside templates are swapped for private sentinels, the line-local tidies run
-//  on the safe skeleton, and a final pass restores the sentinels. The sentinels
-//  (`§ ¤ « » ⟶ ␤`) are assumed absent from the input.
+//  real `=>` arrow or a real line start from one living inside a "…" template or
+//  a multi-line `{…}` group. We fix that the HMK way — with **masking pre-passes**
+//  that swap the dangerous tokens inside templates and braces for private
+//  sentinels, run the line-local tidies on the safe skeleton, and restore the
+//  sentinels at the end. The sentinels (`§ ¤ « » ⟶ ␤ ⦃ ⦄`) are assumed absent.
 //
 //  Tidies applied (all idempotent): trim file edges, strip trailing whitespace,
-//  collapse blank runs, and canonicalize arrows — one space around an inline
-//  `=>`, a four-space indent + single space for a continuation `=>` at line start.
+//  collapse blank runs, out-dent hand-indented top-level statements, and
+//  canonicalize arrows — one space around an inline `=>`, a four-space indent +
+//  single space for a continuation `=>` at line start. Template interiors and
+//  multi-line brace interiors are preserved verbatim.
 //
-//  Still out of scope (would need a full lexer): multi-line *brace* groups are
-//  not protected (their interior trailing whitespace / blank lines may be
-//  touched), and a stray `"` inside a comment fools the template matcher. Keep
-//  brace groups on one line where you can.
+//  Still out of scope (would need a full lexer): a stray `"` inside a `//`
+//  comment fools the template matcher, and nesting deeper than the brace-mask
+//  budget below leaves the over-budget interior unprotected.
 // ============================================================================
 
-// ── MASK ── protect template interiors so the tidies below never touch them ──
+// ── MASK TEMPLATES ── protect "…" interiors from the tidies below ────────────
 // 1. Neutralize escapes so every remaining `"` is a real template delimiter.
 {\\}[2] => "§"        // `\\`  → §  (a literal backslash pair)
 {\\}{\"} => "¤"       // `\"`  → ¤  (an escaped quote)
 // 2. Wrap each template in private brackets « » (captures multi-line templates).
 {\"}{!\"}[..]{\"} => "«{{$1}}»"
-// 3. Mask arrows inside a template (× a small budget; one per template per pass).
-//    The multi-char break !{»,=>} stops the run at the close bracket OR an arrow.
+// 3. Mask arrows inside a template (× budget; one per template per pass). The
+//    multi-char break !{»,=>} stops the run at the close bracket OR an arrow.
 {«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
 {«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
 {«}{!{»,=>}}[..]{=>} => "{{$0}}{{$1}}⟶"
@@ -39,12 +40,41 @@
 {«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
 {«}{!{»,\n}}[..]{\n} => "{{$0}}{{$1}}␤"
 
-// ── FORMAT ── safe line-local tidies (templates are masked away) ─────────────
+// ── MASK BRACE NEWLINES ── protect multi-line {…} interiors (inside-out) ──────
+// Each pair of passes masks one interior newline of an innermost brace (the
+// boundary !{\},\n} stops at the brace's own `}` because children are already
+// marked ⦃⦄), then marks any newline-free innermost brace ⦃…⦄ so its parent
+// becomes innermost next round. A top-level newline is never inside a `{`, so it
+// is left alone. (× a depth+newline budget.)
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+{\{}{!{\},\n}}[..]{\n} => "{{$0}}{{$1}}␤"
+{\{}{!{\{,\},\n}}[..]{\}} => "⦃{{$1}}⦄"
+// Restore brace marks: the tidies want real braces, only the newlines stay masked.
+{⦃} => "\{"
+{⦄} => "\}"
+
+// ── FORMAT ── safe line-local tidies (templates and brace bodies are masked) ──
 // Trim leading, then trailing, blank lines (and stray indent) of the whole file.
 {@^^}{{ ,\t,\n}}[1..] => ""
 {{ ,\t,\n}}[1..]{@$$} => "\n"
 // Strip trailing whitespace at the end of every line.
 {{ ,\t}}[1..]{\n} => "\n"
+// Out-dent a hand-indented top-level statement (a line-start run of whitespace
+// before a `{`). Brace bodies are masked, so this only sees real statement lines.
+{@^}{{ ,\t}}[1..]{\{} => "\{"
 // Canonical arrow spacing. An inline `=>` follows a step end (`}` `»` `]`, where
 // `»` is a masked template) — anchoring on that leaves a `=>` inside a comment
 // alone. A continuation `=>` at line start gets a four-space indent instead.
@@ -54,8 +84,8 @@
 {\n}[3..] => "\n\n"
 
 // ── RESTORE ── put the masked tokens back ────────────────────────────────────
+{␤} => "\n"           // masked newline (template or brace interior) → real `\n`
 {⟶} => "\=>"          // sentinel arrow → `=>`  (\= keeps phase0 from splitting)
-{␤} => "\n"
 {«} => "\""
 {»} => "\""
 {¤} => "\\\""         // ¤ → `\"`
