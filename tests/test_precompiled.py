@@ -67,14 +67,17 @@ def test_roundtrip_through_file(tmp_path):
 
 
 def test_dump_excludes_engine_objects(tmp_path):
-    # The artifact holds only the AST — the lowered program is not serialised, so
-    # the compile cache is empty after load and recompiles lazily on first use.
+    # The artifact holds only the AST — the lowered program lives in the engine's
+    # Runtime, never on the nodes, so no node carries engine state and the loaded
+    # pipeline recompiles lazily on first use.
     pipe = precompiled.compile_pipeline(STATEMENTS)
-    precompiled.apply(pipe, "&")  # warm the compile cache
+    precompiled.apply(pipe, "&")  # warm the compile cache (now in the Runtime)
     art = tmp_path / "md.hmkc"
     precompiled.dump(pipe, art)
     loaded = precompiled.load(art)
-    assert all(tree._compiled is None for steps in loaded for tree in steps)
+    assert all(
+        not hasattr(tree, "_compiled") for steps in loaded for tree in steps
+    )  # the engine cache no longer rides on the AST
     assert precompiled.apply(loaded, "&") == "&amp;"  # still works (recompiles)
 
 

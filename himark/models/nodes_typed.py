@@ -43,7 +43,10 @@ CountSpec: TypeAlias = CountRange | CountSet | CountRefSpec
 # -----------------------------
 
 
-@dataclass(slots=True)
+# `weakref_slot` lets the engine's `Runtime` hold this node as a weak cache key:
+# the lowered-program cache lives off the AST now (see himark/engine/runtime.py),
+# so a node is purely data — no engine state rides on it.
+@dataclass(slots=True, weakref_slot=True)
 class RootNode:
     type: Literal["root"] = "root"
     children: list[Node] = field(default_factory=list)
@@ -52,11 +55,6 @@ class RootNode:
     # settles. A plain `=>` statement leaves it False. Excluded from equality (it
     # is a runner directive, not part of the matched shape).
     fixed_point: bool = field(default=False, compare=False)
-    # Engine compile cache: the lowered program and the backend that produced it
-    # (so a swapped backend recompiles). Excluded from equality/repr — pure
-    # memoization, tied to this tree's lifetime. Populated lazily by the engine.
-    _compiled: object = field(default=None, repr=False, compare=False)
-    _compiled_by: object = field(default=None, repr=False, compare=False)
 
 
 @dataclass(slots=True)

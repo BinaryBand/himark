@@ -35,6 +35,7 @@ from himark.engine.backend import (
     PythonEngine,
     RustEngine,
 )
+from himark.engine.runtime import Runtime
 from himark.models import nodes_typed as t
 
 __all__ = [
@@ -48,47 +49,38 @@ __all__ = [
     "PythonEngine",
     "RustEngine",
     "RUST_AVAILABLE",
+    "Runtime",
     "set_backend",
     "get_backend",
     "using_backend",
 ]
 
-# The active matching backend. Swap it (e.g. for a native engine) via
-# set_backend; orchestration below is backend-agnostic.
-_backend: Engine = PythonEngine()
+# The default runtime owns the active matching backend and the per-tree compile
+# cache. Swap the backend via set_backend / using_backend; orchestration below is
+# backend-agnostic. (Construct a fresh `Runtime` for an isolated backend + cache.)
+_runtime = Runtime()
 
 
 def set_backend(engine: Engine) -> None:
     """Install `engine` as the matching backend for all subsequent calls."""
-    global _backend
-    _backend = engine
+    _runtime.backend = engine
 
 
 def get_backend() -> Engine:
     """The currently installed matching backend."""
-    return _backend
+    return _runtime.backend
 
 
 @contextmanager
 def using_backend(engine: Engine) -> Iterator[Engine]:
     """Install `engine` for the duration of the `with` block, restoring the
     previously installed backend on exit (even on error)."""
-    prev = get_backend()
-    set_backend(engine)
+    prev = _runtime.backend
+    _runtime.backend = engine
     try:
         yield engine
     finally:
-        set_backend(prev)
-
-
-def _compiled(tree: t.RootNode) -> object:
-    """The tree's lowered program, compiled once per backend and cached on the
-    node — `_transform` re-runs the same nested query across every branch, so
-    recompiling each time is pure waste."""
-    if tree._compiled is None or tree._compiled_by is not _backend:
-        tree._compiled = _backend.compile(tree)
-        tree._compiled_by = _backend
-    return tree._compiled
+        _runtime.backend = prev
 
 
 def find_matches(
@@ -96,7 +88,7 @@ def find_matches(
 ) -> list[Match]:
     """Compile a pattern tree and return all its matches in target. `stages` are
     the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve."""
-    return _backend.run(_compiled(tree), target, stages)
+    return _runtime.find_matches(tree, target, stages)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:

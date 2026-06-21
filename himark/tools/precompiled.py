@@ -223,13 +223,9 @@ def _splice_to_fixed_point(steps: list[t.RootNode], text: str) -> str:
 def dump(pipeline: Pipeline, path: str | Path) -> None:
     """Write `pipeline` to a portable artifact at `path`.
 
-    The per-node compile cache is cleared first, so the file holds only the AST —
-    no lowered matchers, no backend objects — keeping it small and recompiling
-    lazily on load."""
-    for steps in pipeline:
-        for tree in steps:
-            tree._compiled = None
-            tree._compiled_by = None
+    The AST carries no engine state — the lowered-program cache lives in the
+    engine's `Runtime`, not on the nodes — so the file holds only the AST (no
+    matchers, no backend objects), stays small, and recompiles lazily on load."""
     body = pickle.dumps(pipeline, protocol=pickle.HIGHEST_PROTOCOL)
     Path(path).write_bytes(_MAGIC + bytes([_VERSION]) + body)
 
