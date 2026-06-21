@@ -52,25 +52,32 @@ def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.Semanti
     return node
 
 
-def _resolve_brace_node(child: t.BraceGroupNode) -> None:
-    """Resolve a brace group in place: a `{…}` is an alphabet expression unless
-    its interior concatenates constructs, in which case it is a grouping brace
-    (`SequenceNode`). Any `[count]` suffix is parsed too."""
+def _resolved_brace(child: t.BraceGroupNode) -> t.BraceGroupNode:
+    """Resolve a brace group into a **fresh** node, leaving `child` untouched: a
+    `{…}` is an alphabet expression unless its interior concatenates constructs, in
+    which case it is a grouping brace (`SequenceNode`). Any `[count]` suffix is
+    parsed too."""
     if is_sequence_brace(child.content):
-        child.semantic = _resolve_sequence_brace(child.content)
+        semantic: t.SemanticNode = _resolve_sequence_brace(child.content)
     else:
-        child.semantic = _resolve_brace(child.content)
-    if child.count_src is not None:
-        child.count = parse_count(child.count_src)
-        child.count_src = None
+        semantic = _resolve_brace(child.content)
+    count, count_src = child.count, child.count_src
+    if count_src is not None:
+        count, count_src = parse_count(count_src), None
+    return t.BraceGroupNode(
+        content=child.content, semantic=semantic, count=count, count_src=count_src
+    )
 
 
 def parse(node: t.RootNode) -> t.RootNode:
-    """Walk the phase2 tree and resolve each brace group in place."""
-    for child in node.children:
-        if isinstance(child, t.BraceGroupNode):
-            _resolve_brace_node(child)
-    return node
+    """Resolve every brace group, returning a **new** tree — the phase-2 input is
+    left unmodified, so resolution is a pure function of the structural tree.
+    (Leaf nodes are immutable and carried through as-is.)"""
+    children = [
+        _resolved_brace(c) if isinstance(c, t.BraceGroupNode) else c
+        for c in node.children
+    ]
+    return t.RootNode(children=children, fixed_point=node.fixed_point)
 
 
 # ── Grouping brace (concatenation vs. alphabet) ───────────────────────────────
