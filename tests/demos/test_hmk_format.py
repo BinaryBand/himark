@@ -1,4 +1,4 @@
-"""The HMK-self-hosted cosmetic tidy (`himark/scripts/fmt.hmk`).
+"""The HMK-self-hosted cosmetic tidy (`himark/scripts/hmk_format.hmk`).
 
 A dogfooding experiment written entirely in HMK. We pin the line-local tidies
 (trailing whitespace, blank runs, file edges, arrow spacing) and that they stay
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from himark.tools import precompiled
 
-FMT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "fmt.hmk"
+FMT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "hmk_format.hmk"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(FMT))
 
 

@@ -55,7 +55,8 @@ def _head9(t: str) -> str:
 PIPELINES = [
     ("btc_extract", "btc_extract.hmk", "addresses.txt", _whole),
     ("bubble_sort", "bubble_sort.hmk", "numbers.txt", _whole),
-    ("fmt", "fmt.hmk", "sample.hmk", _whole),
+    ("hmk_format", "hmk_format.hmk", "sample.hmk", _whole),
+    ("md_format", "md_format.hmk", "messy.md", _whole),
     ("html_format", "html_format.hmk", "sample.html", _strip),
     ("md_html", "md_html.hmk", "sample.md", _whole),
     ("dedup", "dedup.hmk", "podcasts.csv", _head9),

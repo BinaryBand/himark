@@ -1,8 +1,8 @@
 // ============================================================================
-//  fmt.hmk — a cosmetic tidy for .hmk scripts, written entirely in HMK.
+//  hmk_format.hmk — a cosmetic tidy for .hmk scripts, written entirely in HMK.
 //
 //  Run it like any pipeline:
-//      himark transpile messy.hmk --script himark/scripts/fmt.hmk --out clean.hmk
+//      himark transpile messy.hmk --script himark/scripts/hmk_format.hmk --out clean.hmk
 //
 //  HMK matches by shape with no nesting stack, so a naive formatter cannot tell a
 //  real `=>` arrow or a real line start from one living inside a "…" template or

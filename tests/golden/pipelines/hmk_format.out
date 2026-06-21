@@ -2,11 +2,10 @@
 
 // Simple formatting problems to fix:
 //  - trailing spaces at end of line
-{alpha}   => "extra-space"   
+{alpha} => "extra-space"
 //  - mixed tabs and spaces before arrow
- {beta}	=> "tab-after-space"
+{beta} => "tab-after-space"
 //  - multiple blank lines below
-
 
 // Complex cases to trip the formatter:
 //  - a template containing => and braces inside quotes
@@ -16,7 +15,7 @@
 
 {!\ }[1..] => "<w>{{.}}</w>"
 // continuation that has inconsistent indent
-=>    {next}
+    => {next}
 
 // Nested braces across lines (should be treated as one brace group):
 {a,{b,c,
@@ -36,10 +35,10 @@
 
 // Another chain with messy spacing
 {a}{b}{c} => "x"
-   =>    {d}
+    => {d}
 
 // A multi-step chain with no spaces around the arrows (each gets one).
-{a}=>{b}=>"squished"
+{a} => {b} => "squished"
 
 // An arrow inside a comment keeps its spacing:  a  =>  b  (left untouched).
 
@@ -53,4 +52,4 @@ line three"
 
 // A hand-indented top-level statement IS out-dented now: the brace-newline mask
 // lets fmt tell a real statement line from a brace-continuation line.
-   {indented} => "outdented"
+{indented} => "outdented"
