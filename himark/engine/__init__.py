@@ -37,10 +37,13 @@ from himark.engine.backend import (
 )
 from himark.engine.runtime import Runtime
 from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
 
 __all__ = [
     "execute",
     "splice",
+    "splice_to_fixed_point",
+    "run_pipeline",
     "deltas",
     "find",
     "find_matches",
@@ -181,3 +184,41 @@ def splice(steps: list[t.RootNode], target: str) -> str:
         last = end
     out.append(target[last:])
     return "".join(out)
+
+
+# ── Pipelines ─────────────────────────────────────────────────────────────────
+
+
+def splice_to_fixed_point(steps: list[t.RootNode], target: str) -> str:
+    """Re-splice `steps` over `target` until a pass changes nothing (the fixed
+    point) — the in-place form of a `while` loop, for a `<=` statement. A
+    contracting rule settles in a few passes per unit of input, so the guards only
+    trip on a rule that does not converge (a `CompileError`): a pass count (catches
+    oscillators) and a size bound (catches a grower like `{a} <= "aa"`)."""
+    text = target
+    cap = 8 * len(text) + 1024
+    size_limit = 64 * len(text) + 65536
+    for _ in range(cap):
+        nxt = splice(steps, text)
+        if nxt == text:
+            return text
+        if len(nxt) > size_limit:
+            break
+        text = nxt
+    raise CompileError(
+        "a `<=` statement did not settle: the rule is not contracting toward a "
+        "fixed point (it grows or oscillates). Use `=>` for a single pass."
+    )
+
+
+def run_pipeline(pipeline: list[list[t.RootNode]], target: str) -> str:
+    """Run a pipeline of statements over `target`, each spliced in turn, returning
+    the transformed document. A `<=` (fixed-point) statement — flagged on its first
+    step — is re-spliced until the text stops changing (`splice_to_fixed_point`)."""
+    text = target
+    for steps in pipeline:
+        if steps and steps[0].fixed_point:
+            text = splice_to_fixed_point(steps, text)
+        else:
+            text = splice(steps, text)
+    return text

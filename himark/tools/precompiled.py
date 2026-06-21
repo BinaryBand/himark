@@ -27,9 +27,8 @@ from pathlib import Path
 import typer
 
 from himark import parser
-from himark.engine import splice
+from himark.engine import run_pipeline
 from himark.models import nodes_typed as t
-from himark.models.exceptions import CompileError
 
 _MAGIC = b"HMKC\x00"
 _VERSION = 1
@@ -188,36 +187,11 @@ def _strip_comment(line: str) -> str:
 
 
 def apply(pipeline: Pipeline, text: str) -> str:
-    """Run each statement's in-place splice over `text` in turn, returning the
-    transformed document. The compile cache warms on the first document. A
-    `<=` (fixed-point) statement is re-spliced until the text stops changing."""
-    for steps in pipeline:
-        if steps and steps[0].fixed_point:
-            text = _splice_to_fixed_point(steps, text)
-        else:
-            text = splice(steps, text)
-    return text
-
-
-def _splice_to_fixed_point(steps: list[t.RootNode], text: str) -> str:
-    """Re-splice `steps` over `text` until a pass changes nothing (the fixed
-    point). A contracting rule settles in at most a few passes per unit of input,
-    so the guards only trip on a rule that does not converge — a `CompileError`.
-    Two guards: a pass count (catches oscillators), and a size bound (catches a
-    grower like `{a} <= "aa"` before it exhausts memory)."""
-    cap = 8 * len(text) + 1024
-    size_limit = 64 * len(text) + 65536
-    for _ in range(cap):
-        nxt = splice(steps, text)
-        if nxt == text:
-            return text
-        if len(nxt) > size_limit:
-            break
-        text = nxt
-    raise CompileError(
-        "a `<=` statement did not settle: the rule is not contracting toward a "
-        "fixed point (it grows or oscillates). Use `=>` for a single pass."
-    )
+    """Run the compiled `pipeline` over `text`, returning the transformed document
+    — a thin wrapper over the engine's executor (the language's pipeline and
+    fixed-point semantics live in `engine`, not here). The compile cache warms on
+    the first document."""
+    return run_pipeline(pipeline, text)
 
 
 def dump(pipeline: Pipeline, path: str | Path) -> None:
