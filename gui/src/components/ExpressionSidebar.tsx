@@ -4,19 +4,14 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
-import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
-import ListSubheader from "@mui/material/ListSubheader";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
 import type { Expression, Project } from "../types";
-
-const MONO = '"SFMono-Regular", Menlo, Consolas, monospace';
+import { SavedItemsMenu } from "./SavedItemsMenu";
 
 interface Props {
   expressions: Expression[];
@@ -90,7 +85,7 @@ export function ExpressionSidebar({
                 maxRows={8}
                 size="small"
                 fullWidth
-                slotProps={{ input: { sx: { fontFamily: MONO, fontSize: 13 } } }}
+                slotProps={{ input: { sx: { fontFamily: "var(--mono)", fontSize: 13 } } }}
                 sx={{ opacity: e.enabled ? 1 : 0.5 }}
               />
               <Tooltip title="Remove">
@@ -109,101 +104,16 @@ export function ExpressionSidebar({
         </Button>
       </Box>
 
-      <ProjectMenu
+      <SavedItemsMenu
         anchorEl={menuAnchor}
         onClose={() => setMenuAnchor(null)}
-        projectName={projectName}
-        savedProjects={savedProjects}
-        defaultProjects={defaultProjects}
-        onSaveProject={onSaveProject}
-        onLoadProject={onLoadProject}
-        onDeleteProject={onDeleteProject}
+        saved={savedProjects}
+        defaults={defaultProjects}
+        defaultsLabel="Default scripts"
+        onPick={onLoadProject}
+        onDelete={onDeleteProject}
+        saveAs={{ initial: projectName, onSave: onSaveProject }}
       />
     </Box>
-  );
-}
-
-interface MenuProps {
-  anchorEl: HTMLElement | null;
-  onClose: () => void;
-  projectName: string;
-  savedProjects: Project[];
-  defaultProjects: Project[];
-  onSaveProject: (name: string) => void;
-  onLoadProject: (project: Project) => void;
-  onDeleteProject: (name: string) => void;
-}
-
-function ProjectMenu({
-  anchorEl,
-  onClose,
-  projectName,
-  savedProjects,
-  defaultProjects,
-  onSaveProject,
-  onLoadProject,
-  onDeleteProject,
-}: MenuProps) {
-  const [name, setName] = useState(projectName);
-
-  return (
-    <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={onClose}>
-      <Box sx={{ px: 2, py: 1, display: "flex", gap: 1 }}>
-        <TextField
-          size="small"
-          label="Save as"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.stopPropagation()}
-        />
-        <Button
-          variant="contained"
-          disabled={!name.trim()}
-          onClick={() => {
-            onSaveProject(name.trim());
-            onClose();
-          }}
-        >
-          Save
-        </Button>
-      </Box>
-
-      {savedProjects.length > 0 && <ListSubheader>Saved</ListSubheader>}
-      {savedProjects.map((p) => (
-        <MenuItem
-          key={`s-${p.name}`}
-          onClick={() => {
-            onLoadProject(p);
-            onClose();
-          }}
-        >
-          <Box sx={{ flex: 1, fontFamily: MONO }}>{p.name}</Box>
-          <IconButton
-            size="small"
-            onClick={(ev) => {
-              ev.stopPropagation();
-              onDeleteProject(p.name);
-            }}
-          >
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </MenuItem>
-      ))}
-
-      <Divider />
-      <ListSubheader>Default scripts</ListSubheader>
-      {defaultProjects.map((p) => (
-        <MenuItem
-          key={`d-${p.name}`}
-          sx={{ fontFamily: MONO }}
-          onClick={() => {
-            onLoadProject(p);
-            onClose();
-          }}
-        >
-          {p.name}
-        </MenuItem>
-      ))}
-    </Menu>
   );
 }

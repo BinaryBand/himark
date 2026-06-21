@@ -19,41 +19,31 @@ function write<T>(key: string, value: Record<string, T>): void {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-export function listProjects(): Project[] {
-  return Object.values(read<Project>(PROJECTS_KEY)).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+// A named-entry store keyed by `name`: list (sorted), upsert, and remove. Both
+// projects and test strings are exactly this, so they share one implementation.
+function listNamed<T extends { name: string }>(key: string): T[] {
+  return Object.values(read<T>(key)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function saveProject(project: Project): void {
-  const all = read<Project>(PROJECTS_KEY);
-  all[project.name] = project;
-  write(PROJECTS_KEY, all);
+function saveNamed<T extends { name: string }>(key: string, item: T): void {
+  const all = read<T>(key);
+  all[item.name] = item;
+  write(key, all);
 }
 
-export function deleteProject(name: string): void {
-  const all = read<Project>(PROJECTS_KEY);
+function deleteNamed(key: string, name: string): void {
+  const all = read<unknown>(key);
   delete all[name];
-  write(PROJECTS_KEY, all);
+  write(key, all);
 }
 
-export function listTestStrings(): TestString[] {
-  return Object.values(read<TestString>(TEST_STRINGS_KEY)).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-}
+export const listProjects = () => listNamed<Project>(PROJECTS_KEY);
+export const saveProject = (project: Project) => saveNamed(PROJECTS_KEY, project);
+export const deleteProject = (name: string) => deleteNamed(PROJECTS_KEY, name);
 
-export function saveTestString(ts: TestString): void {
-  const all = read<TestString>(TEST_STRINGS_KEY);
-  all[ts.name] = ts;
-  write(TEST_STRINGS_KEY, all);
-}
-
-export function deleteTestString(name: string): void {
-  const all = read<TestString>(TEST_STRINGS_KEY);
-  delete all[name];
-  write(TEST_STRINGS_KEY, all);
-}
+export const listTestStrings = () => listNamed<TestString>(TEST_STRINGS_KEY);
+export const saveTestString = (ts: TestString) => saveNamed(TEST_STRINGS_KEY, ts);
+export const deleteTestString = (name: string) => deleteNamed(TEST_STRINGS_KEY, name);
 
 // The open tabs persist as a whole (the working set), so a reload restores the
 // exact tabs and which one was active.

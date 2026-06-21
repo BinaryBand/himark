@@ -1,17 +1,16 @@
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import LibraryBooksIcon from "@mui/icons-material/LibraryBooks";
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import InputBase from "@mui/material/InputBase";
-import ListSubheader from "@mui/material/ListSubheader";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
 import { useState } from "react";
 import type { TestString, TestTab } from "../types";
+import { SavedItemsMenu } from "./SavedItemsMenu";
 
 interface Props {
   tabs: TestTab[];
@@ -21,6 +20,8 @@ interface Props {
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onLoad: (ts: TestString) => void;
+  onSaveActive: () => void;
+  onDeleteSaved: (name: string) => void;
   defaultTestStrings: TestString[];
   savedTests: TestString[];
 }
@@ -33,6 +34,8 @@ export function TestStringTabs({
   onClose,
   onRename,
   onLoad,
+  onSaveActive,
+  onDeleteSaved,
   defaultTestStrings,
   savedTests,
 }: Props) {
@@ -108,46 +111,30 @@ export function TestStringTabs({
       </Tabs>
 
       <Tooltip title="New test string">
-        <IconButton size="small" onClick={onAdd} sx={{ mx: 0.5 }}>
+        <IconButton size="small" onClick={onAdd} sx={{ ml: 0.5 }}>
           <AddIcon fontSize="small" />
         </IconButton>
       </Tooltip>
+      <Tooltip title="Save this test string">
+        <IconButton size="small" onClick={onSaveActive}>
+          <SaveOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
       <Tooltip title="Load a saved or default test string">
-        <IconButton
-          size="small"
-          onClick={(e) => setMenuAnchor(e.currentTarget)}
-          sx={{ mr: 0.5 }}
-        >
+        <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)} sx={{ mr: 0.5 }}>
           <LibraryBooksIcon fontSize="small" />
         </IconButton>
       </Tooltip>
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-        {savedTests.length > 0 && <ListSubheader>Saved</ListSubheader>}
-        {savedTests.map((t) => (
-          <MenuItem
-            key={`s-${t.name}`}
-            onClick={() => {
-              onLoad(t);
-              setMenuAnchor(null);
-            }}
-          >
-            {t.name}
-          </MenuItem>
-        ))}
-        <ListSubheader>Demo resources</ListSubheader>
-        {defaultTestStrings.map((t) => (
-          <MenuItem
-            key={`d-${t.name}`}
-            onClick={() => {
-              onLoad(t);
-              setMenuAnchor(null);
-            }}
-          >
-            {t.name}
-          </MenuItem>
-        ))}
-      </Menu>
+      <SavedItemsMenu
+        anchorEl={menuAnchor}
+        onClose={() => setMenuAnchor(null)}
+        saved={savedTests}
+        defaults={defaultTestStrings}
+        defaultsLabel="Demo resources"
+        onPick={onLoad}
+        onDelete={onDeleteSaved}
+      />
     </Box>
   );
 }
