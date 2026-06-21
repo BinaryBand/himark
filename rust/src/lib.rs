@@ -18,6 +18,7 @@ use pyo3::prelude::*;
 
 mod matcher;
 mod program;
+pub mod parser;
 
 use program::Element;
 
@@ -47,9 +48,16 @@ fn compile(program_json: &str) -> PyResult<Program> {
     Ok(Program { elements })
 }
 
+/// Parse a raw HMK statement, returning `[RootNode, ...]` as a JSON string.
+#[pyfunction]
+fn parse(source: &str) -> PyResult<String> {
+    parser::parse(source).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+}
+
 #[pymodule]
 fn himark_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile, m)?)?;
+    m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_class::<Program>()?;
     Ok(())
 }
