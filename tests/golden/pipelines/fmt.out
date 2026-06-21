@@ -1,0 +1,55 @@
+// A deliberately messy script for fmt.hmk to tidy.
+
+// Simple formatting problems to fix:
+//  - trailing spaces at end of line
+{alpha} => "extra-space"
+//  - mixed tabs and spaces before arrow
+{beta} => "tab-after-space"
+//  - multiple blank lines below
+
+// Complex cases to trip the formatter:
+//  - a template containing => and braces inside quotes
+//  - a multi-line brace with internal => that should not be seen as a step
+//  - triple-backtick fenced block that contains HMK-like tokens
+//  - escaped quotes and backslashes inside templates
+
+{!\ }[1..] => "<w>{{.}}</w>"
+// continuation that has inconsistent indent
+    => {next}
+
+// Nested braces across lines (should be treated as one brace group):
+{a,{b,c,
+    {d,e}
+}}[1..] => "braced"
+
+// A template that contains a literal => and braces — must remain intact.
+{x} => "This is a template with an arrow => and a brace { not closed"
+
+// Triple-backtick fence containing HMK-like content (should be left alone)
+{```}
+{foo}{bar} => "<p>{{.}}</p>"
+```
+
+// Escapes and quotes inside templates
+{z} => "He said \"=> not a step\" and a backslash \\\""
+
+// Another chain with messy spacing
+{a}{b}{c} => "x"
+    => {d}
+
+// A multi-step chain with no spaces around the arrows (each gets one).
+{a} => {b} => "squished"
+
+// An arrow inside a comment keeps its spacing:  a  =>  b  (left untouched).
+
+// A pattern matching the literal braces { and } via the \{ \} escapes.
+{\{,\}}[1..] => "braces"
+
+// A multi-line template keeps its interior whitespace verbatim (masking):
+{m} => "line one
+    indented body
+line three"
+
+// A hand-indented top-level statement IS out-dented now: the brace-newline mask
+// lets fmt tell a real statement line from a brace-continuation line.
+{indented} => "outdented"

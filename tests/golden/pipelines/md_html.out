@@ -1,0 +1,29 @@
+<h1>Project Marky</h1>
+
+A small <strong>Markdown</strong> demo for the <code>md_html.hmk</code> transpiler.
+
+<h2>Features</h2>
+
+<ul><li>Headings and <em>emphasis</em></li>
+<li>Inline <code>code</code> spans</li>
+<li><a href="https://example.com">Links</a> and lists</li>
+</ul>
+<h3>Ordered</h3>
+
+<ol><li>first</li>
+<li>second</li>
+<li>third</li>
+</ol>
+<blockquote>A blockquote with a <strong>bold</strong> word. 
+</blockquote>
+<table><tr><td>Feature</td><td>Status</td></tr>
+<tr><td>Tables</td><td>works</td></tr>
+<tr><td>Code</td><td>masked</td></tr>
+</table>
+<hr/>
+
+<pre><code class="language-python"># not a heading; **not** emphasis, a_b stays a_b
+def hello(name):
+    return f"hi {name}"  # [not](a-link)</code></pre>
+
+Done with <code>**literal**</code> markdown left intact.

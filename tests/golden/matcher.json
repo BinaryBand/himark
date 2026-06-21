@@ -1,0 +1,1220 @@
+{
+  "char_range_run": {
+    "pattern": "{a..z}[1..]",
+    "text": "hello world 42",
+    "matches": [
+      {
+        "text": "h",
+        "span": [
+          0,
+          1
+        ],
+        "captures": [
+          {
+            "text": "h",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "h"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "e",
+        "span": [
+          1,
+          2
+        ],
+        "captures": [
+          {
+            "text": "e",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "e"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "ll",
+        "span": [
+          2,
+          4
+        ],
+        "captures": [
+          {
+            "text": "ll",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "l",
+              "l"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "o",
+        "span": [
+          4,
+          5
+        ],
+        "captures": [
+          {
+            "text": "o",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "o"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "w",
+        "span": [
+          6,
+          7
+        ],
+        "captures": [
+          {
+            "text": "w",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "w"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "o",
+        "span": [
+          7,
+          8
+        ],
+        "captures": [
+          {
+            "text": "o",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "o"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "r",
+        "span": [
+          8,
+          9
+        ],
+        "captures": [
+          {
+            "text": "r",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "r"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "l",
+        "span": [
+          9,
+          10
+        ],
+        "captures": [
+          {
+            "text": "l",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "l"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "d",
+        "span": [
+          10,
+          11
+        ],
+        "captures": [
+          {
+            "text": "d",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "d"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "het_digit_run": {
+    "pattern": "{{@d}}[1..]",
+    "text": "ab123cd45ef",
+    "matches": [
+      {
+        "text": "123",
+        "span": [
+          2,
+          5
+        ],
+        "captures": [
+          {
+            "text": "123",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "1",
+              "2",
+              "3"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "45",
+        "span": [
+          7,
+          9
+        ],
+        "captures": [
+          {
+            "text": "45",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "4",
+              "5"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "value_bound": {
+    "pattern": "{0:@d:255}",
+    "text": "go 42 200 999 7 here",
+    "matches": [
+      {
+        "text": "42",
+        "span": [
+          3,
+          5
+        ],
+        "captures": [
+          {
+            "text": "42",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "42"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "200",
+        "span": [
+          6,
+          9
+        ],
+        "captures": [
+          {
+            "text": "200",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "200"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "99",
+        "span": [
+          10,
+          12
+        ],
+        "captures": [
+          {
+            "text": "99",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "99"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "9",
+        "span": [
+          12,
+          13
+        ],
+        "captures": [
+          {
+            "text": "9",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "9"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "7",
+        "span": [
+          14,
+          15
+        ],
+        "captures": [
+          {
+            "text": "7",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "7"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "dyn_value_range": {
+    "pattern": "{{@d}}[1..]\\,{0:@d:$0}",
+    "text": "9,4 and 3,7",
+    "matches": []
+  },
+  "union_strings": {
+    "pattern": "{cat,dog}",
+    "text": "a dog and a cat",
+    "matches": [
+      {
+        "text": "dog",
+        "span": [
+          2,
+          5
+        ],
+        "captures": [
+          {
+            "text": "dog",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "dog"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "cat",
+        "span": [
+          12,
+          15
+        ],
+        "captures": [
+          {
+            "text": "cat",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "cat"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "congruence_fold": {
+    "pattern": "{{a,A},{c,C}}[2]",
+    "text": "aA Cc xx aa Ca",
+    "matches": [
+      {
+        "text": "aA",
+        "span": [
+          0,
+          2
+        ],
+        "captures": [
+          {
+            "text": "aA",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "a",
+              "A"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "Cc",
+        "span": [
+          3,
+          5
+        ],
+        "captures": [
+          {
+            "text": "Cc",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "C",
+              "c"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "aa",
+        "span": [
+          9,
+          11
+        ],
+        "captures": [
+          {
+            "text": "aa",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "a",
+              "a"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "back_ref_repeat": {
+    "pattern": "{abc}{$0}[0..]",
+    "text": "abcabcabc and abc",
+    "matches": [
+      {
+        "text": "abcabcabc",
+        "span": [
+          0,
+          9
+        ],
+        "captures": [
+          {
+            "text": "abc",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "abc"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "abcabc",
+            "span": [
+              3,
+              9
+            ],
+            "reps": [
+              "abc",
+              "abc"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "abc",
+        "span": [
+          14,
+          17
+        ],
+        "captures": [
+          {
+            "text": "abc",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "abc"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "",
+            "span": [
+              3,
+              3
+            ],
+            "reps": [],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "count_ref": {
+    "pattern": "{a}[2..]{-}[#0]",
+    "text": "aaa--- then aa--",
+    "matches": [
+      {
+        "text": "aaa---",
+        "span": [
+          0,
+          6
+        ],
+        "captures": [
+          {
+            "text": "aaa",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "a",
+              "a",
+              "a"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "---",
+            "span": [
+              3,
+              6
+            ],
+            "reps": [
+              "-",
+              "-",
+              "-"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "aa--",
+        "span": [
+          12,
+          16
+        ],
+        "captures": [
+          {
+            "text": "aa",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "a",
+              "a"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "--",
+            "span": [
+              2,
+              4
+            ],
+            "reps": [
+              "-",
+              "-"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "complement_break": {
+    "pattern": "{!{x,y}}[1..]",
+    "text": "abxcdyef",
+    "matches": [
+      {
+        "text": "ab",
+        "span": [
+          0,
+          2
+        ],
+        "captures": [
+          {
+            "text": "ab",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "a",
+              "b"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "cd",
+        "span": [
+          3,
+          5
+        ],
+        "captures": [
+          {
+            "text": "cd",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "c",
+              "d"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "ef",
+        "span": [
+          6,
+          8
+        ],
+        "captures": [
+          {
+            "text": "ef",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "e",
+              "f"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "multichar_break": {
+    "pattern": "{<!--}{!{-->}}[1..]{-->}",
+    "text": "<!--note-->tail",
+    "matches": [
+      {
+        "text": "<!--note-->",
+        "span": [
+          0,
+          11
+        ],
+        "captures": [
+          {
+            "text": "<!--",
+            "span": [
+              0,
+              4
+            ],
+            "reps": [
+              "<!--"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "note",
+            "span": [
+              4,
+              8
+            ],
+            "reps": [
+              "n",
+              "o",
+              "t",
+              "e"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "-->",
+            "span": [
+              8,
+              11
+            ],
+            "reps": [
+              "-->"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "anchored_line": {
+    "pattern": "{@^}{!\\n}[1..]{\\n}",
+    "text": "one\ntwo\nthree\n",
+    "matches": [
+      {
+        "text": "one\n",
+        "span": [
+          0,
+          4
+        ],
+        "captures": [
+          {
+            "text": "one",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "o",
+              "n",
+              "e"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "\n",
+            "span": [
+              3,
+              4
+            ],
+            "reps": [
+              "\n"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "two\n",
+        "span": [
+          4,
+          8
+        ],
+        "captures": [
+          {
+            "text": "two",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "t",
+              "w",
+              "o"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "\n",
+            "span": [
+              3,
+              4
+            ],
+            "reps": [
+              "\n"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "three\n",
+        "span": [
+          8,
+          14
+        ],
+        "captures": [
+          {
+            "text": "three",
+            "span": [
+              0,
+              5
+            ],
+            "reps": [
+              "t",
+              "h",
+              "r",
+              "e",
+              "e"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "\n",
+            "span": [
+              5,
+              6
+            ],
+            "reps": [
+              "\n"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "value_range_uni": {
+    "pattern": "{aa..zz}",
+    "text": "  aa zz mid",
+    "matches": [
+      {
+        "text": "aa",
+        "span": [
+          2,
+          4
+        ],
+        "captures": [
+          {
+            "text": "aa",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "aa"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "zz",
+        "span": [
+          5,
+          7
+        ],
+        "captures": [
+          {
+            "text": "zz",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "zz"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "mi",
+        "span": [
+          8,
+          10
+        ],
+        "captures": [
+          {
+            "text": "mi",
+            "span": [
+              0,
+              2
+            ],
+            "reps": [
+              "mi"
+            ],
+            "alphabet": true,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  },
+  "grouping_subs": {
+    "pattern": "{of {black} {quartz}}",
+    "text": "of black quartz here",
+    "matches": [
+      {
+        "text": "of black quartz",
+        "span": [
+          0,
+          15
+        ],
+        "captures": [
+          {
+            "text": "of black quartz",
+            "span": [
+              0,
+              15
+            ],
+            "reps": [
+              "of black quartz"
+            ],
+            "alphabet": false,
+            "subs": [
+              {
+                "text": "black",
+                "span": [
+                  3,
+                  8
+                ],
+                "reps": [
+                  "black"
+                ]
+              },
+              {
+                "text": "quartz",
+                "span": [
+                  9,
+                  15
+                ],
+                "reps": [
+                  "quartz"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "captures_example": {
+    "pattern": "{#}[1..]{ }{Sphinx}{ }{of {black} {quartz}}",
+    "text": "### Sphinx of black quartz, judge my vow!",
+    "matches": [
+      {
+        "text": "### Sphinx of black quartz",
+        "span": [
+          0,
+          26
+        ],
+        "captures": [
+          {
+            "text": "###",
+            "span": [
+              0,
+              3
+            ],
+            "reps": [
+              "#",
+              "#",
+              "#"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": " ",
+            "span": [
+              3,
+              4
+            ],
+            "reps": [
+              " "
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "Sphinx",
+            "span": [
+              4,
+              10
+            ],
+            "reps": [
+              "Sphinx"
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": " ",
+            "span": [
+              10,
+              11
+            ],
+            "reps": [
+              " "
+            ],
+            "alphabet": false,
+            "subs": []
+          },
+          {
+            "text": "of black quartz",
+            "span": [
+              11,
+              26
+            ],
+            "reps": [
+              "of black quartz"
+            ],
+            "alphabet": false,
+            "subs": [
+              {
+                "text": "black",
+                "span": [
+                  14,
+                  19
+                ],
+                "reps": [
+                  "black"
+                ]
+              },
+              {
+                "text": "quartz",
+                "span": [
+                  20,
+                  26
+                ],
+                "reps": [
+                  "quartz"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "exclusion_range": {
+    "pattern": "{a..z,!{m..p}}[1..]",
+    "text": "abcmnopxyz",
+    "matches": [
+      {
+        "text": "a",
+        "span": [
+          0,
+          1
+        ],
+        "captures": [
+          {
+            "text": "a",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "a"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "b",
+        "span": [
+          1,
+          2
+        ],
+        "captures": [
+          {
+            "text": "b",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "b"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "c",
+        "span": [
+          2,
+          3
+        ],
+        "captures": [
+          {
+            "text": "c",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "c"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "x",
+        "span": [
+          7,
+          8
+        ],
+        "captures": [
+          {
+            "text": "x",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "x"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "y",
+        "span": [
+          8,
+          9
+        ],
+        "captures": [
+          {
+            "text": "y",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "y"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      },
+      {
+        "text": "z",
+        "span": [
+          9,
+          10
+        ],
+        "captures": [
+          {
+            "text": "z",
+            "span": [
+              0,
+              1
+            ],
+            "reps": [
+              "z"
+            ],
+            "alphabet": false,
+            "subs": []
+          }
+        ]
+      }
+    ]
+  }
+}
