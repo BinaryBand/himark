@@ -17,6 +17,7 @@ tagged object `{"k": ...}`; see the `serde` enums in `rust/src/program.rs`.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 
 from himark.engine.backend import _compile as c
 
@@ -26,8 +27,9 @@ class Unsupported(Exception):
     should fall back to the Python backend."""
 
 
-def to_json(elements: list) -> str:
-    """The Rust-program JSON for `elements`, or raise `Unsupported`."""
+def to_json(elements: Sequence) -> str:
+    """The Rust-program JSON for `elements` (a `Program`'s element sequence), or
+    raise `Unsupported`."""
     return json.dumps([_element(el) for el in elements], ensure_ascii=False)
 
 

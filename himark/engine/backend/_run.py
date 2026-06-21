@@ -10,7 +10,7 @@ appended to a flat list and rolled back by truncation when a branch fails.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from himark.engine.backend._compile import (
     AnchorEl,
@@ -20,6 +20,7 @@ from himark.engine.backend._compile import (
     Element,
     GroupEl,
     LiteralEl,
+    Program,
     Reps,
     SeqGroupEl,
     StageRefEl,
@@ -49,14 +50,15 @@ class _State:
 
 
 def find_matches(
-    pattern: list[Element], text: str, stages: tuple[Match, ...] = ()
+    program: Program, text: str, stages: tuple[Match, ...] = ()
 ) -> list[Match]:
     matches: list[Match] = []
+    elements = program.elements
     n = len(text)
     pos = 0
     while pos < n:
         state = _State(stages=stages)
-        end = _match_seq(pattern, 0, text, pos, state)
+        end = _match_seq(elements, 0, text, pos, state)
         if end is not None and end > pos:
             matches.append(_finalize(text, pos, end, state))
             pos = end
@@ -83,7 +85,7 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
 
 
 def _match_seq(
-    elements: list[Element], idx: int, text: str, pos: int, state: _State
+    elements: Sequence[Element], idx: int, text: str, pos: int, state: _State
 ) -> int | None:
     """Match `elements[idx:]` from `pos`, backtracking through each element's
     candidate ends. Returns the end of a full match, or None."""

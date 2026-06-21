@@ -58,9 +58,9 @@ class RustEngine:
         self._fallback = PythonEngine()
 
     def compile(self, tree: t.RootNode) -> object:
-        elements = compile_pattern(tree)
+        program = compile_pattern(tree)
         try:
-            program_json = to_json(elements)
+            program_json = to_json(program.elements)
         except Unsupported:
             return ("py", self._fallback.compile(tree))
         return ("rs", _rs.compile(program_json))

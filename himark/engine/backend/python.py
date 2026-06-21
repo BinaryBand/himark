@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from himark.engine.backend._compile import Element, compile_pattern
+from himark.engine.backend._compile import Program, compile_pattern
 from himark.engine.backend._run import find_matches as _run_find_matches
 from himark.engine.backend._types import Match
 from himark.engine.backend.interface import Engine
@@ -32,4 +32,4 @@ class PythonEngine:
     def run(
         self, compiled: object, text: str, stages: tuple[Match, ...] = ()
     ) -> list[Match]:
-        return _run_find_matches(cast("list[Element]", compiled), text, stages)
+        return _run_find_matches(cast("Program", compiled), text, stages)

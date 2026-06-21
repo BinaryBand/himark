@@ -592,6 +592,16 @@ Element = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class Program:
+    """The lowered, executable form of a pattern: the flat element sequence the
+    matcher runs. This is the single named boundary between compilation and
+    execution — the value the `Runtime` caches and a backend consumes. (A grouping
+    brace's interior keeps its own element list inside its `SeqGroupEl`.)"""
+
+    elements: tuple[Element, ...]
+
+
 def _ref_descriptor(ref: t.SemanticNode) -> tuple:
     """A loop-resolvable descriptor for a reference-endpoint node."""
     if isinstance(ref, t.BackRefNode):
@@ -627,8 +637,9 @@ def _reps(count: t.CountSpec | None) -> Reps:
     return Reps(min=count.min, max=count.max)
 
 
-def compile_pattern(root: t.RootNode) -> list[Element]:
-    """Compile a resolved pattern tree into a flat list of executable elements."""
+def _compile_elements(root: t.RootNode) -> list[Element]:
+    """Lower a resolved pattern tree into its flat list of executable elements (a
+    grouping brace's interior recurses, kept as a sub-list in its `SeqGroupEl`)."""
     elements: list[Element] = []
     for child in root.children:
         if isinstance(child, t.LeafNode):
@@ -641,7 +652,7 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
                 elements.append(AnchorEl(child.semantic.at))
                 continue
             if isinstance(child.semantic, t.SequenceNode):
-                sub = compile_pattern(t.RootNode(children=child.semantic.children))
+                sub = _compile_elements(t.RootNode(children=child.semantic.children))
                 elements.append(SeqGroupEl(sub, reps))
             elif isinstance(child.semantic, t.BackRefNode):
                 elements.append(BackRefEl(child.semantic.group, reps))
@@ -672,3 +683,9 @@ def compile_pattern(root: t.RootNode) -> list[Element]:
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements
+
+
+def compile_pattern(root: t.RootNode) -> Program:
+    """Compile a resolved pattern tree into a `Program` — the lowered, executable
+    intermediate representation that a backend runs."""
+    return Program(elements=tuple(_compile_elements(root)))
