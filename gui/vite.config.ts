@@ -54,6 +54,14 @@ function engineBridge(): Plugin {
 export default defineConfig({
   plugins: [react(), engineBridge()],
   server: {
+    // Pin the port so a Cloudflare tunnel can target a stable address; fail loud
+    // rather than drifting to a random port if it's taken. Override with PORT.
+    port: Number(process.env.PORT) || 5173,
+    strictPort: true,
+    // Listen on all interfaces and accept any Host header, so a tunnel (or a LAN
+    // device) reaching the dev server isn't rejected as a "blocked host".
+    host: true,
+    allowedHosts: true,
     // The default scripts and demo targets live outside gui/; let Vite read them
     // so `import.meta.glob` can bundle them as defaults.
     fs: { allow: [REPO_ROOT] },

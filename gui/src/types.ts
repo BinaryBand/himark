@@ -16,6 +16,13 @@ export interface TestString {
   text: string;
 }
 
+// An open test-string tab — the working set across the top of the app.
+export interface TestTab {
+  id: string;
+  name: string;
+  text: string;
+}
+
 export interface MatchSpan {
   start: number;
   end: number;

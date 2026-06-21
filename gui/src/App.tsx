@@ -1,7 +1,21 @@
+import MenuIcon from "@mui/icons-material/Menu";
+import AppBar from "@mui/material/AppBar";
+import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
+import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Toolbar from "@mui/material/Toolbar";
+import Typography from "@mui/material/Typography";
+import useMediaQuery from "@mui/material/useMediaQuery";
+import { useTheme } from "@mui/material/styles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { runEngine } from "./api";
+import { ExpressionSidebar } from "./components/ExpressionSidebar";
+import { FindResults } from "./components/FindResults";
 import { HighlightedInput } from "./components/HighlightedInput";
-import { SaveLoadMenu } from "./components/SaveLoadMenu";
+import { TestStringTabs } from "./components/TestStringTabs";
 import { defaultProjects, defaultTestStrings } from "./defaults";
 import * as store from "./storage";
 import {
@@ -11,29 +25,50 @@ import {
   type Project,
   type RunResult,
   type TestString,
+  type TestTab,
 } from "./types";
 
-const STARTER_TARGET = defaultTestStrings[0]?.text ?? "type a test string here…\n";
+const SIDEBAR_WIDTH = 320;
+
+function initialTabs(): { tabs: TestTab[]; activeId: string } {
+  const saved = store.loadTabs();
+  if (saved) return saved;
+  const first = defaultTestStrings[0];
+  const tab: TestTab = {
+    id: newId(),
+    name: first?.name ?? "scratch",
+    text: first?.text ?? "",
+  };
+  return { tabs: [tab], activeId: tab.id };
+}
 
 export function App() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const [mode, setMode] = useState<Mode>("execute");
   const [expressions, setExpressions] = useState<Expression[]>([
     { id: newId(), text: '{@^}{-,*,_}[3..]{@$} => "<hr/>"', enabled: true },
   ]);
-  const [selectedId, setSelectedId] = useState<string>("");
   const [projectName, setProjectName] = useState("untitled");
-  const [target, setTarget] = useState(STARTER_TARGET);
-  const [testName, setTestName] = useState(defaultTestStrings[0]?.name ?? "scratch");
-  const [result, setResult] = useState<RunResult>({});
 
-  // Re-list saved items after every save/delete so the menus stay current.
+  const seed = useMemo(initialTabs, []);
+  const [tabs, setTabs] = useState<TestTab[]>(seed.tabs);
+  const [activeId, setActiveId] = useState(seed.activeId);
+
+  const [result, setResult] = useState<RunResult>({});
   const [savedTick, setSavedTick] = useState(0);
   const savedProjects = useMemo(() => store.listProjects(), [savedTick]);
   const savedTests = useMemo(() => store.listTestStrings(), [savedTick]);
 
-  const selected = expressions.find((e) => e.id === selectedId) ?? expressions[0];
+  const activeTab = tabs.find((t) => t.id === activeId) ?? tabs[0];
+  const target = activeTab?.text ?? "";
 
-  // Debounced run whenever the inputs change.
+  // Persist the open tabs (the working set) on every change.
+  useEffect(() => store.saveTabs(tabs, activeId), [tabs, activeId]);
+
+  // Debounced engine run whenever the inputs change.
   const timer = useRef<number>();
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -44,171 +79,210 @@ export function App() {
     return () => window.clearTimeout(timer.current);
   }, [mode, expressions, target]);
 
-  // ── expression list ops ──────────────────────────────────────────────────
+  // ── expressions ───────────────────────────────────────────────────────────
   const updateExpr = (id: string, patch: Partial<Expression>) =>
     setExpressions((xs) => xs.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-  const addExpr = () => {
-    const e = { id: newId(), text: "{.}", enabled: true };
-    setExpressions((xs) => [...xs, e]);
-    setSelectedId(e.id);
-  };
+  const addExpr = () =>
+    setExpressions((xs) => [...xs, { id: newId(), text: "{.}", enabled: true }]);
   const removeExpr = (id: string) =>
     setExpressions((xs) => xs.filter((e) => e.id !== id));
 
-  // ── project + test string load/save ──────────────────────────────────────
   const loadProject = (p: Project) => {
-    const exprs = p.expressions.map((e) => ({ ...e, id: newId() }));
-    setExpressions(exprs);
-    setSelectedId(exprs[0]?.id ?? "");
+    setExpressions(p.expressions.map((e) => ({ ...e, id: newId() })));
     setProjectName(p.name);
   };
-  const loadTest = (t: TestString) => {
-    setTarget(t.text);
-    setTestName(t.name);
+
+  // ── test-string tabs ──────────────────────────────────────────────────────
+  const setActiveText = (text: string) =>
+    setTabs((ts) => ts.map((t) => (t.id === activeId ? { ...t, text } : t)));
+
+  const addTab = (tab?: TestTab) => {
+    const next = tab ?? { id: newId(), name: "untitled", text: "" };
+    setTabs((ts) => [...ts, next]);
+    setActiveId(next.id);
   };
 
-  const projectItems = [
-    ...defaultProjects.map((p) => ({ name: p.name, deletable: false })),
-    ...savedProjects.map((p) => ({ name: p.name, deletable: true })),
-  ];
-  const testItems = [
-    ...defaultTestStrings.map((t) => ({ name: t.name, deletable: false })),
-    ...savedTests.map((t) => ({ name: t.name, deletable: true })),
-  ];
+  const closeTab = (id: string) =>
+    setTabs((ts) => {
+      const remaining = ts.filter((t) => t.id !== id);
+      if (remaining.length === 0) {
+        const fresh = { id: newId(), name: "untitled", text: "" };
+        setActiveId(fresh.id);
+        return [fresh];
+      }
+      if (id === activeId) setActiveId(remaining[remaining.length - 1].id);
+      return remaining;
+    });
 
-  const matches = result.matches ?? [];
+  const renameTab = (id: string, name: string) =>
+    setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, name } : t)));
+
+  const loadTestString = (ts: TestString) =>
+    addTab({ id: newId(), name: ts.name, text: ts.text });
+
+  // ── render helpers ─────────────────────────────────────────────────────────
   const count = result.count ?? 0;
+  const matches = result.matches ?? [];
+
+  const sidebar = (
+    <ExpressionSidebar
+      expressions={expressions}
+      projectName={projectName}
+      savedProjects={savedProjects}
+      defaultProjects={defaultProjects}
+      onChange={updateExpr}
+      onAdd={addExpr}
+      onRemove={removeExpr}
+      onSaveProject={(name) => {
+        store.saveProject({ name, expressions });
+        setProjectName(name);
+        setSavedTick((t) => t + 1);
+      }}
+      onLoadProject={(p) => {
+        loadProject(p);
+        setDrawerOpen(false);
+      }}
+      onDeleteProject={(name) => {
+        store.deleteProject(name);
+        setSavedTick((t) => t + 1);
+      }}
+    />
+  );
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <h1 className="brand">Himark Tester</h1>
-        <div className="modes">
-          {(["find", "execute"] as Mode[]).map((m) => (
-            <button
-              key={m}
-              className={`mode-btn ${mode === m ? "active" : ""}`}
-              onClick={() => setMode(m)}
-            >
-              {m[0].toUpperCase() + m.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="topbar-menus">
-          <SaveLoadMenu
-            label={`Project: ${projectName}`}
-            items={projectItems}
-            onSave={(name) => {
-              store.saveProject({ name, expressions });
-              setProjectName(name);
-              setSavedTick((t) => t + 1);
-            }}
-            onLoad={(name) => {
-              const p =
-                savedProjects.find((x) => x.name === name) ??
-                defaultProjects.find((x) => x.name === name);
-              if (p) loadProject(p);
-            }}
-            onDelete={(name) => {
-              store.deleteProject(name);
-              setSavedTick((t) => t + 1);
-            }}
-            defaultName={projectName}
-          />
-          <SaveLoadMenu
-            label={`Test: ${testName}`}
-            items={testItems}
-            onSave={(name) => {
-              store.saveTestString({ name, text: target });
-              setTestName(name);
-              setSavedTick((t) => t + 1);
-            }}
-            onLoad={(name) => {
-              const t =
-                savedTests.find((x) => x.name === name) ??
-                defaultTestStrings.find((x) => x.name === name);
-              if (t) loadTest(t);
-            }}
-            onDelete={(name) => {
-              store.deleteTestString(name);
-              setSavedTick((t) => t + 1);
-            }}
-            defaultName={testName}
-          />
-        </div>
-      </header>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      <AppBar position="static" color="default" elevation={0} sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Toolbar variant="dense" sx={{ gap: 2 }}>
+          {isMobile && (
+            <IconButton edge="start" onClick={() => setDrawerOpen(true)}>
+              <MenuIcon />
+            </IconButton>
+          )}
+          <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }} noWrap>
+            Himark Tester
+          </Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={mode}
+            onChange={(_, v: Mode | null) => v && setMode(v)}
+          >
+            <ToggleButton value="find">Find</ToggleButton>
+            <ToggleButton value="execute">Execute</ToggleButton>
+          </ToggleButtonGroup>
+        </Toolbar>
+      </AppBar>
 
-      <main className="panes">
-        <section className="pane">
-          <div className="pane-head">TEST STRING</div>
-          <HighlightedInput
-            value={target}
-            onChange={setTarget}
-            matches={mode === "find" ? matches : []}
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {isMobile ? (
+          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+            <Box sx={{ width: SIDEBAR_WIDTH, height: "100%" }}>{sidebar}</Box>
+          </Drawer>
+        ) : (
+          <Box
+            sx={{
+              width: SIDEBAR_WIDTH,
+              flexShrink: 0,
+              borderRight: 1,
+              borderColor: "divider",
+              bgcolor: "background.paper",
+            }}
+          >
+            {sidebar}
+          </Box>
+        )}
+
+        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          <TestStringTabs
+            tabs={tabs}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onAdd={() => addTab()}
+            onClose={closeTab}
+            onRename={renameTab}
+            onLoad={loadTestString}
+            defaultTestStrings={defaultTestStrings}
+            savedTests={savedTests}
           />
-        </section>
 
-        <section className="pane">
-          <div className="pane-head">
-            OUTPUT
-            <span className="badge">{count}</span>
-          </div>
-          <div className="output">
-            {result.error ? (
-              <pre className="output-error">{result.error}</pre>
-            ) : mode === "execute" ? (
-              <pre className="output-text">{result.output}</pre>
-            ) : (
-              <pre className="output-text">
-                {matches.map((m) => target.slice(m.start, m.end)).join("\n")}
-              </pre>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <footer className="exprbar">
-        <div className="tabs">
-          {expressions.map((e) => (
-            <div
-              key={e.id}
-              className={`tab ${selected?.id === e.id ? "active" : ""} ${
-                e.enabled ? "" : "off"
-              }`}
-              onClick={() => setSelectedId(e.id)}
-            >
-              <input
-                type="checkbox"
-                checked={e.enabled}
-                title="toggle"
-                onClick={(ev) => ev.stopPropagation()}
-                onChange={(ev) => updateExpr(e.id, { enabled: ev.target.checked })}
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", md: "row" },
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            <Panel title="TEST STRING">
+              <HighlightedInput
+                value={target}
+                onChange={setActiveText}
+                matches={mode === "find" ? matches : []}
               />
-              <span className="tab-text">{e.text || "(empty)"}</span>
-              <button
-                className="tab-close"
-                title="remove"
-                onClick={(ev) => {
-                  ev.stopPropagation();
-                  removeExpr(e.id);
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <button className="tab-add" title="add expression" onClick={addExpr}>
-            +
-          </button>
-        </div>
-        <textarea
-          className="expr-editor"
-          spellCheck={false}
-          placeholder="HMK expression…"
-          value={selected?.text ?? ""}
-          onChange={(e) => selected && updateExpr(selected.id, { text: e.target.value })}
-        />
-      </footer>
-    </div>
+            </Panel>
+            <Panel
+              title="OUTPUT"
+              badge={count}
+              sx={{ borderLeft: { md: 1 }, borderColor: { md: "divider" } }}
+            >
+              <Box sx={{ position: "relative", flex: 1, minHeight: 0, overflow: "auto" }}>
+                {result.error ? (
+                  <pre className="output-error">{result.error}</pre>
+                ) : mode === "execute" ? (
+                  <pre className="output-text">{result.output}</pre>
+                ) : (
+                  <FindResults target={target} matches={matches} />
+                )}
+              </Box>
+            </Panel>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function Panel({
+  title,
+  badge,
+  children,
+  sx,
+}: {
+  title: string;
+  badge?: number;
+  children: React.ReactNode;
+  sx?: object;
+}) {
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minWidth: 0,
+        minHeight: { xs: "40vh", md: 0 },
+        ...sx,
+      }}
+    >
+      <Box
+        sx={{
+          px: 2,
+          py: 1,
+          borderBottom: 1,
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+        }}
+      >
+        <Typography variant="overline" sx={{ color: "text.secondary" }}>
+          {title}
+        </Typography>
+        {badge !== undefined && (
+          <Badge badgeContent={badge} color="primary" showZero sx={{ ml: 1 }} />
+        )}
+      </Box>
+      {children}
+    </Box>
   );
 }
