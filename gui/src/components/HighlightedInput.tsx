@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { MatchSpan } from "../types";
 
 interface Props {
@@ -27,10 +27,12 @@ export function HighlightedInput({ value, onChange, matches }: Props) {
     return () => ta.removeEventListener("scroll", sync);
   }, []);
 
+  const segments = useMemo(() => renderSegments(value, matches), [value, matches]);
+
   return (
     <div className="highlight-wrap">
       <div className="highlight-backdrop" ref={backdropRef} aria-hidden>
-        {renderSegments(value, matches)}
+        {segments}
       </div>
       <textarea
         ref={textareaRef}

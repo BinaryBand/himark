@@ -159,7 +159,9 @@ export function App() {
             ) : mode === "execute" ? (
               <pre className="output-text">{result.output}</pre>
             ) : (
-              <HighlightedInput value={target} onChange={() => {}} matches={matches} />
+              <pre className="output-text">
+                {matches.map((m) => target.slice(m.start, m.end)).join("\n")}
+              </pre>
             )}
           </div>
         </section>

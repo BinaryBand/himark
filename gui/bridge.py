@@ -65,12 +65,11 @@ def _execute(expressions: list[str], target: str) -> dict:
     text = target
     count = 0
     for expr in expressions:
-        steps = parser.parse(expr)
+        converted, loop = precompiled._split_fixed_point(expr)
+        steps = parser.parse(converted)
         if not steps:
             continue
-        converted, loop = precompiled._split_fixed_point(expr)
         if loop:
-            steps = parser.parse(converted)
             steps[0].fixed_point = True
             text = splice_to_fixed_point(steps, text)
             count += 1 if text != target else 0
