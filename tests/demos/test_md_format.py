@@ -73,6 +73,31 @@ def test_emphasis_is_not_a_bullet():
     assert fmt("*emph* and text\n") == "*emph* and text\n"
 
 
+# ── Unwrapping soft-wrapped paragraphs ────────────────────────────────────────
+
+
+def test_unwraps_a_paragraph_to_one_line():
+    assert fmt("one two\nthree four\nfive six\n") == "one two three four five six\n"
+
+
+def test_unwrap_keeps_paragraph_breaks():
+    assert fmt("a b\nc d\n\ne f\ng h\n") == "a b c d\n\ne f g h\n"
+
+
+def test_unwrap_leaves_a_heading_on_its_own_line():
+    # The heading is not pulled down, and the body below it still unwraps.
+    assert fmt("# Title\nbody one\nbody two\n") == "# Title\nbody one body two\n"
+
+
+def test_unwrap_does_not_merge_block_constructs():
+    # Lists, blockquotes, tables, thematic breaks, and setext underlines each keep
+    # their line breaks (their lines start with a marker the unwrap rule excludes).
+    assert fmt("- a\n- b\n") == "- a\n- b\n"
+    assert fmt("> q\n> r\n") == "> q\n> r\n"
+    assert fmt("text here\n***\nmore here\n") == "text here\n***\nmore here\n"
+    assert fmt("Title\n=====\n") == "Title\n=====\n"
+
+
 # ── Fenced code is protected ──────────────────────────────────────────────────
 
 
@@ -91,8 +116,9 @@ def test_fenced_code_is_preserved_verbatim():
 def test_messy_fixture_is_fully_tidied_and_idempotent():
     out = fmt((RESOURCES / "messy.md").read_text("utf-8"))
     assert out == (
-        "# Heading\n\nIntro paragraph.\n\n## Section\n"
-        "- item one\n- item two\n  - nested item\n\n"
+        "# Heading\n\n"
+        "This intro paragraph is hard wrapped over a few lines.\n\n"
+        "## Section\n- item one\n- item two\n  - nested item\n\n"
         "```py\ndef  f(x):\n    y = *x   \n    ##  not a heading\n```\n\nDone.\n"
     )
     assert fmt(out) == out  # idempotent

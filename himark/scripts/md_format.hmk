@@ -13,10 +13,14 @@
 //
 //  Tidies applied (all idempotent): trim file edges, strip trailing whitespace,
 //  collapse blank runs, give an ATX heading exactly one space after its `#` run,
-//  and normalize `*`/`+` list bullets to `-`. Fenced code is preserved verbatim.
+//  normalize `*`/`+` list bullets to `-`, and **unwrap** soft-wrapped paragraphs
+//  (join consecutive prose lines into one). Fenced code is preserved verbatim.
 //
 //  Out of scope (would need a real block lexer): an unclosed ``` fence leaves its
-//  body unprotected, and a spaced `* * *` thematic break is read as a `*` bullet.
+//  body unprotected, a spaced `* * *` thematic break is read as a `*` bullet, and
+//  unwrap assumes blocks are blank-line separated (CommonMark style) — a list or
+//  table with no blank line above it, or a prose line starting with a digit, is
+//  left as its own line rather than risk merging it into a paragraph.
 // ============================================================================
 
 // ── MASK FENCES ── protect ``` … ``` code blocks from the tidies below ───────
@@ -38,6 +42,13 @@
 {@^}{#}[1..6]{!{ ,#,\n}} => "{{$0}} {{$1}}"
 // Normalize a `*` or `+` list bullet (then its space run, at line start) to `-`.
 {@^}{{ ,\t}}[0..]{*,+}{ }[1..] => "{{$0}}- "
+// Unwrap soft-wrapped paragraphs: join a prose line to the next prose line (a
+// space replaces the newline), re-spliced to a fixed point so a whole paragraph
+// collapses to one line. A "prose" line starts with a non-marker character — not
+// a blank, heading `#`, bullet/rule `-`/`*`/`+`, setext `=`, blockquote `>`, table
+// `|`, fence sentinel ⟦, indent, or digit — so every block construct and every
+// paragraph break is left intact.
+{@^}{!{\n,#,-,=,*,+,>,|,⟦, ,\t,0..9}}{!\n}[..]{\n}{!{\n,#,-,=,*,+,>,|,⟦, ,\t,0..9}} <= "{{$0}}{{$1}} {{$3}}"
 // Collapse runs of blank lines down to a single blank line.
 {\n}[3..] => "\n\n"
 
