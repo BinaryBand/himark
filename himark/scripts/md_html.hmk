@@ -28,6 +28,18 @@
 {&} => "&amp;"
 {<} => "&lt;"
 
+// --- Phase 1b: backslash escapes --------------------------------------------
+// A backslash before a markdown-significant character makes it literal: mask it to
+// the same sentinel the code phase uses (restored in phase 6), so no inline or
+// block rule below interprets it. Runs before code so `\`` is not a code fence.
+// `\\` is a literal backslash (its own sentinel Ⓢ).
+{\\}{\\} => "Ⓢ"
+{\\}{\*} => "Ⓐ"
+{\\}{`} => "Ⓑ"
+{\\}{_} => "Ⓤ"
+{\\}{~} => "Ⓣ"
+{\\}{\[} => "Ⓛ"
+
 // --- Phase 2: code (fenced, then inline), with content masked ---------------
 // Fenced blocks first: the body is a multi-char break {!{\n```}} (any char that
 // does not begin the closing fence), so the run stops at the *nearest* `\n``` and
@@ -62,6 +74,12 @@
 // Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@^}` is a line
 // start, so a mid-line or in-word '#' (e.g. `a # b`, `[x](#y)`) is never a head.
 {@^}{#}[1..6]{ }[1..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
+
+// Setext headings: a text line underlined by a whole line of `=` (h1) or 2+ `-`
+// (h2). Placed before the rule below so a `text\n---` underline becomes a heading
+// rather than an `<hr/>`; a standalone rule line (no text above) still falls to it.
+{@^}{!{<,#,>,\n}}{!\n}[..]{\n}{=}[1..]{@$} => "<h1>{{$0}}{{$1}}</h1>"
+{@^}{!{<,#,>,-,\n}}{!\n}[..]{\n}{-}[2..]{@$} => "<h2>{{$0}}{{$1}}</h2>"
 
 // Horizontal rule: a whole line of 3+ of the same -, *, or _.
 {@^}{-,*,_}[3..]{@$} => "<hr/>"
@@ -101,6 +119,10 @@
 {\!}{[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<img alt=\"{{$2}}\" src=\"{{$5}}\"/>"
 {[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<a href=\"{{$4}}\">{{$1}}</a>"
 
+// Autolink: a bare `<http(s)://…>` URL. Phase 1 already turned the `<` into `&lt;`,
+// so match that form; the `>` is untouched. The URL runs to the closing `>`.
+{&lt;}{http}{!{>, ,\n}}[1..]{>} => "<a href=\"http{{$2}}\">http{{$2}}</a>"
+
 // Emphasis: longest delimiter first so `***` beats `**` beats `*`. The double and
 // triple delimiters use a multi-char break, so they span a lone inner delimiter
 // (`**a*b**` -> `<strong>a*b</strong>`); the singles stop at their own character.
@@ -113,7 +135,11 @@
 // Strikethrough (GFM); a multi-char break lets it span a lone inner '~'.
 {~~}{!{~~}}[1..]{~~} => "<del>{{$1}}</del>"
 
+// Hard line break: two or more trailing spaces before a newline become a `<br/>`.
+{ }[2..]{\n} => "<br/>\n"
+
 // --- Phase 6: restore masked code content -----------------------------------
+{Ⓢ} => "\\"
 {Ⓝ} => "\n"
 {Ⓐ} => "*"
 {Ⓤ} => "_"

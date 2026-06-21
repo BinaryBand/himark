@@ -313,6 +313,71 @@ def test_emphasis_spans_a_lone_inner_delimiter():
     assert md("__a_b__") == "<strong>a_b</strong>"
 
 
+# ── Setext headings ───────────────────────────────────────────────────────────
+
+
+def test_setext_h1():
+    assert md("Title\n=====") == "<h1>Title</h1>"
+
+
+def test_setext_h2():
+    assert md("Subtitle\n---") == "<h2>Subtitle</h2>"
+
+
+def test_setext_keeps_inline_formatting():
+    assert md("A **bold** title\n===") == "<h1>A <strong>bold</strong> title</h1>"
+
+
+def test_setext_underline_needs_text_immediately_above():
+    # A rule line with a blank line above it is an <hr/>, not a setext underline.
+    assert md("text\n\n---") == "text\n\n<hr/>"
+
+
+# ── Backslash escapes ─────────────────────────────────────────────────────────
+
+
+def test_backslash_escapes_emphasis():
+    assert md(r"\*not emphasis\*") == "*not emphasis*"
+
+
+def test_backslash_escapes_backtick():
+    assert md(r"a literal \` tick") == "a literal ` tick"
+
+
+def test_backslash_escapes_underscore():
+    assert md(r"snake\_case") == "snake_case"
+
+
+def test_backslash_backslash_is_one_literal_backslash():
+    assert md("path C:\\\\x") == "path C:\\x"
+
+
+# ── Hard line breaks ──────────────────────────────────────────────────────────
+
+
+def test_hard_break_from_two_trailing_spaces():
+    assert md("line one  \nline two") == "line one<br/>\nline two"
+
+
+def test_single_trailing_space_is_not_a_break():
+    assert md("a \nb") == "a \nb"
+
+
+# ── Autolinks ─────────────────────────────────────────────────────────────────
+
+
+def test_autolink_http():
+    assert md("<http://example.com>") == (
+        '<a href="http://example.com">http://example.com</a>'
+    )
+
+
+def test_autolink_https_escapes_query_ampersand():
+    assert md("see <https://x.io/a?b=1&c=2>") == (
+        'see <a href="https://x.io/a?b=1&amp;c=2">https://x.io/a?b=1&amp;c=2</a>'
+    )
+
+
 # ── Remaining limitations (pinned so the behaviour is defined) ────────────────
 
 
