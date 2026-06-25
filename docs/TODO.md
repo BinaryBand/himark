@@ -2,7 +2,9 @@
 
 ## Performance
 
-- [ ] **Look-ahead ladder** — replace the single `[..3000]` QUICK window in `dedup.hmk` with a geometric ladder (`[..300]`, `[..3000]`, `[..30000]`) before the unbounded sweep, so near twins clear at the cheapest bounded scan and the unbounded pass runs on only the far-apart stragglers.
+- [x] ~~**Deferred capture materialization**~~ — **done (general engine win).** The match loop built each capture's text slice and `reps[:k]` trim on *every* backtracking count it tried, so a long `[..]`/`[1..]` run that backs off toward a constraining continuation cost O(L²). Captures now defer both (text re-derived from the absolute span on demand by the rare back-reference that reads one mid-match, trimmed once at `_finalize`). Helps any backtracking-heavy pattern: dedup **n=80 6.9→2.9s, n=120 17.1→5.2s** (speedup grows with n — order cut, not a constant), and field-length scaling went from quadratic to ~linear (**41→5.8s** at 4× field width). Identical output; all tests pass.
+
+- [x] ~~**Look-ahead ladder**~~ — **tested, harmful (do not pursue).** A geometric ladder of QUICK windows (`[..300]/[..3000]/[..30000]`, etc.) ran **1.4–3× slower** than the single `[..3000]` pass on 80/120-row slices (identical output): each extra bounded sweep re-scans every partnerless singleton, and that overhead outweighs the unbounded passes it saves. The single tuned window stays.
 
 - [ ] **Key-prefix blocking** — partition `dedup.hmk` lines into buckets by the first few characters of the normalized key before the MATCH pass, so each cross-document scan stays within O(n/k) rows per bucket and singletons in a Y-only or P-only bucket retire without scanning the full file.
 

@@ -84,17 +84,35 @@ def find_matches(
     return matches
 
 
+def _cap_text(cap: Capture, text: str) -> str:
+    """A capture's text, sliced on demand from its span. During matching the span
+    is still absolute, so this re-derives the text a deferred capture left empty —
+    letting the run loop avoid materializing a slice it may discard (see
+    `_run_matcher`)."""
+    return text[cap.span[0] : cap.span[1]]
+
+
+def _rep_count(cap: Capture) -> int:
+    """A capture's repetition count: its deferred `count` when set (the `reps` list
+    is still the untrimmed run), else the materialized list's length."""
+    return cap.count if cap.count >= 0 else len(cap.reps)
+
+
 def _finalize(text: str, start: int, end: int, state: _State) -> Match:
-    # Spans are accumulated absolute; shift them to be match-relative. The
-    # captures belong to this match alone, so rebase in place rather than
-    # allocating a parallel tree.
-    def rebase(c: Capture) -> None:
+    # This branch has committed, so settle each capture: trim a deferred run to its
+    # count and re-derive its text from the (still-absolute) span, then shift the
+    # span to be match-relative. The captures belong to this match alone, so settle
+    # in place rather than allocating a parallel tree.
+    def settle(c: Capture) -> None:
+        if c.count >= 0:
+            c.reps = c.reps[: c.count]
+        c.text = text[c.span[0] : c.span[1]]
         c.span = (c.span[0] - start, c.span[1] - start)
         for s in c.subs:
-            rebase(s)
+            settle(s)
 
     for c in state.captures:
-        rebase(c)
+        settle(c)
     return Match(text[start:end], start, end, state.captures)
 
 
@@ -148,7 +166,7 @@ def _resolve_reps(reps: Reps, state: _State) -> Reps | None:
     caps = state.root.captures
     if reps.count_ref >= len(caps):
         return None
-    k = len(caps[reps.count_ref].reps)
+    k = _rep_count(caps[reps.count_ref])
     return Reps(min=k, max=k)
 
 
@@ -220,7 +238,7 @@ def _match_back_ref(el: BackRefEl, text: str, pos: int, state: _State, cont: Con
     if reps is None:
         return None
     caps = state.root.captures
-    referent = caps[el.group].text if el.group < len(caps) else None
+    referent = _cap_text(caps[el.group], text) if el.group < len(caps) else None
     return _match_referent(referent, reps, text, pos, state, cont)
 
 
@@ -229,7 +247,7 @@ def _match_count_ref(el: CountRefEl, text: str, pos: int, state: _State, cont: C
     if reps is None:
         return None
     caps = state.root.captures
-    referent = str(len(caps[el.group].reps)) if el.group < len(caps) else None
+    referent = str(_rep_count(caps[el.group])) if el.group < len(caps) else None
     return _match_referent(referent, reps, text, pos, state, cont)
 
 
@@ -314,9 +332,14 @@ def _run_matcher(matcher, het, reps, alphabet, text, pos, state, cont):
     static `GroupEl` and the dynamic value bound (whose matcher is built per match)."""
     caps = state.captures
 
-    def attempt(end: int, rep_list: list[str]) -> int | None:
+    def attempt(end: int, rep_list: list[str], k: int) -> int | None:
         mark = len(caps)
-        caps.append(Capture(text[pos:end], (pos, end), rep_list, alphabet=alphabet))
+        # Defer the text slice and the `rep_list[:k]` trim to `_finalize`: this is
+        # one of many counts tried (greedy-first, then backing off) and is usually
+        # discarded at the continuation's next element, so paying O(end - pos) per
+        # try is what makes a long `[..]` run quadratic. Keep the whole run and the
+        # chosen count; a back-reference that reads it mid-match slices on demand.
+        caps.append(Capture("", (pos, end), rep_list, count=k, alphabet=alphabet))
         r = cont(end)
         if r is not None:
             return r
@@ -325,7 +348,7 @@ def _run_matcher(matcher, het, reps, alphabet, text, pos, state, cont):
 
     greedy_end = matcher.match(text, pos)
     if greedy_end is None or greedy_end == pos:
-        return attempt(pos, []) if reps.accepts(0) else None
+        return attempt(pos, [], 0) if reps.accepts(0) else None
 
     # The first unit need not be greedy-maximal: a shorter first unit may let the
     # remainder split into equal repetitions ("2525" -> 25+25). Try unit lengths
@@ -354,24 +377,24 @@ def _run_matcher(matcher, het, reps, alphabet, text, pos, state, cont):
             current = nxt
         for k in _counts(reps, len(rep_list)):
             end = pos if k == 0 else ends[k - 1]
-            r = attempt(end, rep_list[:k])
+            r = attempt(end, rep_list, k)
             if r is not None:
                 return r
-    return attempt(pos, []) if reps.accepts(0) else None
+    return attempt(pos, [], 0) if reps.accepts(0) else None
 
 
 # ── Value bound with a reference endpoint `{@d:0..$0}` ───────────────────────
 
 
-def _endpoint_text(desc: tuple, state: _State) -> str | None:
+def _endpoint_text(desc: tuple, state: _State, text: str) -> str | None:
     """Resolve a reference-endpoint descriptor to its captured text (or None if the
     referenced group/stage is undefined)."""
     caps = state.root.captures
     kind = desc[0]
     if kind == "back":
-        return caps[desc[1]].text if desc[1] < len(caps) else None
+        return _cap_text(caps[desc[1]], text) if desc[1] < len(caps) else None
     if kind == "count":
-        return str(len(caps[desc[1]].reps)) if desc[1] < len(caps) else None
+        return str(_rep_count(caps[desc[1]])) if desc[1] < len(caps) else None
     return _stage_referent(state.root.stages, desc[1], desc[2])  # "stage"
 
 
@@ -381,8 +404,8 @@ def _match_dyn_value_range(
     reps = _resolve_reps(el.reps, state)
     if reps is None:
         return None
-    lower = el.lower if el.lower_ref is None else _endpoint_text(el.lower_ref, state)
-    upper = el.upper if el.upper_ref is None else _endpoint_text(el.upper_ref, state)
+    lower = el.lower if el.lower_ref is None else _endpoint_text(el.lower_ref, state, text)
+    upper = el.upper if el.upper_ref is None else _endpoint_text(el.upper_ref, state, text)
     if (el.lower_ref is not None and lower is None) or (
         el.upper_ref is not None and upper is None
     ):

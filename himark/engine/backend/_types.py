@@ -20,6 +20,11 @@ class Capture:
     span: tuple[int, int]  # (start, end) relative to the match start
     reps: list[str]  # per-repetition pieces (one entry when count == 1)
     subs: list[Capture] = field(default_factory=list)  # nested capture groups
+    # A *deferred* repetition count: while a branch is still backtracking, the run
+    # matcher leaves `text` empty and `reps` as the whole untrimmed run, recording
+    # the chosen count here (>= 0) so `_finalize` can trim once the branch commits.
+    # -1 means already materialized (text + reps are final), as from the Rust seam.
+    count: int = -1
     # The value alphabet this group matched under, when it was a `{A:x..y}` bound
     # (else None). It lets a downstream value filter (e.g. `b256`) read the
     # capture as a number in `A`, not just its raw text.
