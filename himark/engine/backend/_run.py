@@ -56,13 +56,24 @@ class _State:
 
 
 def find_matches(
-    program: Program, text: str, stages: tuple[Match, ...] = ()
+    program: Program,
+    text: str,
+    stages: tuple[Match, ...] = (),
+    start: int = 0,
+    stop: int | None = None,
 ) -> list[Match]:
+    """All matches of `program` in `text`. A match may *begin* only in
+    `[start, stop)` (`stop is None` = to the end); it still reads forward freely
+    past `stop`, so a match starting inside the window but extending beyond it is
+    found in full. `splice_to_fixed_point` uses `stop` to skip the tail it has
+    already settled — matching reads forward, so no new match can begin past the
+    last byte the previous pass changed."""
     matches: list[Match] = []
     elements = program.elements
     n = len(text)
-    pos = 0
-    while pos < n:
+    limit = n if stop is None else min(stop, n)
+    pos = start
+    while pos < limit:
         state = _State(stages=stages)
         end = _match_seq(elements, 0, text, pos, state)
         if end is not None and end > pos:

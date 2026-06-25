@@ -87,11 +87,16 @@ def using_backend(engine: Engine) -> Iterator[Engine]:
 
 
 def find_matches(
-    tree: t.RootNode, target: str, stages: tuple[Match, ...] = ()
+    tree: t.RootNode,
+    target: str,
+    stages: tuple[Match, ...] = (),
+    start: int = 0,
+    stop: int | None = None,
 ) -> list[Match]:
     """Compile a pattern tree and return all its matches in target. `stages` are
-    the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve."""
-    return _runtime.find_matches(tree, target, stages)
+    the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve;
+    `start`/`stop` bound the positions a match may begin at."""
+    return _runtime.find_matches(tree, target, stages, start, stop)
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
@@ -150,15 +155,18 @@ def _transform(
     return "".join(pieces)
 
 
-def deltas(steps: list[t.RootNode], target: str) -> list[tuple[int, int, str]]:
+def deltas(
+    steps: list[t.RootNode], target: str, stop: int | None = None
+) -> list[tuple[int, int, str]]:
     """The branches as (start, end, text): each surviving first-query match's
     source span and its transformed result. `execute` lists the texts; `splice`
-    lays them back over the source."""
+    lays them back over the source. `stop` caps where a branch may begin (used by
+    `splice_to_fixed_point` to skip the already-settled tail)."""
     if not steps:
         return []
     head, rest = steps[0], steps[1:]
     result: list[tuple[int, int, str]] = []
-    for m in find_matches(head, target):
+    for m in find_matches(head, target, stop=stop):
         text = _transform(rest, m.text, (m,))
         if text is not None:
             result.append((m.start, m.end, text))
@@ -194,17 +202,38 @@ def splice_to_fixed_point(steps: list[t.RootNode], target: str) -> str:
     point) — the in-place form of a `while` loop, for a `<=` statement. A
     contracting rule settles in a few passes per unit of input, so the guards only
     trip on a rule that does not converge (a `CompileError`): a pass count (catches
-    oscillators) and a size bound (catches a grower like `{a} <= "aa"`)."""
+    oscillators) and a size bound (catches a grower like `{a} <= "aa"`).
+
+    Incremental: each pass remembers where its last change ended and the next pass
+    only begins matches before that point. Matching reads forward, so a match that
+    differs this pass must read a byte the last pass rewrote — and one can begin no
+    later than the last such byte. Everything beyond it is byte-identical to a tail
+    the previous pass already scanned and found settled, so re-scanning it is pure
+    waste. (For bubble_sort this is the textbook shrinking bound: the sorted tail
+    is skipped once no swap reaches into it.)"""
     text = target
-    cap = 8 * len(text) + 1024
-    size_limit = 64 * len(text) + 65536
+    cap = 8 * len(target) + 1024
+    size_limit = 64 * len(target) + 65536
+    stop = None  # the first pass scans the whole document
     for _ in range(cap):
-        nxt = splice(steps, text)
-        if nxt == text:
-            return text
-        if len(nxt) > size_limit:
+        out: list[str] = []
+        last = 0
+        length = 0  # running length of `out` == offset into the new document
+        dirty: int | None = None  # end (new coords) of the right-most real change
+        for s, e, repl in deltas(steps, text, stop=stop):
+            out.append(text[last:s])
+            out.append(repl)
+            length += (s - last) + len(repl)
+            if repl != text[s:e]:  # an identity rewrite changes nothing, so skip it
+                dirty = length
+            last = e
+        if dirty is None:
+            return text  # nothing changed — the fixed point
+        out.append(text[last:])
+        text = "".join(out)
+        stop = dirty  # next pass: no new match can begin past the last change
+        if len(text) > size_limit:
             break
-        text = nxt
     raise CompileError(
         "a `<=` statement did not settle: the rule is not contracting toward a "
         "fixed point (it grows or oscillates). Use `=>` for a single pass."

@@ -47,8 +47,14 @@ class Runtime:
         return program
 
     def find_matches(
-        self, tree: t.RootNode, target: str, stages: tuple[Match, ...] = ()
+        self,
+        tree: t.RootNode,
+        target: str,
+        stages: tuple[Match, ...] = (),
+        start: int = 0,
+        stop: int | None = None,
     ) -> list[Match]:
         """All matches of `tree` in `target`. `stages` are the earlier pipeline
-        matches a cross-stage reference (`{N$M}`) can resolve."""
-        return self.backend.run(self.compiled(tree), target, stages)
+        matches a cross-stage reference (`{N$M}`) can resolve; `start`/`stop` bound
+        the positions a match may begin at (the incremental-splice scan window)."""
+        return self.backend.run(self.compiled(tree), target, stages, start, stop)

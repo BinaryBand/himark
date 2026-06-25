@@ -28,5 +28,10 @@ class Engine(Protocol):
     def compile(self, tree: t.RootNode) -> object: ...
 
     def run(
-        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
+        self,
+        compiled: object,
+        text: str,
+        stages: tuple[Match, ...] = (),
+        start: int = 0,
+        stop: int | None = None,
     ) -> list[Match]: ...

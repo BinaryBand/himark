@@ -66,13 +66,22 @@ class RustEngine:
         return ("rs", _rs.compile(program_json))
 
     def run(
-        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
+        self,
+        compiled: object,
+        text: str,
+        stages: tuple[Match, ...] = (),
+        start: int = 0,
+        stop: int | None = None,
     ) -> list[Match]:
         tag, handle = cast("tuple[str, Any]", compiled)
         if tag == "py":
-            return self._fallback.run(handle, text, stages)
+            return self._fallback.run(handle, text, stages, start, stop)
         # `stages` only feed the (unsupported) reference elements, so the Rust
-        # subset ignores them. JSON in the seam's currency: rebuild Match/Capture.
+        # subset ignores them. The `start`/`stop` scan window is likewise a
+        # speed hint, not a semantic one — the native matcher scans the whole
+        # text; the tail it covers is already match-free, so the result is the
+        # same (it just forgoes the incremental skip). JSON in the seam's
+        # currency: rebuild Match/Capture.
         out: list[Match] = []
         for m in json.loads(handle.run(text)):
             mtext = text[m["s"] : m["e"]]

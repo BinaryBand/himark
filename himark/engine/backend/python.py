@@ -30,6 +30,11 @@ class PythonEngine:
         return compile_pattern(tree)
 
     def run(
-        self, compiled: object, text: str, stages: tuple[Match, ...] = ()
+        self,
+        compiled: object,
+        text: str,
+        stages: tuple[Match, ...] = (),
+        start: int = 0,
+        stop: int | None = None,
     ) -> list[Match]:
-        return _run_find_matches(cast("Program", compiled), text, stages)
+        return _run_find_matches(cast("Program", compiled), text, stages, start, stop)
