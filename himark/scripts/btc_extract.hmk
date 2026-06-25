@@ -1,60 +1,30 @@
 // ============================================================================
-//  btc_extract.hmk -- extract checksum-valid legacy Bitcoin addresses.
+//  btc_extract.hmk -- extract legacy (P2PKH) Bitcoin addresses by shape.
 //
 //  Run it like any pipeline:
 //      himark transpile addresses.txt --script himark/scripts/btc_extract.hmk
 //
-//  Output: every genuine P2PKH (1...) address becomes <btc>1A1zP1eP...</btc>;
-//  a base58 word that only looks like an address is left as plain text. So the
-//  checksum actually filters the false positives -- no manual step needed.
+//  Output: every base58 run shaped like a 25-byte P2PKH address becomes
+//  <btc>1A1zP1eP...</btc>; other text is left untouched.
 //
-//  It runs in three passes, each spliced over the whole document in turn:
+//  This is a *structural* (layer-1) extractor. It does NOT validate the
+//  checksum -- base58check is a double SHA-256, a derived transform deferred to
+//  a layer built on the arithmetic/byte primitives (see docs/HMK.md, Filters).
+//  So an address-shaped base58 word with a bad checksum is still tagged;
+//  filtering those out is the job of the (layer-2) checksum.
 //
-//   1. TAG every address-shaped run with its recomputed and embedded checksums:
-//        <btc addr="1A1zP1eP..." expect=c29b7d93 actual=c29b7d93/>
-//      `expect` is base58check recomputed from the body, `actual` is the 4-byte
-//      checksum carried inside the address (see the filter chain below).
-//
-//   2. KEEP the valid ones. The pattern captures `expect` (group 3) and then
-//      requires `actual` to be the *same* text with the back-reference {$3} --
-//      HMK's equality test. A match (expect == actual) is rewritten to the final
-//      <btc>address</btc>. A mismatch fails the pattern and is left untouched.
-//
-//   3. REVERT the rest. Whatever <btc addr=.../> tags survive pass 2 are exactly
-//      the checksum mismatches, so they are rewritten back to the bare address.
-//
-//  The ordering is the whole trick: handling expect == actual first leaves the
-//  mismatches as the only <btc addr=.../> tags for pass 3 to undo -- so "not
-//  equal" needs no separate operator.
-//
-//  How the match and checksum work (see docs/IN_BRIEF.md, Aspirational examples):
-//    * The address is a 1 prefix (the 0x00 version byte) followed by a base58
+//  How the match works:
+//    * The address is a `1` prefix (the 0x00 version byte) followed by a base58
 //      value bounded between the smallest and largest 25-byte address -- the
 //      endpoints set the value range and the field-width window. Group 2 is that
-//      value (it carries the b58 alphabet); group 1 ++ group 2 is the address.
-//    * The leading boundary (a non-base58 char before the 1) word-anchors
-//      the match, so an interior 1 inside a longer base58 run -- a 3... P2SH
-//      address, say -- is not read as an address start. It is re-emitted as $0.
-//    * base58check: expect decodes the address to 25 bytes [b256(25)], takes the
-//      21-byte body [head(21)], double-SHA256s it, keeps the leading 4 bytes
-//      [head(4)]; actual is the trailing 4 bytes [tail(4)]. A leading 1 is base58
-//      zero, so group 2's value re-encodes to the full payload (version byte pad).
+//      value (it carries the base58 alphabet); group 1 ++ group 2 is the address.
+//    * The leading boundary (a non-base58 char before the 1) anchors the match,
+//      so an interior 1 inside a longer base58 run -- a 3... P2SH address, say --
+//      is not read as an address start. It is re-emitted as $0.
 //
 //  Scope: P2PKH only (3... P2SH and bc1... bech32 are out of scope); an address
 //  at the very first byte of the file is missed (keep a space/newline ahead).
 // ============================================================================
 
-// 1. Tag every address-shaped run with its expected and actual checksums.
 {!{@d},{@u},{@l},!{0,l,I,O}}{1}{{@d},{@u},{@l},!{0,l,I,O}:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
-    => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"
-
-// 2. Keep the valid ones: {$3} forces actual == expect. Render the final form.
-//    The hex fields are matched as complement runs ({!\ } up to the space, {!/}
-//    up to the slash) -- simple and self-delimiting; {{0..9,a..f}}[8] would work
-//    too, now that a het object frees every member.
-{<btc addr=\"}{!\"}[1..]{\" expect=}{!\ }[1..]{\ actual=}{$3}{/>}
-    => "<btc>{{$1}}</btc>"
-
-// 3. Revert the survivors (checksum mismatches) to the bare address.
-{<btc addr=\"}{!\"}[1..]{\" expect=}{!\ }[1..]{\ actual=}{!/}[1..]{/>}
-    => "{{$1}}"
+    => "{{$0}}<btc>{{$1}}{{$2}}</btc>"

@@ -51,20 +51,21 @@ Every range normalises to a banded alphabet `{A:floor..ceiling}`: the payload `A
 - **`{a..z:cc}`** -- `{a..z}` is the limiting alphabet since `cc`'s Unicode alphabet is a super-set. `{a..z:a..cc}`
 - **`{{a,A},{b,B},...,{z,Z}}`** -- Equivalent to `{@uni:a..z}` where every nested pair is functionally the same character as its partner.
 - **`{a..c:zz}`** -- Compilation error since no-combination of `{a,b,c}` characters can meet `zz`. The right-side alphabet is not a subset of the left-side's.
-- **`{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}`** -- Any base-58 string with exactly 25-bytes. AKA, a legacy Bitcoin address (ignoring checksums).
-- **`{1}{@b58:{1}[24]..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}`** -- A legacy Bitcoin address (ignoring checksums) but shorter.
+- **`{1}{@d,@u,@l,!{0,l,I,O}:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}`** -- Any base-58 string with exactly 25-bytes. AKA, a legacy Bitcoin address (ignoring checksums).
+- **`{1}{@d,@u,@l,!{0,l,I,O}:{1}[24]..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}`** -- A legacy Bitcoin address (ignoring checksums) but shorter.
 
 > **Note:** `0$0` returns a full variable with its respective alphabet and range values, whereas `0$` returns a raw string.
 
-### Aspirational examples
+### Structural example
+
+The **shape** of a base58check value -- a version byte, payload, and 4-byte checksum -- needs only `b256` and adjacency; decode the value to bytes, then slice by position:
 
 ```proto
-{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
+{1}{@d,@u,@l,!{0,l,I,O}:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
   => "{{ 0$0 | b256(25) }}"
-  => {@b256:min..max}{@b256:min..max}
-  => "{{ 0$0 | b256(25) | sha256 | sha256 }}."
-  => {@b256:min..max}{$0}{@b256:min..max}
-  => "{{0$}} is valid!"
+  => {{@b256}}[21]{{@b256}}[4]   // $0 = 21-byte body (version + payload), $1 = checksum
 ```
 
+> **Checksum validation is deferred.** Comparing the carried checksum against the double-SHA256 of the body is a derived (hash) transform -- a layer built on these byte primitives, not baked into the core (see [HMK.md](HMK.md), Filters). The structural match above is fully layer 1.
+>
 > `b256` reads a **group** accessor (`0$0`, or `$0` for the current stage) as the base-58-decoded integer — the alphabet and bounds ride along with the capture — and re-encodes it as 25 big-endian bytes. The **whole-stage** accessor `0$` is a raw string with no alphabet to decode, so a value filter cannot read it.

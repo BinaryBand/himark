@@ -3,8 +3,11 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from himark import parser
 from himark.engine import execute, find_matches
+from himark.models.exceptions import CompileError
 from himark.parser.macros import MACROS
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
@@ -107,25 +110,23 @@ def test_doc_word_anchors():
 
 
 def test_doc_filters():
-    # The Filters section: sha512/pad/uint plus `le`/`be` endianness on b256/uint.
+    # The Filters section's core set is pad / b256 / uint (hashes and other derived
+    # transforms are deferred to a layer above these primitives).
     assert execute(parser.parse('{@d:0..} => "{{ 0$0 | pad(4) }}"'), "7") == ["0007"]
     assert execute(
         parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) | uint }}"'), "258"
     ) == ["258"]
-    # `v | b256(n) | uint` round-trips when endianness matches.
+    # `v | b256(n) | uint` round-trips when endianness matches; `le` flips it.
     assert execute(
         parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | uint(le) }}"'), "258"
     ) == ["258"]
-    # b256(le) reverses the byte order of the big-endian form.
     assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | hex }}"'), "258"
-    ) == ["0201"]
-    assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) | hex }}"'), "258"
-    ) == ["0102"]
-    import hashlib
+        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | uint }}"'), "258"
+    ) == ["513"]  # 0x0201 big-endian = 513 — confirms le reversed the bytes
 
-    sha512_hex = execute(
-        parser.parse('{!@s}[1..] => "{{ 0$0 | sha512 | hex }}"'), "abc"
-    )
-    assert sha512_hex == [hashlib.sha512(b"abc").hexdigest()]
+
+def test_doc_filters_omit_deferred_crypto():
+    # Hashes are deferred to a layer above the primitives — not core filters.
+    for gone in ("sha256", "sha512", "head", "tail", "hex"):
+        with pytest.raises(CompileError):
+            execute(parser.parse(f'{{@l}}[1..] => "{{{{ . | {gone} }}}}"'), "abc")

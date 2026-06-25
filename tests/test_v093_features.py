@@ -153,45 +153,26 @@ def test_string_filter_still_works_on_value_accessor():
     assert ex('{@d:0..65535} => "{{ 0$0 | len }}"', "256") == ["3"]
 
 
-def test_sha256_filter_matches_standard_vector():
-    import hashlib
-
-    out = ex('{!\\ }[1..] => "{{ . | sha256 | hex }}"', "abc")
-    assert out == [hashlib.sha256(b"abc").hexdigest()]
-
-
-def test_byte_filters_chain_double_sha_over_b256():
-    import hashlib
-
-    out = ex('{@d:0..65535} => "{{ 0$0 | b256(2) | sha256 | sha256 | hex }}"', "256")
-    expected = hashlib.sha256(
-        hashlib.sha256((256).to_bytes(2, "big")).digest()
-    ).hexdigest()
-    assert out == [expected]
-
-
 def test_b58_decodes_as_bitcoin_base58_value():
-    # {@d},{@u},{@l},!{0,l,I,O} already works as a value alphabet: '21' is base-58 value 58, so b256(1)
-    # emits the single byte 0x3a.
-    assert ex('{{@d},{@u},{@l},!{0,l,I,O}:1..zz} => "{{ 0$0 | b256(1) | hex }}"', "21") == ["3a"]
+    # {@d},{@u},{@l},!{0,l,I,O} works as a value alphabet: '21' is base-58 value 58,
+    # so b256(1) emits the single byte 0x3a, and uint reads it back as 58.
+    assert ex(
+        '{{@d},{@u},{@l},!{0,l,I,O}:1..zz} => "{{ 0$0 | b256(1) | uint }}"', "21"
+    ) == ["58"]
 
 
-def test_base58_value_to_double_sha256_pipeline():
-    # The aspirational target, end to end: match a base-58 value, decode it to
-    # bytes, and run Bitcoin's double-SHA256 — checked against an independent
-    # base-58 decode. This is the whole typed-value seam working on real shape.
-    import hashlib
-
+def test_b58_value_round_trips_through_b256_and_uint():
+    # A multi-byte base-58 value decodes to bytes and back without a hash in sight:
+    # `v | b256(n) | uint` == v is the value model's two projections composing.
     btc = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     token = "abc"
     iv = 0
     for c in token:
         iv = iv * 58 + btc.index(c)
-    expected = hashlib.sha256(
-        hashlib.sha256(iv.to_bytes(8, "big")).digest()
-    ).hexdigest()
-    out = ex('{{@d},{@u},{@l},!{0,l,I,O}:1..zzzzz} => "{{ 0$0 | b256(8) | sha256 | sha256 | hex }}"', token)
-    assert out == [expected]
+    out = ex(
+        '{{@d},{@u},{@l},!{0,l,I,O}:1..zzzzz} => "{{ 0$0 | b256(8) | uint }}"', token
+    )
+    assert out == [str(iv)]
 
 
 def test_payload_marker_splits_doc_and_pipe():

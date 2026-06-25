@@ -19,7 +19,6 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 (everything outside `{{ }}`) is constant.
 """
 
-import hashlib
 import re
 from dataclasses import dataclass
 
@@ -67,7 +66,7 @@ def _to_text(v: _Value) -> str:
 
 def _as_bytes(s: str, filt: str) -> bytes:
     """The byte string of `s` — one byte per code point, matching b256's latin-1
-    output so byte filters chain (`… | b256(25) | sha256`)."""
+    output so a byte string round-trips (`… | b256(n) | uint`)."""
     try:
         return s.encode("latin-1")
     except UnicodeEncodeError:
@@ -120,28 +119,17 @@ def _filter_uint(value: _Value, nums: list[int], little: bool) -> str:
 
 
 # Every filter maps `(value, nums, little)` to a raw string: `nums` are the integer
-# arguments, `little` is set by an `le` flag (cleared by `be`). Most read only the
-# surface text; `b256` additionally needs the value's alphabet. The byte filters
-# (`hex`, `sha256`, `sha512`, `head`, `tail`, `uint`) work one byte per code point,
-# so they chain after `b256`.
+# arguments, `little` is set by an `le` flag (cleared by `be`). The spec's core set
+# is `pad`/`b256`/`uint` — the value model's two byte projections plus output
+# padding; hashes and other derived transforms are deferred to a layer above these
+# primitives. `upper`/`lower`/`trim`/`indent`/`len` are convenience string filters.
 _FILTERS = {
     "upper": lambda v, nums, little: v.text.upper(),
     "lower": lambda v, nums, little: v.text.lower(),
     "trim": lambda v, nums, little: v.text.strip(),
     "indent": lambda v, nums, little: _indent(v.text),
     "len": lambda v, nums, little: str(len(v.text)),
-    "hex": lambda v, nums, little: _as_bytes(v.text, "hex").hex(),
     "pad": lambda v, nums, little: v.text.rjust(_arg(nums, "pad"), "0"),
-    "sha256": lambda v, nums, little: (
-        hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode("latin-1")
-    ),
-    "sha512": lambda v, nums, little: (
-        hashlib.sha512(_as_bytes(v.text, "sha512")).digest().decode("latin-1")
-    ),
-    "head": lambda v, nums, little: v.text[: _arg(nums, "head")],
-    "tail": lambda v, nums, little: (
-        v.text[-_arg(nums, "tail") :] if _arg(nums, "tail") else ""
-    ),
     "b256": _filter_b256,
     "uint": _filter_uint,
 }

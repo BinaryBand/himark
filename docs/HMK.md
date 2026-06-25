@@ -136,7 +136,7 @@ Over `@d` `255`=255; over `@l` `aa`=0, `zz`=675. Comparison is **by ordinal, nev
 Two **projections**:
 
 - **text** -- value rendered back through its alphabet (codec + width); what `{{ $i }}` produces.
-- **bytes** -- value in big-endian base-256, width from the range (inverse: `uint`); what `b256`/`sha256` consume.
+- **bytes** -- value in big-endian base-256, width from the range; what `b256` produces and `uint` reads back.
 
 A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare `{0..9}` on "11" is codepoints 49,49. `{@d}`"11" and `{@l}`"l" are both value 11 (different base/width, same value).
 
@@ -304,18 +304,16 @@ All left-associative; parens override. So `("<h", #0, ">")` is one value, and `$
 
 ### Filters
 
-A moustache value may be piped through **filters** -- a fixed library of pure, deterministic transforms: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative.
+A moustache value may be piped through **filters** -- a small, fixed set of pure, deterministic **primitives**: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative. This is deliberately _not_ a general standard library: `b256`/`uint` are the value model's two [projections](#values-and-ordering) surfaced into templates, and `pad` is output formatting -- nothing here is use-case-specific. Derived transforms (hashes, curve operations, ...) are **deferred to a layer built on arithmetic/bit primitives**, where they would be _defined_ rather than baked into the core.
 
 A value is either a **value** (a named-alphabet capture, carrying alphabet/range/value) or a **raw string** (a whole-stage `{{ i$ }}`, the flowing `{{ $ }}`, any string-filter output, a bare-Unicode-range or subtractive capture). **String** filters read either; a **value** filter or arithmetic on a raw string is a compile error.
 
 | Filter              | Kind   | Effect                                                                                                   |
 | ------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| `sha256`            | string | SHA-256 of the byte string (32 bytes)                                                                    |
-| `sha512`            | string | SHA-512 (64 bytes)                                                                                       |
 | `pad(n)`            | string | left-pad with `0` to width `n`                                                                           |
 | `b256` / `b256(n)`  | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
 | `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
 
-Byte filters work one byte per code point, so they chain (`... | b256 | sha256`). A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
+Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
 
-No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a digest only when it **begins with** that checksum -- how Base58Check verifies without ever taking the first four bytes.
+No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.

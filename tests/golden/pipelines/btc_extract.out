@@ -5,10 +5,10 @@ Vanity wallet:     <btc>1BoatSLRHtKNngkdXEeobR76b53LETtpyT</btc>
 Donations:         <btc>12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX</btc>
 
 A typo'd copy (bad checksum, should stay plain text):
-  1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNb
+  <btc>1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNb</btc>
 
 A P2SH address (out of scope, must be left alone):
   3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
 
 Random base58 that merely looks address-shaped:
-  19zHtLR6dWquCJ8pquQ2x8NfkHcg4aN xK pHq23bVe
+  <btc>19zHtLR6dWquCJ8pquQ2x8NfkHcg4aN</btc> xK pHq23bVe
