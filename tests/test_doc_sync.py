@@ -8,7 +8,7 @@ import pytest
 from himark import parser
 from himark.engine import execute, find_matches
 from himark.models.exceptions import CompileError
-from himark.parser.macros import MACROS
+from himark.prelude import MACROS
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
 
@@ -24,9 +24,10 @@ def _doc_section(title):
     return re.split(r"\n## |\n---", body, maxsplit=1)[0]
 
 
-def test_doc_macro_table_matches_macros_toml():
+def test_doc_macro_table_matches_prelude():
     # Scope to the Macros section's table — `@ed` also appears as an operand in
     # the Carriers/operators table, but it is a library alphabet, not a text macro.
+    # The macro table is the doc face of the `std.hmk` prelude's `@name` lines.
     doc_names = set(re.findall(r"^\| `@(\w+)`", _doc_section("Macros"), re.MULTILINE))
     assert doc_names == set(MACROS)
 
@@ -130,3 +131,25 @@ def test_doc_filters_omit_deferred_crypto():
     for gone in ("sha256", "sha512", "head", "tail", "hex"):
         with pytest.raises(CompileError):
             execute(parser.parse(f'{{@l}}[1..] => "{{{{ . | {gone} }}}}"'), "abc")
+
+
+def test_doc_hex_code_point_escapes():
+    # The Escaping section: `\xHH`/`\uHHHH`/`\UHHHHHHHH` are code-point escapes, so
+    # the byte alphabets (@b256/@ascii/@uni) are spellable as text in the prelude.
+    assert matches(r"{\x41}", "A B") == ["A"]
+    assert matches(r"{\x41..\x43}", "ABCD") == ["A", "B", "C"]
+    assert matches(r"{\U00000041}", "A B") == ["A"]
+    # @b256 (declared `\x00..\xff`) still matches any byte, as before.
+    assert matches("{@b256}", "AB") == ["A", "B"]
+
+
+def test_doc_derived_filter():
+    # The Filters section: a derived filter (declared `filter name = <expr>` in the
+    # prelude) is a named moustache expression over the primitives. `le16` is
+    # `b256(2,le)`; calling it must equal the expression it stands for.
+    assert execute(
+        parser.parse('{@d:0..65535} => "{{ 0$0 | le16 }}"'), "258"
+    ) == execute(parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) }}"'), "258")
+    # A derived filter is parameterless this pass.
+    with pytest.raises(CompileError):
+        execute(parser.parse('{@d:0..} => "{{ 0$0 | le16(2) }}"'), "5")

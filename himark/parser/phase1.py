@@ -2,9 +2,9 @@
 
 Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
-  Macros        a text macro (`@w`, `@s`, `@hex` — see [macros] in macros.toml)
-                expands to its HMK source. Macros may reference other macros;
-                expansion repeats until the text is stable.
+  Macros        a text macro (`@w`, `@s`, `@hex` — declared in `himark/std.hmk`,
+                loaded by `himark/prelude.py`) expands to its HMK source. Macros
+                may reference other macros; expansion repeats until stable.
 
   Implicit wrap a step with no top-level `{…}` construct is wrapped in `{…}`, so
                 a bare expression like `a..z` reads as arithmetic rather than
@@ -13,7 +13,7 @@ Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
 import re
 
-from himark.parser.macros import MACROS
+from himark.prelude import MACROS
 from himark.models.exceptions import CompileError
 from himark.parser import rewrites
 
@@ -49,8 +49,8 @@ def _needs_wrap(step: str) -> bool:
 def preprocess(step: str, *, first: bool = True) -> str:
     """Expand text macros, apply advanced rewrites, then wrap a bare expression.
 
-    The rewrites (`himark/parser/rewrites.py`, configured in `macros.toml`) are
-    structural sugar that run before tokenizing, so the engine sees only plain
+    The rewrites (`himark/parser/rewrites.py`) are structural sugar (code rules,
+    not prelude declarations) that run before tokenizing, so the engine sees plain
     Himark source. The wrap applies only to the first step (the pattern
     position): a bare step after `=>` is a constant template, rendered as-is.
     """

@@ -9,15 +9,14 @@ Two layers keep the specifics in data, not code:
 
   * **Tools** — a small set of generic, parameterized interpreters (below). Each
     knows *how* to perform a class of structural rewrite.
-  * **Rewrites** — the `[[rewrites]]` rules in `macros.toml`: each names a tool
-    and supplies its parameters. Adding a shortcut that fits an existing tool is
-    pure TOML; only a genuinely new *shape* needs a new tool here.
+  * **Rules** — the `_RULES` table below: each pairs a tool with its parameters.
+    Rewrites are structural (they inspect braces), so — unlike the named alphabets
+    of the `.hmk` prelude — they are not data-declarable and stay here as code.
 """
 
 import re
 
 from himark.parser._text import brace_end
-from himark.parser.macros import REWRITES
 
 _COUNT = re.compile(r"\[[^\]]*\]")
 # A self-binding count token: a `[…]` count holding a lone `#` (not `#N`, which is
@@ -110,20 +109,15 @@ def _count_top_groups(text: str) -> int:
     return n
 
 
-# ── Rules (data, from macros.toml's [[rewrites]]) ─────────────────────────────
-
-
-def _load_rules() -> list[tuple]:
-    """The `[[rewrites]]` rules: each pairs a tool with its keyword parameters."""
-    out: list[tuple] = []
-    for rule in REWRITES:
-        tool = _TOOLS.get(rule.get("tool", ""))
-        if tool is not None:
-            out.append((tool, {k: v for k, v in rule.items() if k != "tool"}))
-    return out
-
-
-_RULES = _load_rules()
+# ── Rules ─────────────────────────────────────────────────────────────────────
+# The active rewrites, in order. Structural sugar inspects braces and renumbers
+# groups, so — unlike a named alphabet — it is not declarable in the `.hmk`
+# prelude; it lives here as code. `bind_count` handles the self-binding count
+# `[#]`; `substitute` expands `{|..}` (a pipe repeated any number of times).
+_RULES: list[tuple] = [
+    (bind_count, {}),
+    (substitute, {"find": "{|..}", "into": "{|}[..]"}),
+]
 
 
 def apply(src: str) -> str:

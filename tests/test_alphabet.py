@@ -1,9 +1,9 @@
-"""Tests for the Alphabet value object and the macros.toml definitions."""
+"""Tests for the Alphabet value object and the `std.hmk` prelude definitions."""
 
 import pytest
 
 from himark.engine.backend import Alphabet
-from himark.parser.macros import MACROS
+from himark.prelude import MACROS
 from himark.models.exceptions import CompileError
 
 try:

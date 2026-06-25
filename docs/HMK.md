@@ -60,6 +60,13 @@ Point **value** is fixed under [Values and ordering](#values-and-ordering).
 
 ## Macros
 
+Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single
+centralized declaration file loaded before every run. Each `@name = <source>` line
+binds a macro: `@name` expands to that Himark source before tokenizing, so the
+engine holds no built-in alphabet knowledge — it only ever sees the ranges and
+congruence classes the source expands to. The same file declares **derived
+filters** (`filter name = <expr>`, see [Filters](#filters)). The shipped set:
+
 | Name     | Expands to                     |
 | -------- | ------------------------------ |
 | `@d`     | `0..9`                         |
@@ -91,6 +98,8 @@ A whole word is `{@<}{@w}[1..]{@>}`.
 ## Escaping
 
 Backslash makes the next char literal. Only **framing** chars ever need it: `{` `}` `[` `]` `"` `\`, plus `:` `$` `#` where they'd read as a band separator or reference. All else (`(` `)` `.` `*` `+` `-` `?` `|` ...) is already literal. Invisibles use C spellings `\n` `\r` `\t`; a space is a space. So `{(a|b)?}` matches the literal `(a|b)?`.
+
+A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). So `\x41` is `A`, and the byte alphabets are spelled `\x00..\xff` (`@b256`), `\x00..\U0010ffff` (`@uni`). Fixed width (not `\u{…}`) keeps the trailing hex from ever reading as a brace.
 
 ---
 
@@ -315,5 +324,7 @@ A value is either a **value** (a named-alphabet capture, carrying alphabet/range
 | `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
 
 Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
+
+**Derived filters.** The primitives above are native; new filters are _composed_ from them in the prelude (`himark/std.hmk`) with `filter name = <expr>`, where `<expr>` is a moustache expression over the primitives and operators and `.` is the piped-in value. So `filter le16 = . | b256(2,le)` names a two-byte little-endian encode; `{{ $0 | le16 }}` then stands for `{{ $0 | b256(2,le) }}`. This is the layer-2 extension seam: the irreducible primitives stay in the core, everything else is declared. (Derived filters are parameterless for now.)
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.

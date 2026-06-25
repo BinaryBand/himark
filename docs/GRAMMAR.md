@@ -118,7 +118,7 @@ macro_use   = '@' macro_name              « macro_name ∈ the macro table, §A
 
 ### 5.2 Structural rewrites
 
-Pre-tokenization sugar that inspects braces and renumbers groups (reference: [rewrites.py](../himark/parser/rewrites.py), configured in [macros.toml](../himark/parser/macros.toml)):
+Pre-tokenization sugar that inspects braces and renumbers groups (reference: [rewrites.py](../himark/parser/rewrites.py); because they are structural, they live as code rules there rather than in the declaration prelude):
 
 | Surface form            | Rewrites to                         | Meaning                                   |
 | ----------------------- | ----------------------------------- | ----------------------------------------- |
@@ -346,7 +346,7 @@ An escaped character is never a delimiter, never an operator, and (for `\`) is a
 
 ## Appendix B: Macro table
 
-The named alphabets (reference: [macros.toml](../himark/parser/macros.toml)). The engine has no built-in alphabet knowledge — it only ever sees the ranges and congruence classes these expand to.
+The named alphabets, declared in the prelude [std.hmk](../himark/std.hmk) and loaded by [prelude.py](../himark/prelude.py). The engine has no built-in alphabet knowledge — it only ever sees the ranges and congruence classes these expand to.
 
 | Name     | Expands to                  |
 | -------- | --------------------------- |

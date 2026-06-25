@@ -38,7 +38,9 @@ function engineBridge(): Plugin {
             res.setHeader("Content-Type", "application/json");
             if (code !== 0 && !out) {
               res.statusCode = 200;
-              res.end(JSON.stringify({ error: err.trim() || "engine crashed" }));
+              res.end(
+                JSON.stringify({ error: err.trim() || "engine crashed" }),
+              );
             } else {
               res.end(out || "{}");
             }
@@ -56,12 +58,12 @@ export default defineConfig({
   server: {
     // Pin the port so a Cloudflare tunnel can target a stable address; fail loud
     // rather than drifting to a random port if it's taken. Override with PORT.
-    port: Number(process.env.PORT) || 5173,
+    port: Number(process.env.PORT) || 5174,
     strictPort: true,
     // Listen on all interfaces and accept any Host header, so a tunnel (or a LAN
     // device) reaching the dev server isn't rejected as a "blocked host".
     host: true,
-    allowedHosts: true,
+    allowedHosts: ["himark.doreeto.com", "localhost"],
     // The default scripts and demo targets live outside gui/; let Vite read them
     // so `import.meta.glob` can bundle them as defaults.
     fs: { allow: [REPO_ROOT] },

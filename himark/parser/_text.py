@@ -20,11 +20,20 @@ ESCAPES = {
     '"': '"',
 }
 
+# Fixed-width hex code-point escapes, Python/C spellings: `\xHH` (a byte),
+# `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). Fixed width — not a `\u{…}` brace
+# form — so the trailing hex never looks like a brace to a depth scanner, and the
+# named alphabets (`@b256`/`@ascii`/`@uni`) can be spelled as text in the prelude.
+_HEX_ESCAPE_WIDTH = {"x": 2, "u": 4, "U": 8}
+_HEX_DIGITS = set("0123456789abcdefABCDEF")
+
 
 def unescape(s: str) -> str:
-    """Resolve backslash escapes in a literal fragment (\\!, \\{, \\n, …).
+    """Resolve backslash escapes in a literal fragment (\\!, \\{, \\n, \\x41, …).
 
-    An unknown escape resolves to the escaped character itself.
+    `\\xHH`/`\\uHHHH`/`\\UHHHHHHHH` resolve to the code point; any other escape
+    resolves to the escaped character itself (so `\\!` -> `!`, and a `\\x` without
+    two hex digits stays a literal `x`).
     """
     if "\\" not in s:
         return s
@@ -32,8 +41,14 @@ def unescape(s: str) -> str:
     i = 0
     while i < len(s):
         if s[i] == "\\" and i + 1 < len(s):
-            out.append(ESCAPES.get(s[i + 1], s[i + 1]))
-            i += 2
+            width = _HEX_ESCAPE_WIDTH.get(s[i + 1])
+            hexits = s[i + 2 : i + 2 + width] if width else ""
+            if width and len(hexits) == width and set(hexits) <= _HEX_DIGITS:
+                out.append(chr(int(hexits, 16)))
+                i += 2 + width
+            else:
+                out.append(ESCAPES.get(s[i + 1], s[i + 1]))
+                i += 2
         else:
             out.append(s[i])
             i += 1

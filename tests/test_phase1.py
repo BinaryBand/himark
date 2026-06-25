@@ -37,8 +37,10 @@ def test_macro_nested_expansion():
 
 
 def test_macro_whitespace_set():
-    # @s expands to a comma-union of real control chars, not backslash escapes.
-    assert phase1.preprocess("{@s}") == "{\n,\r, ,\t}"
+    # @s expands to a comma-union of whitespace, spelled with the prelude's C-style
+    # escapes (`\n`/`\r`/`\t`); the escapes resolve to control chars later, in
+    # phase 3's `unescape`.
+    assert phase1.preprocess("{@s}") == r"{\n,\r, ,\t}"
 
 
 def test_macro_word_boundary():
