@@ -87,6 +87,12 @@ fn starts_with(chars: &[char], pos: usize, unit: &[char]) -> bool {
     pos + unit.len() <= chars.len() && chars[pos..pos + unit.len()] == *unit
 }
 
+/// A `@w` symbol — an ASCII letter, digit, or underscore — for the `@<`/`@>`
+/// word-boundary anchors.
+fn is_word(c: char) -> bool {
+    c == '_' || c.is_ascii_alphanumeric()
+}
+
 fn collect(chars: &[char], a: usize, b: usize) -> String {
     chars[a..b].iter().collect()
 }
@@ -247,6 +253,16 @@ fn match_seq(
                 "line_end" => pos == chars.len() || chars[pos] == '\n',
                 "scope_start" => pos == 0,
                 "scope_end" => pos == chars.len(),
+                "word_start" => {
+                    let after = pos < chars.len() && is_word(chars[pos]);
+                    let before = pos > 0 && is_word(chars[pos - 1]);
+                    after && !before
+                }
+                "word_end" => {
+                    let before = pos > 0 && is_word(chars[pos - 1]);
+                    let after = pos < chars.len() && is_word(chars[pos]);
+                    before && !after
+                }
                 _ => false,
             };
             if ok {

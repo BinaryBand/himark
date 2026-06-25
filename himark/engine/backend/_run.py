@@ -31,6 +31,12 @@ from himark.engine.backend._types import Capture, Match
 Cont = Callable[[int], "int | None"]
 
 
+def _is_word(ch: str) -> bool:
+    """A `@w` symbol — an ASCII letter, digit, or underscore. The alphabet whose
+    boundary the `@<`/`@>` word anchors test against."""
+    return ch == "_" or (ch.isascii() and ch.isalnum())
+
+
 class _State:
     """Captures accumulated during one match attempt, with absolute spans.
 
@@ -109,8 +115,16 @@ def _match_seq(
             ok = pos == len(text) or text[pos] == "\n"
         elif at == "scope_start":
             ok = pos == 0
-        else:  # scope_end
+        elif at == "scope_end":
             ok = pos == len(text)
+        elif at == "word_start":
+            ok = (pos < len(text) and _is_word(text[pos])) and not (
+                pos > 0 and _is_word(text[pos - 1])
+            )
+        else:  # word_end
+            ok = (pos > 0 and _is_word(text[pos - 1])) and not (
+                pos < len(text) and _is_word(text[pos])
+            )
         return cont(pos) if ok else None
     return _DISPATCH[type(el)](el, text, pos, state, cont)
 

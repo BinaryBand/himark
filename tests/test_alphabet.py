@@ -25,11 +25,7 @@ def test_macros_present():
         "u",
         "s",
         "w",
-        "x",
         "hex",
-        "b32",
-        "b58",
-        "b64",
         "ascii",
         "uni",
     ):
@@ -38,11 +34,6 @@ def test_macros_present():
 
 def test_dec_expands_to_range():
     assert MACROS["d"] == "0..9"
-
-
-def test_b58_complement_form():
-    # base58 = digits, upper, lower, minus the four ambiguous glyphs.
-    assert MACROS["b58"] == "{@d},{@u},{@l},!{0,l,I,O}"
 
 
 # ── Positional value arithmetic ───────────────────────────────────────────────

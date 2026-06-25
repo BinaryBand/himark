@@ -35,13 +35,34 @@ _FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 
 @dataclass(slots=True)
 class _Value:
-    """A moustache value flowing through the filter chain. `text` is the surface
-    string; `alphabet` (set only for a **group** accessor over a `{A:x..y}` bound)
-    lets a value filter read it as a number. A whole-stage accessor, `{{.}}`, and
-    any string-filter output carry no alphabet — they are raw strings."""
+    """A moustache value flowing through an expression and its filter chain. `text`
+    is the surface string; `alphabet` (set only for a **group** accessor over a
+    `{A:x..y}` bound) lets a value filter read it as a number. `num` is set for a
+    **computed** integer (`$0 + 1`, `2 * #0`) — a `Z` result with no alphabet that
+    render-casts to decimal. A whole-stage accessor, `{{.}}`, a string literal, and
+    any string-filter output carry neither — they are raw strings."""
 
     text: str
     alphabet: Alphabet | RangeAlphabet | None = None
+    num: int | None = None
+
+
+def _to_int(v: _Value) -> int:
+    """The integer value of `v` for arithmetic: a computed `num`, else a typed
+    group read through its alphabet. A raw string has no value — a compile error."""
+    if v.num is not None:
+        return v.num
+    if v.alphabet is not None:
+        return v.alphabet.value(v.text)
+    raise CompileError(
+        f"arithmetic needs a value (a typed-alphabet group or an integer), "
+        f"not the raw string {v.text!r}"
+    )
+
+
+def _to_text(v: _Value) -> str:
+    """The surface text of `v` — a computed integer render-casts to decimal (`@d`)."""
+    return str(v.num) if v.num is not None else v.text
 
 
 def _as_bytes(s: str, filt: str) -> bytes:
@@ -64,37 +85,65 @@ def _indent(s: str) -> str:
     return "" if s == "" else "\t" + s.replace("\n", "\n\t")
 
 
-def _filter_b256(value: _Value, n: int) -> str:
-    """The reference's value as `n` big-endian base-256 bytes (latin-1 string).
-    The only **value** filter — it needs the alphabet the reference matched under."""
-    if value.alphabet is None:
+def _arg(nums: list[int], name: str) -> int:
+    """The single integer argument a width/count filter needs, or a clear error."""
+    if len(nums) != 1:
+        raise CompileError(f"Filter '{name}' needs exactly one integer argument")
+    return nums[0]
+
+
+def _filter_b256(value: _Value, nums: list[int], little: bool) -> str:
+    """The reference's value as base-256 bytes (latin-1 string), big-endian unless
+    `le`. The only **value** filter — it needs the alphabet the reference matched
+    under. Width is the `b256(n)` argument."""
+    n = _arg(nums, "b256")
+    if value.num is not None:
+        iv = value.num
+    elif value.alphabet is not None:
+        iv = value.alphabet.value(value.text)
+    else:
         raise CompileError(
-            "b256 needs a value reference (a '{A:x..y}' group), not a raw string"
+            "b256 needs a value (a '{A:x..y}' group or an arithmetic result), "
+            "not a raw string"
         )
-    iv = value.alphabet.value(value.text)
     try:
-        return iv.to_bytes(n, "big").decode("latin-1")
+        return iv.to_bytes(n, "little" if little else "big").decode("latin-1")
     except OverflowError:
         raise CompileError(f"b256({n}): value {iv} does not fit in {n} bytes") from None
 
 
-# Every filter maps a `_Value` (plus any integer arguments) to a raw string. Most
-# read only the surface text; `b256` additionally needs the value's alphabet. The
-# byte filters (`hex`, `sha256`, `head`, `tail`) work in the one-byte-per-code-point
-# domain, so they chain after `b256`.
+def _filter_uint(value: _Value, nums: list[int], little: bool) -> str:
+    """A byte string back to an unsigned integer (decimal text), big-endian unless
+    `le` — the inverse of `b256`, so `v | b256(n) | uint` round-trips."""
+    raw = _as_bytes(value.text, "uint")
+    return str(int.from_bytes(raw, "little" if little else "big"))
+
+
+# Every filter maps `(value, nums, little)` to a raw string: `nums` are the integer
+# arguments, `little` is set by an `le` flag (cleared by `be`). Most read only the
+# surface text; `b256` additionally needs the value's alphabet. The byte filters
+# (`hex`, `sha256`, `sha512`, `head`, `tail`, `uint`) work one byte per code point,
+# so they chain after `b256`.
 _FILTERS = {
-    "upper": lambda v: v.text.upper(),
-    "lower": lambda v: v.text.lower(),
-    "trim": lambda v: v.text.strip(),
-    "indent": lambda v: _indent(v.text),
-    "len": lambda v: str(len(v.text)),
-    "hex": lambda v: _as_bytes(v.text, "hex").hex(),
-    "sha256": lambda v: (
+    "upper": lambda v, nums, little: v.text.upper(),
+    "lower": lambda v, nums, little: v.text.lower(),
+    "trim": lambda v, nums, little: v.text.strip(),
+    "indent": lambda v, nums, little: _indent(v.text),
+    "len": lambda v, nums, little: str(len(v.text)),
+    "hex": lambda v, nums, little: _as_bytes(v.text, "hex").hex(),
+    "pad": lambda v, nums, little: v.text.rjust(_arg(nums, "pad"), "0"),
+    "sha256": lambda v, nums, little: (
         hashlib.sha256(_as_bytes(v.text, "sha256")).digest().decode("latin-1")
     ),
-    "head": lambda v, n: v.text[:n],
-    "tail": lambda v, n: v.text[-n:] if n else "",
+    "sha512": lambda v, nums, little: (
+        hashlib.sha512(_as_bytes(v.text, "sha512")).digest().decode("latin-1")
+    ),
+    "head": lambda v, nums, little: v.text[: _arg(nums, "head")],
+    "tail": lambda v, nums, little: (
+        v.text[-_arg(nums, "tail") :] if _arg(nums, "tail") else ""
+    ),
     "b256": _filter_b256,
+    "uint": _filter_uint,
 }
 
 
@@ -145,18 +194,128 @@ def render(
     return full, ptext, (pstart, pstart + len(ptext))
 
 
+# One expression token. Order matters: a string and an accessor (`0$0`, `$`, `.`)
+# are tried before a bare integer or filter name so they are not mis-split.
+_EXPR_TOKEN_RE = re.compile(
+    r"""
+      (?P<ws>\s+)
+    | (?P<string>"[^"]*")
+    | (?P<accessor>\d*[$#]\d+(?:\.\d+)*|\d*[$#]|\.)
+    | (?P<filter>[A-Za-z_]\w*\s*\([^)]*\)|[A-Za-z_]\w*)
+    | (?P<int>\d+)
+    | (?P<lparen>\()
+    | (?P<rparen>\))
+    | (?P<star>\*)
+    | (?P<plus>\+)
+    | (?P<pipe>\|)
+    | (?P<comma>,)
+    """,
+    re.X,
+)
+
+
+def _tokenize(s: str) -> list[tuple[str, str]]:
+    """Lex a moustache expression into `(kind, text)` tokens, dropping whitespace."""
+    toks: list[tuple[str, str]] = []
+    pos = 0
+    while pos < len(s):
+        m = _EXPR_TOKEN_RE.match(s, pos)
+        if m is None:
+            raise CompileError(
+                f"Unexpected character {s[pos]!r} in moustache expression {{{{{s}}}}}"
+            )
+        pos = m.end()
+        if m.lastgroup != "ws":
+            toks.append((m.lastgroup, m.group()))
+    return toks
+
+
+class _ExprParser:
+    """Recursive descent over a moustache expression. Precedence tightest to
+    loosest: `*`, `+`, `|` (filter), `,` (concat, parentheses only). Each rule
+    returns a `_Value`; arithmetic reads `Z` values and yields a computed integer,
+    `,` concatenates surface text, `|` applies a filter."""
+
+    def __init__(self, toks: list[tuple[str, str]], current: str, stages):
+        self.toks = toks
+        self.i = 0
+        self.current = current
+        self.stages = stages
+
+    def _peek(self) -> str:
+        return self.toks[self.i][0] if self.i < len(self.toks) else ""
+
+    def parse(self) -> _Value:
+        value = self._pipe()
+        if self.i != len(self.toks):
+            raise CompileError(
+                f"Unexpected '{self.toks[self.i][1]}' in moustache expression"
+            )
+        return value
+
+    def _pipe(self) -> _Value:
+        value = self._add()
+        while self._peek() == "pipe":
+            self.i += 1
+            if self._peek() != "filter":
+                raise CompileError("'|' must be followed by a filter")
+            value = _apply_filter(self.toks[self.i][1], value)
+            self.i += 1
+        return value
+
+    def _add(self) -> _Value:
+        value = self._mul()
+        while self._peek() == "plus":
+            self.i += 1
+            n = _to_int(value) + _to_int(self._mul())
+            value = _Value(str(n), num=n)
+        return value
+
+    def _mul(self) -> _Value:
+        value = self._atom()
+        while self._peek() == "star":
+            self.i += 1
+            n = _to_int(value) * _to_int(self._atom())
+            value = _Value(str(n), num=n)
+        return value
+
+    def _atom(self) -> _Value:
+        kind, text = self.toks[self.i] if self.i < len(self.toks) else ("", "")
+        if kind == "lparen":
+            return self._parens()
+        self.i += 1
+        if kind == "string":
+            return _Value(text[1:-1])  # a raw string
+        if kind == "int":
+            return _Value(text, num=int(text))
+        if kind == "accessor":
+            return _Value(self.current) if text == "." else _resolve(text, self.stages)
+        raise CompileError(f"Expected a value in moustache expression, got {text!r}")
+
+    def _parens(self) -> _Value:
+        self.i += 1  # consume '('
+        members = [self._pipe()]
+        while self._peek() == "comma":
+            self.i += 1
+            members.append(self._pipe())
+        if self._peek() != "rparen":
+            raise CompileError("Unclosed '(' in moustache expression")
+        self.i += 1  # consume ')'
+        if len(members) == 1:
+            return members[0]  # plain grouping
+        return _Value("".join(_to_text(m) for m in members))  # concatenation
+
+
 def _eval(inner: str, current: str, stages: list[Match]) -> str:
-    """Resolve a moustache body `accessor | filter | …` to its surface string."""
-    parts = inner.split("|")
-    accessor = parts[0].strip()
-    value = _Value(current) if accessor == "." else _resolve(accessor, stages)
-    for f in parts[1:]:
-        value = _apply_filter(f, value)
-    return value.text
+    """Evaluate a moustache body — an expression over accessors, integer/string
+    literals, `*`/`+` arithmetic, `,` concatenation, and `|` filters — to text."""
+    return _to_text(_ExprParser(_tokenize(inner), current, stages).parse())
 
 
 def _apply_filter(token: str, value: _Value) -> _Value:
-    """Apply one `name` or `name(args)` filter, returning a raw-string `_Value`."""
+    """Apply one `name` or `name(args)` filter, returning a raw-string `_Value`.
+    Arguments are integers (width/count) plus an optional `le`/`be` endianness
+    flag (default big-endian)."""
     m = _FILTER_RE.fullmatch(token)
     if m is None:
         raise CompileError(f"Malformed template filter: '{token.strip()}'")
@@ -164,16 +323,19 @@ def _apply_filter(token: str, value: _Value) -> _Value:
     fn = _FILTERS.get(name)
     if fn is None:
         raise CompileError(f"Unknown template filter: '{name}'")
-    try:
-        args = [int(a) for a in arg_src.split(",")] if arg_src else []
-    except ValueError:
-        raise CompileError(
-            f"Filter '{name}' arguments must be integers: '{arg_src}'"
-        ) from None
-    try:
-        return _Value(fn(value, *args))
-    except TypeError:
-        raise CompileError(f"Filter '{name}': wrong number of arguments") from None
+    nums: list[int] = []
+    little = False
+    for a in (p.strip() for p in arg_src.split(",")) if arg_src else ():
+        if a in ("le", "be"):
+            little = a == "le"
+            continue
+        try:
+            nums.append(int(a))
+        except ValueError:
+            raise CompileError(
+                f"Filter '{name}' argument must be an integer or 'le'/'be': '{a}'"
+            ) from None
+    return _Value(fn(value, nums, little))
 
 
 def _resolve(expr: str, stages: list[Match]) -> _Value:

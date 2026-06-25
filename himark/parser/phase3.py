@@ -228,6 +228,10 @@ def _resolve_brace(content: str) -> t.SemanticNode:
         return t.AnchorNode(at="scope_start")
     if sa == "@$$":
         return t.AnchorNode(at="scope_end")
+    if sa == "@<":
+        return t.AnchorNode(at="word_start")
+    if sa == "@>":
+        return t.AnchorNode(at="word_end")
 
     ref = _resolve_reference(content)
     if ref is not None:

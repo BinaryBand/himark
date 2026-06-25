@@ -97,3 +97,35 @@ def test_doc_band_literal_colons():
     assert matches("{https://x.com}", "go to https://x.com now") == ["https://x.com"]
     # A class whose member is `:` is a union, not a band (the colon is a point).
     assert sorted(matches("{ ,:,-}", "a:b-c d")) == [" ", "-", ":"]
+
+
+def test_doc_word_anchors():
+    # The Anchors section: `@<`/`@>` are a `@w` <-> non-`@w` boundary, zero-width.
+    assert matches("{@<}{@w:a..zzzzz}{@>}", "hi there") == ["hi", "there"]
+    assert len(matches("{@<}{a,b,c}", "a b c")) == 3  # three word starts
+    assert matches("{foo}{@>}", "foo foobar") == ["foo"]  # @> only at a boundary
+
+
+def test_doc_filters():
+    # The Filters section: sha512/pad/uint plus `le`/`be` endianness on b256/uint.
+    assert execute(parser.parse('{@d:0..} => "{{ 0$0 | pad(4) }}"'), "7") == ["0007"]
+    assert execute(
+        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) | uint }}"'), "258"
+    ) == ["258"]
+    # `v | b256(n) | uint` round-trips when endianness matches.
+    assert execute(
+        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | uint(le) }}"'), "258"
+    ) == ["258"]
+    # b256(le) reverses the byte order of the big-endian form.
+    assert execute(
+        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | hex }}"'), "258"
+    ) == ["0201"]
+    assert execute(
+        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) | hex }}"'), "258"
+    ) == ["0102"]
+    import hashlib
+
+    sha512_hex = execute(
+        parser.parse('{!@s}[1..] => "{{ 0$0 | sha512 | hex }}"'), "abc"
+    )
+    assert sha512_hex == [hashlib.sha512(b"abc").hexdigest()]
