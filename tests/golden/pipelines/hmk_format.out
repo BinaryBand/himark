@@ -1,4 +1,4 @@
-// A deliberately messy script for hmk_format.hmk to tidy.
+// A deliberately messy script for format_hmk.hmk to tidy.
 
 // Simple formatting problems to fix:
 //  - trailing spaces at end of line

@@ -1,8 +1,8 @@
 // ============================================================================
-//  html_format.hmk -- pretty-print and normalize HTML (one tab per nesting level).
+//  format_html.hmk -- pretty-print and normalize HTML (one tab per nesting level).
 //
 //  Run it like any pipeline:
-//      himark transpile page.html --script himark/scripts/html_format.hmk
+//      himark transpile page.html --script himark/scripts/format_html.hmk
 //
 //  Handles real markup: tag attributes, void elements (<br>, <img …>, …), self-
 //  closing tags, comments, the DOCTYPE, and the inline-vs-block distinction --

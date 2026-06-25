@@ -1,10 +1,10 @@
 // ============================================================================
-//  md_format.hmk — a cosmetic tidy for Markdown, written entirely in HMK.
+//  format_md.hmk — a cosmetic tidy for Markdown, written entirely in HMK.
 //
 //  Run it like any pipeline:
-//      himark transpile messy.md --script himark/scripts/md_format.hmk --out clean.md
+//      himark transpile messy.md --script himark/scripts/format_md.hmk --out clean.md
 //
-//  Like hmk_format.hmk, HMK matches by shape with no nesting stack, so a naive
+//  Like format_hmk.hmk, HMK matches by shape with no nesting stack, so a naive
 //  formatter would happily "tidy" inside a fenced code block. We avoid that the
 //  HMK way — a **masking pre-pass** wraps each ``` … ``` block in private brackets
 //  ⟦ ⟧ and swaps its interior newlines for a sentinel ␤, so the line-local rules

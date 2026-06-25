@@ -55,15 +55,17 @@ def _head9(t: str) -> str:
 PIPELINES = [
     ("btc_extract", "btc_extract.hmk", "addresses.txt", _whole),
     ("bubble_sort", "bubble_sort.hmk", "numbers.txt", _whole),
-    ("hmk_format", "hmk_format.hmk", "sample.hmk", _whole),
-    ("md_format", "md_format.hmk", "messy.md", _whole),
-    ("html_format", "html_format.hmk", "sample.html", _strip),
+    ("hmk_format", "format_hmk.hmk", "sample.hmk", _whole),
+    ("md_format", "format_md.hmk", "messy.md", _whole),
+    ("html_format", "format_html.hmk", "sample.html", _strip),
     ("md_html", "md_html.hmk", "sample.md", _whole),
     ("dedup", "dedup.hmk", "podcasts.csv", _head9),
 ]
 
 
-@pytest.mark.parametrize("name,script,resource,slice_", PIPELINES, ids=[p[0] for p in PIPELINES])
+@pytest.mark.parametrize(
+    "name,script,resource,slice_", PIPELINES, ids=[p[0] for p in PIPELINES]
+)
 def test_pipeline_golden(name, script, resource, slice_):
     pipeline = precompiled.compile_pipeline(precompiled.load_script(SCRIPTS / script))
     src = slice_((RESOURCES / resource).read_text("utf-8"))
@@ -98,8 +100,11 @@ MATCHER = [
     ("anchored_line", r"{@^}{!\n}[1..]{\n}", "one\ntwo\nthree\n"),
     ("value_range_uni", r"{aa..zz}", "  aa zz mid"),
     ("grouping_subs", r"{of {black} {quartz}}", "of black quartz here"),
-    ("captures_example", r"{#}[1..]{ }{Sphinx}{ }{of {black} {quartz}}",
-     "### Sphinx of black quartz, judge my vow!"),
+    (
+        "captures_example",
+        r"{#}[1..]{ }{Sphinx}{ }{of {black} {quartz}}",
+        "### Sphinx of black quartz, judge my vow!",
+    ),
     ("exclusion_range", r"{a..z,!{m..p}}[1..]", "abcmnopxyz"),
 ]
 
@@ -144,7 +149,9 @@ def test_matcher_golden_corpus():
     built = _build_matcher_corpus()
     if _UPDATE:
         _MATCHER_GOLDEN.parent.mkdir(parents=True, exist_ok=True)
-        _MATCHER_GOLDEN.write_text(json.dumps(built, indent=2, ensure_ascii=False) + "\n", "utf-8")
+        _MATCHER_GOLDEN.write_text(
+            json.dumps(built, indent=2, ensure_ascii=False) + "\n", "utf-8"
+        )
         return
     assert _MATCHER_GOLDEN.exists(), (
         f"missing golden {_MATCHER_GOLDEN} — run HIMARK_UPDATE_GOLDEN=1 pytest"

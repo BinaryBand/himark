@@ -58,19 +58,19 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 
 ### Classes and arithmetic
 
-| Pattern         | Matches                                       |
-| --------------- | --------------------------------------------- |
-| `{abc}`         | the literal string `abc`                      |
-| `{a,A}`         | one congruence class: `a` or `A`              |
-| `{a..z}`        | **one** lowercase letter (a single position)  |
-| `{a,A}`         | one congruence class: `a` or `A`              |
-| `{!\ }[1..]`    | a run of non-spaces (a word)                  |
-| `{0:@d:255}`    | a decimal value from 0 to 255                 |
-| `{cat,dog}`     | one class: the token `cat` or `dog`           |
-| `{cat..dog}`    | any string between `cat` and `dog`            |
-| `{0:@hex:fff}`  | a hex value, 1 to 3 digits wide               |
+| Pattern        | Matches                                      |
+| -------------- | -------------------------------------------- |
+| `{abc}`        | the literal string `abc`                     |
+| `{a,A}`        | one congruence class: `a` or `A`             |
+| `{a..z}`       | **one** lowercase letter (a single position) |
+| `{a,A}`        | one congruence class: `a` or `A`             |
+| `{!\ }[1..]`   | a run of non-spaces (a word)                 |
+| `{0:@d:255}`   | a decimal value from 0 to 255                |
+| `{cat,dog}`    | one class: the token `cat` or `dog`          |
+| `{cat..dog}`   | any string between `cat` and `dog`           |
+| `{0:@hex:fff}` | a hex value, 1 to 3 digits wide              |
 
-**Every `{…}` matches one position** — one symbol or one value. A *run* comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A multi-symbol **value** is a `:`-bound — `{x:U:y}`, where the floor/ceiling widths set the field width (`{0:@d:255}`, `{0:@hex:fff}`). Operators: `..` ordered range · `,` congruence class · `!` subtract · `:` value bound.
+**Every `{…}` matches one position** — one symbol or one value. A _run_ comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A multi-symbol **value** is a `:`-bound — `{x:U:y}`, where the floor/ceiling widths set the field width (`{0:@d:255}`, `{0:@hex:fff}`). Operators: `..` ordered range · `,` congruence class · `!` subtract · `:` value bound.
 
 ### Macros
 
@@ -78,7 +78,7 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 
 ### Repetition
 
-`[N]` exactly N · `[N..]` N or more · `[..N]` up to N · `[N..M]` · `[..]` any. A **class** repeats by *value* (`{a..z}[3]` is `aaa`, `bbb`, … — three of the *same* letter, since `{a..z}` is one position); a **grouping brace** repeats by *shape*, so one pattern can walk a whole table.
+`[N]` exactly N · `[N..]` N or more · `[..N]` up to N · `[N..M]` · `[..]` any. A **class** repeats by _value_ (`{a..z}[3]` is `aaa`, `bbb`, … — three of the _same_ letter, since `{a..z}` is one position); a **grouping brace** repeats by _shape_, so one pattern can walk a whole table.
 
 ### Chaining and transformers
 

@@ -1,4 +1,4 @@
-"""End-to-end tests for the HTML formatter (`himark/scripts/html_format.hmk`).
+"""End-to-end tests for the HTML formatter (`himark/scripts/format_html.hmk`).
 
 The script pretty-prints and normalizes HTML one tab per nesting level using a
 stackless, inside-out fixed point (`<=>`). Inline elements (<b>, <a>, <code>, …)
@@ -13,7 +13,7 @@ from pathlib import Path
 
 from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "html_format.hmk"
+SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_html.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
 

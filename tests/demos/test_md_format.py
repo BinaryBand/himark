@@ -1,6 +1,6 @@
-"""The HMK-self-hosted Markdown tidy (`himark/scripts/md_format.hmk`).
+"""The HMK-self-hosted Markdown tidy (`himark/scripts/format_md.hmk`).
 
-A second dogfooding formatter, the Markdown sibling of `hmk_format.hmk`. We pin the
+A second dogfooding formatter, the Markdown sibling of `format_hmk.hmk`. We pin the
 line-local tidies (file edges, trailing whitespace, blank runs, ATX heading
 spacing, bullet normalization), that they stay idempotent, and — crucially — that
 the **masking pre-pass** protects fenced ``` … ``` code: messy interior spacing, a
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from himark.tools import precompiled
 
-SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "md_format.hmk"
+SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_md.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
 _PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
