@@ -13,8 +13,9 @@
 //
 //  Tidies applied (all idempotent): trim file edges, strip trailing whitespace,
 //  collapse blank runs, give an ATX heading exactly one space after its `#` run,
-//  normalize `*`/`+` list bullets to `-`, and **unwrap** soft-wrapped paragraphs
-//  (join consecutive prose lines into one). Fenced code is preserved verbatim.
+//  normalize `*`/`+` list bullets to `-`, join soft-wrapped list-item continuation
+//  lines onto their item, and **unwrap** soft-wrapped paragraphs (join consecutive
+//  prose lines into one). Fenced code is preserved verbatim.
 //
 //  Out of scope (would need a real block lexer): an unclosed ``` fence leaves its
 //  body unprotected, a spaced `* * *` thematic break is read as a `*` bullet, and
@@ -42,6 +43,14 @@
 {@^}{#}[1..6]{!{ ,#,\n}} => "{{$0}} {{$1}}"
 // Normalize a `*` or `+` list bullet (then its space run, at line start) to `-`.
 {@^}{{ ,\t}}[0..]{*,+}{ }[1..] => "{{$0}}- "
+// Join list-item continuation lines: a line indented 2–3 spaces whose first real
+// character is prose (not a nested bullet/quote/heading/number) is a soft-wrap of
+// the item above it — drop the newline+indent for a single space. The leading
+// `{!\n}` anchors to a non-blank line (so a blank-separated paragraph or loose
+// list item is left alone), and re-splicing to a fixed point chains successive
+// continuation lines. The 2–3 bound (and the non-space first char) keeps a 4-space
+// indented code block out.
+{!\n}{\n}{ }[2..3]{{!{\n, ,\t,#,-,=,*,+,>,|,⟦,0..9}}{!\n}[..]} <=> "{{$0}} {{$3}}"
 // Unwrap soft-wrapped paragraphs: join a prose line to the next prose line (a
 // space replaces the newline), re-spliced to a fixed point so a whole paragraph
 // collapses to one line. A "prose" line starts with a non-marker character — not

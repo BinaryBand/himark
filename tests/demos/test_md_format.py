@@ -98,6 +98,29 @@ def test_unwrap_does_not_merge_block_constructs():
     assert fmt("Title\n=====\n") == "Title\n=====\n"
 
 
+# ── Joining soft-wrapped list-item continuations ──────────────────────────────
+
+
+def test_joins_list_item_continuation():
+    # A line indented 2–3 spaces with prose first is a soft-wrap of the item above:
+    # the newline+indent collapses to a single space, onto the bullet line.
+    assert fmt("- item one\n  wrapped tail\n- item two\n") == (
+        "- item one wrapped tail\n- item two\n"
+    )
+
+
+def test_continuation_join_does_not_swallow_a_nested_bullet():
+    # The continuation's first real char is a `-`, a marker the rule excludes, so
+    # the nested item keeps its own line.
+    assert fmt("- a\n  - nested\n") == "- a\n  - nested\n"
+
+
+def test_continuation_join_keeps_a_blank_separated_loose_item():
+    # A blank line before the indented line means a loose-list paragraph, not a
+    # soft-wrap — the non-blank anchor leaves it alone.
+    assert fmt("- a\n\n  loose para\n") == "- a\n\n  loose para\n"
+
+
 # ── Fenced code is protected ──────────────────────────────────────────────────
 
 
