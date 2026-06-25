@@ -50,7 +50,7 @@ def test_doc_subtractive_universe_examples():
 def test_doc_b256_value_filter_example():
     # The Filters section: a group accessor carries its alphabet, so b256 reads
     # '256' as the value 256 and emits it as two big-endian bytes.
-    assert execute(parser.parse('{0:@d:65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
+    assert execute(parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
         "\x01\x00"
     ]
 
@@ -64,4 +64,28 @@ def test_doc_primitives_vs_objects():
     assert matches("{{a,A}}[2]", "aa aA Aa AA") == ["aa", "aA", "Aa", "AA"]
     assert len(matches("{{a,A},{c,C}}[2]", "aa aA Aa AA cc cC Cc CC")) == 8
     # `{a,b}` is `{a..b}`: ordered, so a bound is value-ordered, not folded.
-    assert matches("{a:{a,b,c}:b}", "a b c") == ["a", "b"]
+    assert matches("{{a,b,c}:a..b}", "a b c") == ["a", "b"]
+
+
+def test_doc_band_grammar_examples():
+    # The Bands section: a band is `{payload:band}` — the payload alphabet
+    # restricted by a `..` range, a single value, or a `,`-union of either.
+    assert matches("{@d:0..255}", "0 200 255 256") == ["0", "200", "255", "25", "6"]
+    assert matches("{@d:5}", "4 5 6") == ["5"]  # single value over a typed head
+    assert matches("{a,b,g..z:m..p}", "a g m n p z") == ["m", "n", "p"]
+    assert matches("{0..9:9..12,1..5}", "0 1 5 6 9 12 13") == ["1", "5", "9", "12", "1", "3"]
+    assert matches("{{a..z}:b}", "a b c") == ["b"]  # braced-universe head
+    # Drop the prefix for an ambient band; an open end keeps one side unbounded.
+    assert matches("{@d:0..}", "7") == ["7"]
+    assert matches("{@l:aa..zz}", "aa a9 zz") == ["aa", "zz"]
+
+
+def test_doc_band_literal_colons():
+    # "When `:` separates": the colon is a band separator only for a typed head
+    # or a band-side `..`. A plain-literal head with a value-only right side keeps
+    # every colon literal — no escaping needed.
+    assert matches("{12:30}", "12:30 12:31") == ["12:30"]
+    assert matches("{std::vector}", "std::vector x") == ["std::vector"]
+    assert matches("{https://x.com}", "go to https://x.com now") == ["https://x.com"]
+    # A class whose member is `:` is a union, not a band (the colon is a point).
+    assert sorted(matches("{ ,:,-}", "a:b-c d")) == [" ", "-", ":"]

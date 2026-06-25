@@ -247,7 +247,7 @@
     ]
   },
   "value_bound": {
-    "pattern": "{0:@d:255}",
+    "pattern": "{@d:0..255}",
     "text": "go 42 200 999 7 here",
     "matches": [
       {
@@ -358,7 +358,7 @@
     ]
   },
   "dyn_value_range": {
-    "pattern": "{{@d}}[1..]\\,{0:@d:$0}",
+    "pattern": "{{@d}}[1..]\\,{@d:0..$0}",
     "text": "9,4 and 3,7",
     "matches": []
   },

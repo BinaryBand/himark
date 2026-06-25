@@ -31,7 +31,7 @@ def _norm(ms):
     """A comparable view of a match list: text, span, and capture shape. The
     capture's value alphabet is reduced to present/absent — distinct `Alphabet`
     instances are equal in content but not by identity, and the Rust subset never
-    produces one anyway (only the Python fallback does, for `{x:A:y}` bounds)."""
+    produces one anyway (only the Python fallback does, for `{A:x..y}` bounds)."""
     return [
         (
             m.text,
@@ -66,18 +66,18 @@ def test_rust_path_matches_python(pattern, text):
 
 def test_static_value_bound_falls_back_and_still_matches():
     rs = RustEngine()
-    tag, _ = rs.compile(parser.parse(r"{0:@d:255}")[0])
+    tag, _ = rs.compile(parser.parse(r"{@d:0..255}")[0])
     assert tag == "py"  # value arithmetic is out of subset
     text = "go 42 200 999 7 here"
-    assert _norm(_matches(rs, r"{0:@d:255}", text)) == _norm(
-        _matches(PY, r"{0:@d:255}", text)
+    assert _norm(_matches(rs, r"{@d:0..255}", text)) == _norm(
+        _matches(PY, r"{@d:0..255}", text)
     )
 
 
 def test_reference_value_bound_falls_back():
-    # bubble_sort.hmk's compare-and-swap uses {0:@d:$0} (a dynamic value range).
+    # bubble_sort.hmk's compare-and-swap uses {@d:0..$0} (a dynamic value range).
     rs = RustEngine()
-    tag, _ = rs.compile(parser.parse(r"{{@d}}[1..]\,{0:@d:$0}")[0])
+    tag, _ = rs.compile(parser.parse(r"{{@d}}[1..]\,{@d:0..$0}")[0])
     assert tag == "py"
 
 

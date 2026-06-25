@@ -49,7 +49,7 @@ class _Base:
     same congruence group."""
 
     # The value alphabet a capture of this matcher carries (None unless the
-    # matcher is a `{x:A:y}` bound); read by the run loop to type the capture.
+    # matcher is a `{A:x..y}` bound); read by the run loop to type the capture.
     value_alphabet: "Alphabet | RangeAlphabet | None" = None
 
     def match(self, text: str, pos: int) -> int | None:  # pragma: no cover
@@ -170,7 +170,7 @@ def _alphabet_of(node: t.SemanticNode, *, distinct: bool) -> Alphabet:
 
 def _value_alphabet(node: t.SemanticNode) -> Alphabet | RangeAlphabet:
     """The alphabet a bound's values are read in. A code-point range too large to
-    materialize (`@uni`, the normalised `{x::y}` middle) becomes a virtual
+    materialize (`@uni`, the normalised `{x..y}` payload) becomes a virtual
     `RangeAlphabet`; everything else is the ordinary materialized `Alphabet`."""
     if isinstance(node, t.CharRangeNode):
         lo, hi = ord(node.start), ord(node.end)
@@ -231,7 +231,7 @@ def _build_value_view(
 
 
 def _value_view(node: t.ValueRangeNode) -> _ValueView:
-    """The value-arithmetic view of a static `{floor:alphabet:ceiling}` bound."""
+    """The value-arithmetic view of a static `{alphabet:floor..ceiling}` bound."""
     return _build_value_view(
         _value_alphabet(node.alpha), node.lower, node.upper, node.exclusions
     )
@@ -270,7 +270,7 @@ class _CharRange(_Base):
 
 
 class _ValueRange(_Base):
-    """Width-window value match for a `{floor:alphabet:ceiling}` bound: the value
+    """Width-window value match for a `{alphabet:floor..ceiling}` bound: the value
     lies in [floor, ceiling] and the written width lies in the bound's width
     window. Leading zero-padding inside the window is allowed, and the longest
     valid width wins."""

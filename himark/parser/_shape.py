@@ -22,7 +22,7 @@ def is_sequence_brace(content: str) -> bool:
     adjacent text — or holds more than one construct — is a sub-pattern.
     """
     if len(split_top(":", content)) == 3:
-        return False  # a `{floor:alphabet:ceiling}` bound is one value universe
+        return False  # a `{alphabet:floor..ceiling}` bound is one value universe
     body = content
     if body.startswith("!"):
         body = body[1:]

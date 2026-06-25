@@ -45,7 +45,7 @@
 // ============================================================================
 
 // 1. Tag every address-shaped run with its expected and actual checksums.
-{!@b58}{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
+{!@b58}{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
     => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"
 
 // 2. Keep the valid ones: {$3} forces actual == expect. Render the final form.

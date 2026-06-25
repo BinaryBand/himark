@@ -15,7 +15,7 @@ def matches(pattern, text):
 # A leading '1' then a base58 value bounded by the smallest and largest 25-byte
 # addresses (the floor/ceiling widths give the length window).
 
-BTC = "{1}{111111111111111111111111:@b58:2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}"
+BTC = "{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}"
 
 
 def test_btc_minimum_length_enforced():
@@ -103,7 +103,7 @@ def test_btc_rejects_forbidden_base58_symbols():
 # 0x prefix + exactly 40 hex digits. A fixed width is a floor and ceiling written
 # at the same width, so the value runs from 40 zeros to 40 f's (case-folded).
 
-ETH = "{0x}{" + "0" * 40 + ":@hex:" + "f" * 40 + "}"
+ETH = "{0x}{@hex:" + "0" * 40 + ".." + "f" * 40 + "}"
 
 
 def test_eth_valid_address():

@@ -45,7 +45,7 @@ def test_char_range_single_position():
 
 def test_upper_bound():
     # phase3 sees the expanded macro text (@d -> 0..9), not the @ ref.
-    node = first_semantic("{:{0..9}:255}")
+    node = first_semantic("{{0..9}:..255}")
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)
     assert node.upper == "255"
@@ -53,7 +53,7 @@ def test_upper_bound():
 
 
 def test_lower_bound():
-    node = first_semantic("{128:{0..9}:}")
+    node = first_semantic("{{0..9}:128..}")
     assert node.type == "value_range"
     assert node.lower == "128"
     assert node.upper is None  # open above (unbounded)
@@ -61,7 +61,7 @@ def test_lower_bound():
 
 
 def test_bounded_range():
-    node = first_semantic("{aa:{a..z}:zz}")
+    node = first_semantic("{{a..z}:aa..zz}")
     assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
@@ -69,9 +69,9 @@ def test_bounded_range():
 
 
 def test_bound_reference_endpoint():
-    # `{0:@d:$0}` — the ceiling is a back-reference, resolved at match time. The
+    # `{@d:0..$0}` — the ceiling is a back-reference, resolved at match time. The
     # literal `upper` is None; `upper_ref` carries the reference node.
-    node = first_semantic("{0:@d:$0}")
+    node = first_semantic("{@d:0..$0}")
     assert node.type == "value_range"
     assert node.lower == "0"
     assert node.upper is None
@@ -81,7 +81,7 @@ def test_bound_reference_endpoint():
 
 def test_escaped_dollar_endpoint_is_literal_not_reference():
     # `\$0` is the literal text "$0", not a reference (so `upper_ref` is None).
-    node = first_semantic(r"{0:@d:\$0}")
+    node = first_semantic(r"{@d:0..\$0}")
     assert node.upper == "$0"
     assert node.upper_ref is None
 
@@ -157,7 +157,7 @@ def test_singleton_value_helper():
 
 def test_singleton_bounded_range_synonym():
     # {z}[3] is a singleton τ, equivalent to writing the literal 'zzz'.
-    node = first_semantic("{{1}[3]:{a..z}:{z}[3]}")
+    node = first_semantic("{{a..z}:{1}[3]..{z}[3]}")
     assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
@@ -166,14 +166,14 @@ def test_singleton_bounded_range_synonym():
 
 def test_singleton_upper_bound():
     # An open-floor bound whose ceiling is a singleton constructor.
-    node = first_semantic("{:{0..9}:{9}[3]}")
+    node = first_semantic("{{0..9}:..{9}[3]}")
     assert node.type == "value_range"
     assert node.lower is None
     assert node.upper == "999"
 
 
 def test_singleton_lower_bound():
-    node = first_semantic("{{0}[3]:{0..9}:}")
+    node = first_semantic("{{0..9}:{0}[3]..}")
     assert node.type == "value_range"
     assert node.lower == "000"
     assert node.upper is None
@@ -247,7 +247,7 @@ def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
     assert first_semantic("{a..z}").type == "char_range"
     assert first_semantic("{cat,dog}").type == "group_class"
-    assert first_semantic("{aa:{a..z}:zz}").type == "value_range"
+    assert first_semantic("{{a..z}:aa..zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "heterogeneous"  # {{U}} nesting
     assert first_semantic("{{a,A},{b,B}}").type == "group_class"
 
@@ -325,7 +325,7 @@ def test_back_ref_not_shadowed_by_stage_ref():
 
 def test_multi_char_range_is_value_bound_over_uni():
     # HMK.md §Universes: an unnamed multi-char `..` range is a value bound over
-    # ambient Unicode — `{aa..zz}` == `{aa:@uni:zz}`.
+    # ambient Unicode — `{aa..zz}` == `{@uni:aa..zz}`.
     node = first_semantic("{cat..dog}")
     assert node.type == "value_range"
     assert node.lower == "cat"

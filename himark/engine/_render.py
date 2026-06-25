@@ -36,7 +36,7 @@ _FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 @dataclass(slots=True)
 class _Value:
     """A moustache value flowing through the filter chain. `text` is the surface
-    string; `alphabet` (set only for a **group** accessor over a `{x:A:y}` bound)
+    string; `alphabet` (set only for a **group** accessor over a `{A:x..y}` bound)
     lets a value filter read it as a number. A whole-stage accessor, `{{.}}`, and
     any string-filter output carry no alphabet — they are raw strings."""
 
@@ -69,7 +69,7 @@ def _filter_b256(value: _Value, n: int) -> str:
     The only **value** filter — it needs the alphabet the reference matched under."""
     if value.alphabet is None:
         raise CompileError(
-            "b256 needs a value reference (a '{x:A:y}' group), not a raw string"
+            "b256 needs a value reference (a '{A:x..y}' group), not a raw string"
         )
     iv = value.alphabet.value(value.text)
     try:

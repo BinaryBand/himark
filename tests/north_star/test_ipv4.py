@@ -3,7 +3,7 @@
 from himark import parser
 from himark.engine import find_matches
 
-PATTERN = "{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}{.}{0:@d:255}"
+PATTERN = "{@d:0..255}{.}{@d:0..255}{.}{@d:0..255}{.}{@d:0..255}"
 
 
 def matches(text):

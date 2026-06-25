@@ -335,7 +335,7 @@ def _run_matcher(matcher, het, reps, alphabet, text, pos, state, cont):
     return attempt(pos, []) if reps.accepts(0) else None
 
 
-# ── Value bound with a reference endpoint `{0:@d:$0}` ─────────────────────────
+# ── Value bound with a reference endpoint `{@d:0..$0}` ───────────────────────
 
 
 def _endpoint_text(desc: tuple, state: _State) -> str | None:

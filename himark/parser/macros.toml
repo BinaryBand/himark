@@ -10,7 +10,7 @@
 # `{@d}` matches a decimal digit.
 
 [macros]
-# Positional alphabets (ordered — usable as value bounds, e.g. {0:@d:255}).
+# Positional alphabets (ordered — usable as value bounds, e.g. {@d:0..255}).
 d = "0..9"
 l = "a..z"
 u = "A..Z"
@@ -27,14 +27,14 @@ x = "!@s"
 
 # Derived alphabets — @w sliced to f/v carries the fold along, so hex stays base
 # 16 and case-insensitive at once.
-hex = "{@d},{:@w:f}"
-b32 = "{@d},{:@w:v}"       # RFC 4648 §7
+hex = "{@d},{@w:..f}"
+b32 = "{@d},{@w:..v}"       # RFC 4648 §7
 b64 = "{@d},{@l},{@u},+,/"
 
 # Code-point ranges (endpoints written as \\u escapes).
 ascii = "\u0000..\u007f"
 uni = "\u0000..\U0010FFFF"
-# base-256: every byte, an ordered value alphabet (`{x:@b256:y}`). Distinct from
+# base-256: every byte, an ordered value alphabet (`{@b256:x..y}`). Distinct from
 # the `b256` template filter (which re-encodes a value as base-256 bytes).
 b256 = "\u0000..\u00ff"
 

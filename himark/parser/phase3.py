@@ -12,9 +12,13 @@ whose nested braces are sub-captures, `{of{black}{quartz}}`).
 The σ-grammar has two axes: `..` builds an ordered range (≤), and `,` builds a
 congruence class (~) whose members are interchangeable spellings of one
 position. `{a,A}` is one folded position; `{{a,A},{b,B},…}` is an ordered
-alphabet of folded positions. A value *bound* is `{floor:alphabet:ceiling}`:
-the alphabet restricted to values floor–ceiling, the two written widths setting
-the field-width window (`{0:@d:255}`, `{aa:@l:zz}`, `{x::y}` = ambient @uni).
+alphabet of folded positions. A *band* is `{payload:band}`: a payload alphabet
+restricted by a band over its values — a `..` range (`{@d:0..255}`), a single
+value (`{@d:5}`), or a `,`-union of either (`{@d:1..5,9..12}`). Written endpoint
+widths set the field-width window. The first top-level `:` separates payload from
+band only for a *typed head* (a `@macro`/range/union alphabet, or a braced
+universe) or a band-side `..`; otherwise every colon is literal (`{12:30}`,
+`{std::vector}`, `{https://x.com}`). `\\:` forces a literal colon.
 """
 
 import re
@@ -57,8 +61,13 @@ def _resolved_brace(child: t.BraceGroupNode) -> t.BraceGroupNode:
     `{…}` is an alphabet expression unless its interior concatenates constructs, in
     which case it is a grouping brace (`SequenceNode`). Any `[count]` suffix is
     parsed too."""
-    if is_sequence_brace(child.content):
-        semantic: t.SemanticNode = _resolve_sequence_brace(child.content)
+    # A band with a braced-universe head (`{{a..z}:b}`) reads as a nested brace
+    # plus adjacent text, so test for a band before the grouping-brace check.
+    split = _split_band(child.content)
+    if split is not None and _is_band(*split):
+        semantic: t.SemanticNode = _resolve_band(*split)
+    elif is_sequence_brace(child.content):
+        semantic = _resolve_sequence_brace(child.content)
     else:
         semantic = _resolve_brace(child.content)
     count, count_src = child.count, child.count_src
@@ -96,14 +105,14 @@ def _resolve_sequence_brace(content: str) -> t.SequenceNode:
 
 def _ambient_alpha() -> t.SemanticNode:
     """The ambient Unicode universe (`@uni`): every code point. It is the default
-    alphabet for a bound with an empty middle (`{x::y}`) and for an unnamed
-    multi-char `..` range (`{aa..zz}` == `{aa:@uni:zz}`)."""
+    alphabet for a band with an empty payload (`{:0..255}`) and for an unnamed
+    multi-char `..` range (`{aa..zz}` == `{@uni:aa..zz}`)."""
     return t.CharRangeNode(start="\x00", end="\U0010ffff")
 
 
 def _resolve_universe(expr: str) -> t.SemanticNode:
-    """Resolve a universe expression — the middle of a bound, or a `{…}` alphabet
-    arm. Strips one layer of surrounding braces (`{a..z}` → `a..z`) so a bare
+    """Resolve a universe expression — a band's payload, or a `{…}` alphabet arm.
+    Strips one layer of surrounding braces (`{a..z}` → `a..z`) so a bare
     expression and a braced one resolve the same way."""
     expr = strip_unescaped(expr)
     if expr.startswith("{") and brace_end(expr) == len(expr):
@@ -111,24 +120,68 @@ def _resolve_universe(expr: str) -> t.SemanticNode:
     return _resolve_brace(expr)
 
 
-def _resolve_bounds(parts: list[str]) -> t.ValueRangeNode:
-    """Resolve a `{floor:alphabet:ceiling}` bound. An empty alphabet normalises to
-    @uni (full Unicode); an omitted floor/ceiling is an open end. Endpoint strings
-    are kept verbatim — their written widths set the engine's field-width window."""
-    floor_s, alpha_s, ceil_s = (strip_unescaped(p) for p in parts)
-    if alpha_s == "":
-        alpha: t.SemanticNode = _ambient_alpha()
-    else:
-        alpha = _resolve_universe(alpha_s)
-    # An endpoint may be a reference (`$i` / `N$M` / `#i`), resolved to a captured
-    # value at match time; else a singleton constructor (`{1}[3]` → '111') or
-    # literal text whose written width sets the field window.
-    lower, lower_ref = _bound_endpoint(floor_s)
-    upper, upper_ref = _bound_endpoint(ceil_s)
-    if lower is None and upper is None and lower_ref is None and upper_ref is None:
-        raise CompileError("A bound needs a floor or a ceiling: got '{:U:}'")
-    return t.ValueRangeNode(
-        alpha=alpha, lower=lower, upper=upper, lower_ref=lower_ref, upper_ref=upper_ref
+def _split_band(content: str) -> tuple[str, str] | None:
+    """Split a brace body into `(payload, band)` at the **first** top-level `:`, or
+    None when there is no top-level colon. The band keeps every later colon (they
+    read literally), so `{std::vector}` → `('std', ':vector')`."""
+    parts = split_top(":", content)
+    if len(parts) < 2:
+        return None
+    return parts[0], ":".join(parts[1:])
+
+
+def _is_band(payload: str, band: str) -> bool:
+    """Whether a `payload:band` split is a real band rather than literal colons.
+    A band needs a **typed head** — a payload that names a value alphabet: a
+    `..` range (which is what a `@macro` like `@d`→`0..9` expands to) or a braced
+    universe (`{{a..z}:b}`) — or a **band-side `..`** range (`{a,b,g..z:m..p}`).
+    Otherwise every colon is literal: a plain-literal head with a value-only right
+    side (`{12:30}`, `{std::vector}`), or a class whose member is `:` (`{ ,:,-}`)."""
+    head = strip_unescaped(payload)
+    typed_head = len(split_top("..", payload)) > 1 or (
+        head.startswith("{") and brace_end(head) == len(head)
+    )
+    band_has_range = len(split_top("..", band)) > 1
+    return typed_head or band_has_range
+
+
+def _resolve_band(payload: str, band: str) -> t.SemanticNode:
+    """Resolve a `{payload:band}` band. The payload is any universe (ambient @uni
+    when empty); the band is a `,`-union of arms, each a `lo..hi` range or a single
+    value over the payload alphabet. One arm is a `ValueRangeNode`; several fold
+    into a `UnionNode` of ranges (`{@d:1..5,9..12}`)."""
+    payload = strip_unescaped(payload)
+    alpha: t.SemanticNode = (
+        _ambient_alpha() if payload == "" else _resolve_universe(payload)
+    )
+    options = [_resolve_band_arm(alpha, arm) for arm in split_top(",", band)]
+    return options[0] if len(options) == 1 else t.UnionNode(options=options)
+
+
+def _resolve_band_arm(alpha: t.SemanticNode, arm: str) -> t.ValueRangeNode:
+    """One band arm: a `lo..hi` range (either end omittable) or a single value
+    (`{@d:5}` is `5..5`). An endpoint may be a reference (`{@d:0..$0}`), resolved
+    to a captured value at match time; else its written width sets the field
+    window."""
+    parts = split_top("..", arm)
+    if len(parts) == 1:
+        value, ref = _bound_endpoint(strip_unescaped(parts[0]))
+        if value is None and ref is None:
+            raise CompileError(f"An empty band arm has no value: got {arm!r}")
+        return t.ValueRangeNode(
+            alpha=alpha, lower=value, upper=value, lower_ref=ref, upper_ref=ref
+        )
+    if len(parts) == 2:
+        lower, lower_ref = _bound_endpoint(strip_unescaped(parts[0]))
+        upper, upper_ref = _bound_endpoint(strip_unescaped(parts[1]))
+        if lower is None and upper is None and lower_ref is None and upper_ref is None:
+            raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
+        return t.ValueRangeNode(
+            alpha=alpha, lower=lower, upper=upper,
+            lower_ref=lower_ref, upper_ref=upper_ref,
+        )
+    raise CompileError(
+        f"Too many '..' in a band arm (a range is 'lo..hi'): got {arm!r}"
     )
 
 
@@ -180,11 +233,13 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if ref is not None:
         return ref
 
-    # `:`-bounds: {floor:alphabet:ceiling} (two top-level colons). A literal colon
-    # in a class is escaped (`\:`).
-    colon_parts = split_top(":", content)
-    if len(colon_parts) == 3:
-        return _resolve_bounds(colon_parts)
+    # `:`-bands: {payload:band}. The first top-level `:` separates a payload
+    # alphabet from a value band — but only for a typed head or a band-side `..`
+    # (the `_is_band` test). Otherwise every colon is literal (`{12:30}`,
+    # `{std::vector}`); `\:` forces a literal colon.
+    split = _split_band(content)
+    if split is not None and _is_band(*split):
+        return _resolve_band(*split)
 
     # Object nesting `{{X}}`: a brace whose whole content is one nested brace is
     # a single object. A materialisable inner (`{{a,A}}`) folds its members into
@@ -344,9 +399,9 @@ def _singleton_value(expr: str) -> str | None:
 def _resolve_arm(arm: str) -> t.SemanticNode:
     """Resolve one arm (no top-level commas) into a typed node.
 
-    `..` is a plain range between two concrete endpoints. A value *bound* (an
-    alphabet plus floor/ceiling) is written with `:` ({floor:alphabet:ceiling}),
-    not `..`, so an alphabet endpoint here is an error pointing at the `:` form.
+    `..` is a plain range between two concrete endpoints. A *band* (an alphabet
+    plus a value range) is written with `:` (`{alphabet:lo..hi}`), not `..`, so an
+    alphabet endpoint here is an error pointing at the `:` form.
     """
     parts = strict_split("..", arm, arm)
     svals = [_singleton_value(p) for p in parts]
@@ -373,13 +428,13 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
             if len(av) == 1 and len(bv) == 1:
                 return t.CharRangeNode(start=av, end=bv)
             return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
-        # An alphabet endpoint means this is a value bound, now spelled with `:`.
+        # An alphabet endpoint means this is a band, now spelled with `:`.
         raise CompileError(
-            f"A value bound is written '{{floor:alphabet:ceiling}}' with ':', "
-            f"not '..': got {arm!r}"
+            f"A '..' range needs concrete endpoints; a band over an alphabet is "
+            f"'{{alphabet:lo..hi}}' with ':': got {arm!r}"
         )
 
     raise CompileError(
-        f"Too many '..' separators (a value bound uses ':', as in "
-        f"'{{floor:alphabet:ceiling}}'): got {arm!r}"
+        f"Too many '..' separators in a range (a band is '{{alphabet:lo..hi}}' "
+        f"with ':'): got {arm!r}"
     )
