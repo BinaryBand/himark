@@ -204,13 +204,18 @@ def splice_to_fixed_point(steps: list[t.RootNode], target: str) -> str:
     trip on a rule that does not converge (a `CompileError`): a pass count (catches
     oscillators) and a size bound (catches a grower like `{a} <= "aa"`).
 
-    Incremental: each pass remembers where its last change ended and the next pass
-    only begins matches before that point. Matching reads forward, so a match that
-    differs this pass must read a byte the last pass rewrote — and one can begin no
-    later than the last such byte. Everything beyond it is byte-identical to a tail
-    the previous pass already scanned and found settled, so re-scanning it is pure
-    waste. (For bubble_sort this is the textbook shrinking bound: the sorted tail
-    is skipped once no swap reaches into it.)"""
+    Incremental (safe but not a left-skip): each pass remembers where its last
+    change ended and the next pass only *begins* matches before that point.
+    Matching reads forward, so a match that differs this pass must read a byte the
+    last pass rewrote — and one can begin no later than the last such byte.
+    Everything beyond it is byte-identical to a tail the previous pass already
+    scanned and found settled, so re-scanning it for new starts is waste. The dual
+    (skipping the *prefix* before the first change) is **unsafe**: a forward-reading
+    rule can begin a match before the change and read into it (bubble_sort mis-sorts
+    `2,3,1` that way), so only the tail is pruned. In practice the win is small —
+    a contracting rule whose edits span the document (bubble_sort, dedup) keeps its
+    last change near the end, so little tail is skipped; see docs/TODO.md for the
+    larger, structural levers."""
     text = target
     cap = 8 * len(target) + 1024
     size_limit = 64 * len(target) + 65536

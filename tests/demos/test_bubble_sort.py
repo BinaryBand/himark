@@ -54,6 +54,15 @@ def test_works_without_trailing_newline():
     assert sort("30,4,100,7") == "4,7,30,100"
 
 
+def test_swap_reactivates_the_pair_to_its_left():
+    # A swap can make the pair to its *left* newly out of order, so the fixed point
+    # must re-examine positions before its last change. (An incremental sweep that
+    # skipped the unchanged prefix would settle early here — `2,3,1` -> `2,1,3` — so
+    # this pins that the prefix is never skipped.)
+    assert sort("2,3,1") == "1,2,3"
+    assert sort("5,4,3,2,1") == "1,2,3,4,5"
+
+
 # Runbook: sort the sample file into `tests/demos/output` for manual inspection.
 if __name__ == "__main__":
     OUTPUT.mkdir(parents=True, exist_ok=True)
