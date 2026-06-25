@@ -110,8 +110,8 @@ class _ValueExcluder:
 def _drop_excluded(groups: list[list[str]], exclusions: list[str]) -> list[list[str]]:
     """Remove excluded symbols from an alphabet's groups, dropping any group left
     empty. An excluded symbol is simply not part of the value alphabet, so a run
-    stops at it — this is what keeps `@b58`'s forbidden `0`/`O`/`I`/`l` out of a
-    `{floor:@b58:ceiling}` bound, and keeps the positional values canonical."""
+    stops at it — this is what keeps base58's forbidden `0`/`O`/`I`/`l` out of a
+    `{@d,@u,@l,!{0,l,I,O}:lo..hi}` bound, and keeps the positional values canonical."""
     excl = _excluder(exclusions)
     if excl is None:
         return groups

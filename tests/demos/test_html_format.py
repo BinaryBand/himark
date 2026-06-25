@@ -1,7 +1,7 @@
 """End-to-end tests for the HTML formatter (`himark/scripts/html_format.hmk`).
 
 The script pretty-prints and normalizes HTML one tab per nesting level using a
-stackless, inside-out fixed point (`<=`). Inline elements (<b>, <a>, <code>, …)
+stackless, inside-out fixed point (`<=>`). Inline elements (<b>, <a>, <code>, …)
 and their text are masked into `‹…›` sentinels so they stay on one line; only
 block elements are broken out and indented. Leaf constructs (comments, DOCTYPE,
 block-level void tags) are marked as `⟦…⟧`. Inter-tag whitespace is normalized
@@ -46,7 +46,7 @@ def test_depth_accumulates():
 
 
 def test_arbitrary_depth_indents_completely():
-    # The `<=` fixed point peels until no pair is left — no depth limit. Names are
+    # The `<=>` fixed point peels until no pair is left — no depth limit. Names are
     # non-inline (`t0`…`t15`) so every level is a block that breaks out.
     names = [f"t{i}" for i in range(16)]
     src = (

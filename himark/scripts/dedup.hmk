@@ -25,7 +25,7 @@
 //  Each title is keyed by its normalized form (the YouTube-only `Episode 791: `
 //  counter stripped), and two lines with the *same* key — one from each column —
 //  are merged by `{$0}` matching the key it captured (the same primitive
-//  btc_extract uses for `expect == actual`). The `<=` arrow re-splices each merge
+//  btc_extract uses for `expect == actual`). The `<=>` arrow re-splices each merge
 //  to a fixed point, both column orders, until no equal-key pair is left.
 //
 //  The passes, in order:
@@ -61,7 +61,7 @@
 {@^}{youtube_title\,podcast_title\n} => ""
 
 // ── MASK ── shield commas inside "…" quoted fields from the FLATTEN split ─────
-{\"}{!{\",\n}}[..]{\,}{!{\",\n}}[..]{\"} <= "\"{{$1}}⸴{{$3}}\""
+{\"}{!{\",\n}}[..]{\,}{!{\",\n}}[..]{\"} <=> "\"{{$1}}⸴{{$3}}\""
 
 // ── FLATTEN ── source-tag each title onto its own line (YouTube, then feed) ───
 {@^}{!{\,,\n}}[1..]{\,}{!\n}[1..]{\n} => "Y\t{{$0}}\nP\t{{$2}}\n"
@@ -80,14 +80,14 @@
 // robust pass below then settles in far fewer sweeps. Same merge rule, only the
 // scan is bounded — so it can never merge a pair the robust pass wouldn't, and the
 // final result is identical (just reached ~3x faster on the full file).
-{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..3000]{@^}{$0}{¤P\t}{!\n}[1..]{\n} <= "{{$2}}\,{{$7}}\n{{$4}}"
-{@^}{!{¤,\n}}[1..]{¤P\t}{!\n}[1..]{\n}{!§}[..3000]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <= "{{$7}}\,{{$2}}\n{{$4}}"
+{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..3000]{@^}{$0}{¤P\t}{!\n}[1..]{\n} <=> "{{$2}}\,{{$7}}\n{{$4}}"
+{@^}{!{¤,\n}}[1..]{¤P\t}{!\n}[1..]{\n}{!§}[..3000]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$7}}\,{{$2}}\n{{$4}}"
 
 // ── MATCH ── the robust pass: merge any equal-key Y/P pair, anywhere (fixed
 // point, both orders). The unbounded `[..]` guarantees full recall — it catches
 // the few twins the quick pass left (partners far apart in the file).
-{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..]{@^}{$0}{¤P\t}{!\n}[1..]{\n} <= "{{$2}}\,{{$7}}\n{{$4}}"
-{@^}{!{¤,\n}}[1..]{¤P\t}{!\n}[1..]{\n}{!§}[..]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <= "{{$7}}\,{{$2}}\n{{$4}}"
+{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..]{@^}{$0}{¤P\t}{!\n}[1..]{\n} <=> "{{$2}}\,{{$7}}\n{{$4}}"
+{@^}{!{¤,\n}}[1..]{¤P\t}{!\n}[1..]{\n}{!§}[..]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$7}}\,{{$2}}\n{{$4}}"
 
 // ── CLEANUP ── each unmatched keyed line becomes a one-cell row ───────────────
 {@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n} => "{{$2}}\,\n"

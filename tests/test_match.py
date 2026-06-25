@@ -511,14 +511,14 @@ def test_chained_patterns_narrow():
 def test_named_alpha_b32():
     # b32 = {@d},{@w:..v} (RFC 4648 §7). One position is one base32 symbol; w-z
     # are outside the alphabet. A bounded value matches a base32 string.
-    assert matches("{@b32}", "01v wxyz") == ["0", "1", "v"]
-    assert matches("{@b32:0..vvv}", "01v wxyz") == ["01v"]
+    assert matches("{{@d},{@w:..v}}", "01v wxyz") == ["0", "1", "v"]
+    assert matches("{{@d},{@w:..v}:0..vvv}", "01v wxyz") == ["01v"]
 
 
 def test_named_alpha_b64():
     # b64 = {@d},{@l},{@u},+,/ — case-sensitive, a 64-symbol alphabet. One
     # position is one base64 symbol; '!' and ' ' are outside it.
-    assert matches("{@b64}", "Az+/ !") == ["A", "z", "+", "/"]
+    assert matches("{{@d},{@l},{@u},+,/}", "Az+/ !") == ["A", "z", "+", "/"]
 
 
 # ── Self-reference {$i}: match the text an earlier group captured ──────────────

@@ -171,9 +171,9 @@ def test_byte_filters_chain_double_sha_over_b256():
 
 
 def test_b58_decodes_as_bitcoin_base58_value():
-    # @b58 already works as a value alphabet: '21' is base-58 value 58, so b256(1)
+    # {@d},{@u},{@l},!{0,l,I,O} already works as a value alphabet: '21' is base-58 value 58, so b256(1)
     # emits the single byte 0x3a.
-    assert ex('{@b58:1..zz} => "{{ 0$0 | b256(1) | hex }}"', "21") == ["3a"]
+    assert ex('{{@d},{@u},{@l},!{0,l,I,O}:1..zz} => "{{ 0$0 | b256(1) | hex }}"', "21") == ["3a"]
 
 
 def test_base58_value_to_double_sha256_pipeline():
@@ -190,7 +190,7 @@ def test_base58_value_to_double_sha256_pipeline():
     expected = hashlib.sha256(
         hashlib.sha256(iv.to_bytes(8, "big")).digest()
     ).hexdigest()
-    out = ex('{@b58:1..zzzzz} => "{{ 0$0 | b256(8) | sha256 | sha256 | hex }}"', token)
+    out = ex('{{@d},{@u},{@l},!{0,l,I,O}:1..zzzzz} => "{{ 0$0 | b256(8) | sha256 | sha256 | hex }}"', token)
     assert out == [expected]
 
 

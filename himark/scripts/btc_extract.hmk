@@ -32,7 +32,7 @@
 //      value bounded between the smallest and largest 25-byte address -- the
 //      endpoints set the value range and the field-width window. Group 2 is that
 //      value (it carries the b58 alphabet); group 1 ++ group 2 is the address.
-//    * The leading boundary [!@b58] (a non-base58 char before the 1) word-anchors
+//    * The leading boundary (a non-base58 char before the 1) word-anchors
 //      the match, so an interior 1 inside a longer base58 run -- a 3... P2SH
 //      address, say -- is not read as an address start. It is re-emitted as $0.
 //    * base58check: expect decodes the address to 25 bytes [b256(25)], takes the
@@ -45,7 +45,7 @@
 // ============================================================================
 
 // 1. Tag every address-shaped run with its expected and actual checksums.
-{!@b58}{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
+{!{@d},{@u},{@l},!{0,l,I,O}}{1}{{@d},{@u},{@l},!{0,l,I,O}:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
     => "{{$0}}<btc addr=\"{{$1}}{{$2}}\" expect={{ $2 | b256(25) | head(21) | sha256 | sha256 | head(4) | hex }} actual={{ $2 | b256(25) | tail(4) | hex }}/>"
 
 // 2. Keep the valid ones: {$3} forces actual == expect. Render the final form.

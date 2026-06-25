@@ -40,7 +40,7 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
     """Parse each HMK statement into its ordered step trees — the costly one-time
     work this module exists to cache. The result runs with `apply`.
 
-    A statement whose arrow is `<=` (fixed-point) is parsed like its `=>` form,
+    A statement whose arrow is `<=>` (fixed-point) is parsed like its `=>` form,
     and its first step is flagged so `apply` re-splices it until the document
     settles (see `_split_fixed_point`)."""
     pipeline: Pipeline = []
@@ -54,10 +54,10 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
 
 
 def _split_fixed_point(statement: str) -> tuple[str, bool]:
-    """Rewrite each top-level `<=` arrow to `=>`, returning `(text, used_<=)`.
+    """Rewrite each top-level `<=>` arrow to `=>`, returning `(text, used_<=>)`.
 
     Depth-aware over `{…}` / `[…]` and skipping `\\`-escapes, like the `=>`
-    splitter — so a `<=` inside a brace or count is left alone. (A `<=` inside a
+    splitter — so a `<=>` inside a brace or count is left alone. (A `<=>` inside a
     quoted template is not distinguished, the same limitation `=>` has.)"""
     out: list[str] = []
     depth = 0
@@ -70,10 +70,10 @@ def _split_fixed_point(statement: str) -> tuple[str, bool]:
             out.append(statement[i : i + 2])
             i += 2
             continue
-        if ch == "<" and statement[i + 1 : i + 2] == "=" and depth == 0:
+        if ch == "<" and statement[i + 1 : i + 3] == "=>" and depth == 0:
             out.append("=>")
             found = True
-            i += 2
+            i += 3
             continue
         if ch in "[{":
             depth += 1

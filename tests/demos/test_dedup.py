@@ -8,7 +8,7 @@ unmatched title keeps its own row with the other cell blank.
 The match is HMK's **self-reference equality**: each title is keyed by its
 normalized form (the YouTube-only `Episode NNN: ` counter stripped), and two lines
 with the same key — one per column — are merged by `{$0}` matching the captured
-key, re-spliced to a fixed point by `<=` (both column orders). A MASK pass shields
+key, re-spliced to a fixed point by `<=>` (both column orders). A MASK pass shields
 commas inside quoted fields, restored at the end.
 
 These tests pin each pass and the merge on small crafted inputs — cross-column
@@ -71,7 +71,7 @@ def test_matches_align_on_one_row_cross_column():
 
 
 def test_matches_when_feed_appears_before_youtube():
-    # The twin can sit *above* the YouTube row; the second `<=` rule (P before Y)
+    # The twin can sit *above* the YouTube row; the second `<=>` rule (P before Y)
     # catches that order.
     src = HEADER + ",The Big Case\nEpisode 5: The Big Case,Other\n"
     assert ["Episode 5: The Big Case", "The Big Case"] in rows(src)

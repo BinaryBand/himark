@@ -17,7 +17,7 @@
 //      that happens to wrap *block* content can't be masked (its body keeps a raw
 //      `<`), so it falls through to step 4 and is formatted as a block.
 //   3. Mark block LEAVES (comments, DOCTYPE, block-level void tags) as `⟦…⟧`.
-//   4. WRAP, re-spliced to a fixed point (`<=`): peel each innermost block pair
+//   4. WRAP, re-spliced to a fixed point (`<=>`): peel each innermost block pair
 //      (body has no raw `<`), back-reference the tag *name* for the close, and
 //      `{{ … | trim | indent }}` re-tabs the body each pass so depth accumulates.
 //   5. Restore `‹ ›` and `⟦ ⟧` to `< >` and tidy stray blank lines.
@@ -29,15 +29,15 @@
 // ============================================================================
 
 // ── NORMALIZE ── collapse whitespace that sits purely between two tags ───────
-{>}{{\ ,\t,\n}}[1..]{<} <= "><"
+{>}{{\ ,\t,\n}}[1..]{<} <=> "><"
 
 // ── MASK INLINE ── inline elements stay on their line (sentinels `‹ ›`) ───────
 // Inline void elements (kept inline, unlike block voids below).
 {<}{br,img,wbr,input}{>} => "‹{{$1}}›"
 {<}{br,img,wbr,input}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "‹{{$1}}{{$2}}{{$3}}›"
 // Inline paired elements, innermost-first to a fixed point (handles nesting).
-{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{>}{!<}[..]{</}{$1}{>} <= "‹{{$1}}›{{$3}}‹/{{$1}}›"
-{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{{\ ,\t,\n}}{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <= "‹{{$1}}{{$2}}{{$3}}›{{$5}}‹/{{$1}}›"
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{>}{!<}[..]{</}{$1}{>} <=> "‹{{$1}}›{{$3}}‹/{{$1}}›"
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{{\ ,\t,\n}}{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <=> "‹{{$1}}{{$2}}{{$3}}›{{$5}}‹/{{$1}}›"
 
 // ── MARK BLOCK LEAVES ── comment, DOCTYPE, then block-level void elements ─────
 {<!--}{!{-->}}[..]{-->} => "\n⟦!--{{$1}}--⟧"
@@ -46,7 +46,7 @@
 {<}{hr,meta,link,base,col,embed,source,track,area,param}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "\n⟦{{$1}}{{$2}}{{$3}}⟧"
 
 // ── WRAP ── indent each innermost block pair, re-spliced to a fixed point ─────
-{<}{!{<,>,/,\ ,\t,\n}}[1..]{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <= "\n⟦{{$1}}{{$2}}⟧\n{{ $4 | trim | indent }}\n⟦/{{$1}}⟧"
+{<}{!{<,>,/,\ ,\t,\n}}[1..]{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <=> "\n⟦{{$1}}{{$2}}⟧\n{{ $4 | trim | indent }}\n⟦/{{$1}}⟧"
 
 // ── RESTORE ── sentinels back to angle brackets, then tidy stray blank lines ──
 {‹} => "<"
@@ -54,4 +54,4 @@
 {⟦} => "<"
 {⟧} => ">"
 {@^^}{\n}[1..] => ""
-{\n}{{\ ,\t}}[1..]{\n} <= "\n"
+{\n}{{\ ,\t}}[1..]{\n} <=> "\n"

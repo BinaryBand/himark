@@ -26,9 +26,9 @@ def test_apply_matches_statement_by_statement():
 
 
 def test_fixed_point_arrow_runs_to_settle():
-    # `<=` re-splices its statement until the document stops changing. Here a
+    # `<=>` re-splices its statement until the document stops changing. Here a
     # single rule that drops one `x` per pass runs until none remain.
-    pipe = precompiled.compile_pipeline([r"{xx} <= x"])
+    pipe = precompiled.compile_pipeline([r"{xx} <=> x"])
     assert pipe[0][0].fixed_point is True
     assert precompiled.apply(pipe, "xxxxxxx") == "x"  # 7 → 4 → 2 → 1, settled
     # A plain `=>` form of the same rule is a single pass.
@@ -38,7 +38,7 @@ def test_fixed_point_arrow_runs_to_settle():
 
 
 def test_fixed_point_at_brace_or_count_depth_is_left_alone():
-    # `<=` is only an arrow at top level; inside `{…}` / `[…]` it is plain text.
+    # `<=>` is only an arrow at top level; inside `{…}` / `[…]` it is plain text.
     converted, used = precompiled._split_fixed_point(r"{a..z}[1..] => x")
     assert used is False and converted == r"{a..z}[1..] => x"
 
@@ -48,12 +48,12 @@ def test_fixed_point_non_contracting_rule_errors(tmp_path):
 
     # A grower never settles and is caught (by the size guard) as a CompileError.
     with pytest.raises(CompileError, match="did not settle"):
-        precompiled.apply(precompiled.compile_pipeline([r"{a} <= aa"]), "aaa")
+        precompiled.apply(precompiled.compile_pipeline([r"{a} <=> aa"]), "aaa")
 
 
 def test_fixed_point_flag_survives_dump_load(tmp_path):
     art = tmp_path / "fp.hmkc"
-    precompiled.dump(precompiled.compile_pipeline([r"{xx} <= x"]), art)
+    precompiled.dump(precompiled.compile_pipeline([r"{xx} <=> x"]), art)
     loaded = precompiled.load(art)
     assert loaded[0][0].fixed_point is True
     assert precompiled.apply(loaded, "xxxx") == "x"

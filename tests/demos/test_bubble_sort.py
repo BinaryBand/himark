@@ -4,7 +4,7 @@ The script sorts a comma-separated list of base-10 values with no loop and no
 arithmetic. The whole comparison is one range — a value bound whose ceiling is a
 **reference** to the pair's first value (`{@d:0..$0}` matches "≤ a"), which is
 width-agnostic. A comma-terminating PAD makes every value a complete token, the
-SORT sweep uses the `<=` fixed-point arrow (re-spliced until sorted, for a list
+SORT sweep uses the `<=>` fixed-point arrow (re-spliced until sorted, for a list
 of any length), and an UNPAD strips the pad. These tests pin the sort on the
 sample, a long reversed list, mixed widths, duplicates, and no trailing newline.
 """
@@ -33,7 +33,7 @@ def test_mixed_widths_compare_by_value_not_lexicographically():
 
 
 def test_long_reversed_list_no_budget_limit():
-    # 20 values reversed — past any fixed budget; the `<=` fixed point sorts a
+    # 20 values reversed — past any fixed budget; the `<=>` fixed point sorts a
     # list of any length.
     vals = list(range(200, 0, -10))
     src = ",".join(str(v) for v in vals) + "\n"

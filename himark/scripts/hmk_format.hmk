@@ -28,11 +28,11 @@
 {\\}{\"} => "¤"       // `\"`  → ¤  (an escaped quote)
 // 2. Wrap each template in private brackets « » (captures multi-line templates).
 {\"}{!\"}[..]{\"} => "«{{$1}}»"
-// 3. Mask every arrow inside a template (`<=` re-splices to a fixed point; the
+// 3. Mask every arrow inside a template (`<=>` re-splices to a fixed point; the
 //    multi-char break !{»,=>} stops the run at the close bracket OR an arrow).
-{«}{!{»,=>}}[..]{=>} <= "{{$0}}{{$1}}⟶"
+{«}{!{»,=>}}[..]{=>} <=> "{{$0}}{{$1}}⟶"
 // 4. Mask every newline inside a (multi-line) template so the line rules skip it.
-{«}{!{»,\n}}[..]{\n} <= "{{$0}}{{$1}}␤"
+{«}{!{»,\n}}[..]{\n} <=> "{{$0}}{{$1}}␤"
 
 // ── MASK BRACE NEWLINES ── protect multi-line {…} interiors (inside-out) ──────
 // Each pair of passes masks one interior newline of an innermost brace (the

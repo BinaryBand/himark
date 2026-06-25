@@ -15,7 +15,7 @@ def matches(pattern, text):
 # A leading '1' then a base58 value bounded by the smallest and largest 25-byte
 # addresses (the floor/ceiling widths give the length window).
 
-BTC = "{1}{@b58:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}"
+BTC = "{1}{{@d},{@u},{@l},!{0,l,I,O}:111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}"
 
 
 def test_btc_minimum_length_enforced():

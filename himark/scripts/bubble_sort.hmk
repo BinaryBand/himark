@@ -15,7 +15,7 @@
 //  `{@d:0..$0}` matches the right number only when it is ≤ the left one, and it is
 //  width-agnostic: the ceiling's width caps the field, and a value with more
 //  digits than `a` is larger (no leading zeros), so it is excluded. When the pair
-//  is out of order the template swaps it. The `<=` arrow re-splices the rule to a
+//  is out of order the template swaps it. The `<=>` arrow re-splices the rule to a
 //  **fixed point** — every non-overlapping out-of-order pair is reordered each
 //  pass, and passes repeat until the list stops changing (i.e. is sorted), for a
 //  list of any length. (With `=>` you would unroll one sweep per pass yourself.)
@@ -29,8 +29,8 @@
 // ── PAD ── comma-terminate the last value (so every value has a trailing comma)
 {@d}[1..]{@$} => "{{$0}},"
 
-// ── SORT ── compare-and-swap, re-spliced to a fixed point (`<=`) ─────────────
-{@d:0..},{@d:0..$0}, <= "{{$1}},{{$0}},"
+// ── SORT ── compare-and-swap, re-spliced to a fixed point (`<=>`) ─────────────
+{@d:0..},{@d:0..$0}, <=> "{{$1}},{{$0}},"
 
 // ── UNPAD ── remove the trailing comma the PAD added ─────────────────────────
 {\,}{@$} => ""

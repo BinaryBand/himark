@@ -15,8 +15,16 @@ def matches(pattern, text):
     return [m.text for m in find_matches(trees[0], text)]
 
 
+def _doc_section(title):
+    """The body of a `## title` section, up to the next `## ` heading or `---`."""
+    body = DOC.split(f"\n## {title}\n", 1)[1]
+    return re.split(r"\n## |\n---", body, maxsplit=1)[0]
+
+
 def test_doc_macro_table_matches_macros_toml():
-    doc_names = set(re.findall(r"^\| `@(\w+)`", DOC, re.MULTILINE))
+    # Scope to the Macros section's table — `@ed` also appears as an operand in
+    # the Carriers/operators table, but it is a library alphabet, not a text macro.
+    doc_names = set(re.findall(r"^\| `@(\w+)`", _doc_section("Macros"), re.MULTILINE))
     assert doc_names == set(MACROS)
 
 

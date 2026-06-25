@@ -60,18 +60,17 @@ Point **value** is fixed under [Values and ordering](#values-and-ordering).
 
 ## Macros
 
-| Name     | Expands to                                                                                                                             |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `@d`     | `0..9`                                                                                                                                 |
-| `@l`     | `a..z`                                                                                                                                 |
-| `@u`     | `A..Z`                                                                                                                                 |
-| `@s`     | `\n,\r, ,\t`                                                                                                                           |
-| `@w`     | `0..9,{a,A},{b,B},...,{z,Z},_`                                                                                                         |
-| `@hex`   | `{@w:0..f}`                                                                                                                            |
-| `@b256`  | `U+0000..U+00FF` (every byte)                                                                                                          |
-| `@ascii` | `U+0000..U+007F`                                                                                                                       |
-| `@uni`   | `U+0000..U+10FFFF`                                                                                                                     |
-| `@ed`    | curve-point cycle `O, B, 2B, ...` -- a library alphabet (carrier = the ed25519 group; see [Carriers](#symbols-carriers-and-operators)) |
+| Name     | Expands to                     |
+| -------- | ------------------------------ |
+| `@d`     | `0..9`                         |
+| `@l`     | `a..z`                         |
+| `@u`     | `A..Z`                         |
+| `@s`     | `\n,\r, ,\t`                   |
+| `@w`     | `0..9,{a,A},{b,B},...,{z,Z},_` |
+| `@hex`   | `{@w:0..f}`                    |
+| `@b256`  | `U+0000..U+00FF` (every byte)  |
+| `@ascii` | `U+0000..U+007F`               |
+| `@uni`   | `U+0000..U+10FFFF`             |
 
 ---
 
@@ -132,15 +131,14 @@ $$\text{value} = \sum_{i} \text{ordinal}(p_i) \cdot b^{k-1-i}$$
 
 Over `@d` `255`=255; over `@l` `aa`=0, `zz`=675. Comparison is **by ordinal, never raw codepoint** (they coincide only for `@uni`, `@ascii`, `@b256`). This is why `@w` slices: ordinals put `a/A`=10 ... `f/F`=15 ... `z/Z`=35, `_`=36, so `0..f` is ordinals 0--15 and stops below `_`.
 
-**A capture is `<alphabet, range, value>`** -- the alphabet matched under (codec), the range in force (band, which fixes **width**), the value (ordinal). It derives an **element** (the carrier member: integer for digits, curve point for `@ed`). For digit alphabets element = value; for `@ed` they differ, and arithmetic uses the element.
+**A capture is `<alphabet, range, value>`** -- the alphabet matched under (codec), the range in force (band, which fixes **width**), the value (ordinal). The value is what arithmetic reads.
 
-Three **projections**:
+Two **projections**:
 
 - **text** -- value rendered back through its alphabet (codec + width); what `{{ $i }}` produces.
 - **bytes** -- value in big-endian base-256, width from the range (inverse: `uint`); what `b256`/`sha256` consume.
-- **element** -- the carrier member, for arithmetic (`+`, `*`).
 
-A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare `{0..9}` on "11" is codepoints 49,49. `{@d}`"11" and `{@l}`"l" are both value 11 (different base/width, one element).
+A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare `{0..9}` on "11" is codepoints 49,49. `{@d}`"11" and `{@l}`"l" are both value 11 (different base/width, same value).
 
 > **Matching position is concrete text** -- the triple is a template/value-time view. A reference re-matches the **exact text**: `{{a,A}}{$0}` matches `aa` or `AA`, never `aA`.
 
@@ -148,34 +146,9 @@ A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare 
 
 ## :symbols: Carriers and operators
 
-Every alphabet has a **carrier** (the algebra its elements live in); operators offer what that structure provides:
+Values are integers: `Z` is the carrier of every alphabet (`@d`, `@l`, `@hex`, the byte alphabets), and a **ring**, so the operators are integer `+` (add) and `*` (multiply). A computed result has **no alphabet**, so it needs a **render-cast**: `Z` defaults to `@d`, `| @hex` re-codecs. (`7 + 8` -> value 15, "15".)
 
-- `Z` (integers; carrier of `@d`, `@l`, `@hex`, byte alphabets) is a **ring**: `+` and `*`.
-- the **`@ed` group** is a `Z`-**module**: `+` (point add) and scalar action `[k]P`, no point $\times$ point.
-
-`*` is overloaded (ring multiply vs scalar action), resolved by operand carriers:
-
-| Left  | Op  | Right | Result | Meaning                              |
-| ----- | --- | ----- | ------ | ------------------------------------ |
-| `Z`   | +   | `Z`   | `Z`    | integer add                          |
-| `Z`   | \*  | `Z`   | `Z`    | integer multiply                     |
-| `@ed` | +   | `@ed` | `@ed`  | point add                            |
-| `Z`   | \*  | `@ed` | `@ed`  | scalar action `[k]P` (also `@ed*Z`)  |
-| `@ed` | +   | `Z`   | --     | type error                           |
-| `@ed` | \*  | `@ed` | --     | type error (no point $\times$ point) |
-
-Carrier is static -> cross-carrier misuse is a **compile-time** error. A `Z` acting on `@ed` is **reduced mod `l`** (group order $\approx 2^{252}$) at the action boundary (silently reduced, not rejected). A computed result has a carrier but **no alphabet**, so it needs a **render-cast**: `Z` defaults to `@d`, `| @hex` re-codecs; an `@ed` point renders as its byte encoding. (`7 + 8` -> value 15, "15".)
-
-### Library alphabets
-
-A **library alphabet** supplies its own increment and carrier. `@ed` is ed25519: with base point `B`, points cycle `O, B, 2B, ...` (increment `+B`, identity `O`), so ordinal `k` = the scalar with point `[k]B`. **Adjacency is fine** (`{@ed}{@ed}` is two encodings); what is meaningless is value-stacking (`[count]` over `@ed`, or `{@ed:..}`), so `@ed` is a single **value** position. Membership = a valid prime-order-subgroup point. **Encoding** = the RFC 8032 32-byte little-endian compressed point (canonical only). In a value expr `{@ed:k}` = `[k]B`, so base point `{@ed:1}`, identity `{@ed:0}`, `[S]B` = `$S * {@ed:1}`. Cofactored checks ($\times 8$) are three doublings. Verification needs nothing beyond the gate: compute both sides of `[S]B == R + [k]A`, emit them, let the next query re-match (deterministic, not a constant-time/validated verifier).
-
-**Forward cheap, inverse closed.** ordinal -> point (`[k]B`) is easy; point -> ordinal (recover `k`) is the discrete log, infeasible. A **parsed** `@ed` point has an element (decode its 32 bytes) but an **opaque value** (unknown ordinal). **Arithmetic uses the element, bands use the ordinal**, so on an opaque point:
-
-- feasible: equality, `+` (point add), `*` (scalar action, including **variable-base** `[k]A` -- double-and-add needs no dlog).
-- infeasible: magnitude bands (`{@ed:G..$0}`), sorting, `b256` of its value.
-
-An infeasible read doesn't compute; it **fails** wherever used -- so it can never be a discrete-log oracle.
+> **Carrier is the extension hook.** Each alphabet's carrier is fixed at compile time. Today every carrier is `Z`, so `*` has one meaning and there is nothing to disambiguate. A future **library alphabet** (a curve group, say) could carry its own algebra -- overloading `*` as a scalar action against ring multiply -- with cross-carrier misuse caught as a compile-time error.
 
 ---
 
@@ -198,7 +171,7 @@ Either endpoint may be omitted (`{@d:0..}` is $\geq 0$, `{@d:..255}` is $\leq 25
 
 A band's **width follows endpoint widths**: `{@d:00..99}` is two wide, `{@d:000..999}` three, `{@d:0..999}` one-to-three (narrower endpoint = min, wider = max). For a fixed width regardless of value use a count (`{@d}[3]`); to **produce** padded output use `pad` -- padding is never inferred from a bound's spelling.
 
-An endpoint is a value, so a **reference** may stand in, resolved at match time by magnitude: `{@d:0..$0}` matches a decimal $\leq$ group 0 (width-agnostic -- more positions than the referent is larger), `{@d:$0..}` matches one $\geq$ it. A reference that didn't capture, a referent outside the alphabet, or an **opaque** value (a parsed `@ed` point) does not resolve. `\$` is literal.
+An endpoint is a value, so a **reference** may stand in, resolved at match time by magnitude: `{@d:0..$0}` matches a decimal $\leq$ group 0 (width-agnostic -- more positions than the referent is larger), `{@d:$0..}` matches one $\geq$ it. A reference that didn't capture, or a referent outside the alphabet, does not resolve. `\$` is literal.
 
 ```proto
 {@d}[1..],{@d:0..$0}    // two decimals, second <= first
@@ -245,7 +218,7 @@ A run is **greedy**: it takes the longest count in range that still lets the res
 
 ## Captures
 
-Every `{...}` in matching position is a **capture group**, numbered from **0** in source order (assigned when the opening brace is read). Numbering is **flat** -- each group takes the next number. A **non-capturing** brace `~{...}` matches like `{...}` but takes no number, so delimiters don't shift the indices around them; a bare `~` is literal.
+Every `{...}` in matching position is a **capture group**, numbered from **0** in source order (assigned when the opening brace is read). Numbering is **flat** -- each group takes the next number.
 
 A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only. (`{1{am,pm}}` is alternation in a unit; folding the inner to `{1{{am,pm}}}` changes nothing observable -- a brace buried in a grouping brace is never addressed or repeated on its own, so object vs. union there is moot.)
 
@@ -303,7 +276,7 @@ A statement's result is **(span, output)** pairs. The semantics is **splice**: e
 ```proto
 "# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
 // lands "<h1>Hello</h1>"
-{@d:0..}~{=}{$0} => "ok"
+{@d:0..}{=}{$0} => "ok"
 // gate: '7=7' passes, '7=8' is dropped
 ```
 
@@ -320,20 +293,20 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 ### Expressions
 
-A `{{ ... }}` moustache holds one **expression** over captured values. What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$j`), integer/string literals, an **element literal** `{@A:v}` (alphabet `@A` at value `v` -- `{@ed:1}` is the ed25519 base point), and parentheses. Operators, tightest to loosest:
+A `{{ ... }}` moustache holds one **expression** over captured values. What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$j`), integer/string literals, and parentheses. Operators, tightest to loosest:
 
-- `*` -- multiply / scalar action
+- `*` -- multiply
 - `+` -- add (integer or point)
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
-All left-associative; parens override. So `("<h", #0, ">")` is one value, and `$0 + $2 | b256` = `($0 + $2) | b256`; to filter one operand first, parenthesize: `($h | uint(le)) * {@ed:1}`. Carrier typing applies; a computed result is render-cast. The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
+All left-associative; parens override. So `("<h", #0, ">")` is one value, and `$0 + $2 | b256` = `($0 + $2) | b256`; to filter one operand first, parenthesize: `($h | uint(le)) * 256`. Carrier typing applies; a computed result is render-cast. The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
 
 ### Filters
 
 A moustache value may be piped through **filters** -- a fixed library of pure, deterministic transforms: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative.
 
-A value is either a **value** (a named-alphabet capture, carrying alphabet/range/element) or a **raw string** (a whole-stage `{{ i$ }}`, the flowing `{{ $ }}`, any string-filter output, a bare-Unicode-range or subtractive capture). **String** filters read either; a **value** filter or arithmetic on a raw string is a compile error.
+A value is either a **value** (a named-alphabet capture, carrying alphabet/range/value) or a **raw string** (a whole-stage `{{ i$ }}`, the flowing `{{ $ }}`, any string-filter output, a bare-Unicode-range or subtractive capture). **String** filters read either; a **value** filter or arithmetic on a raw string is a compile error.
 
 | Filter              | Kind   | Effect                                                                                                   |
 | ------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
@@ -343,6 +316,6 @@ A value is either a **value** (a named-alphabet capture, carrying alphabet/range
 | `b256` / `b256(n)`  | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
 | `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
 
-Byte filters work one byte per code point, so they chain (`... | b256 | sha256`). A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string or opaque value it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
+Byte filters work one byte per code point, so they chain (`... | b256 | sha256`). A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a digest only when it **begins with** that checksum -- how Base58Check verifies without ever taking the first four bytes.

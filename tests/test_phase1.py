@@ -41,11 +41,6 @@ def test_macro_whitespace_set():
     assert phase1.preprocess("{@s}") == "{\n,\r, ,\t}"
 
 
-def test_macro_b58_complement():
-    # b58 = digits, upper, lower, minus the four ambiguous glyphs.
-    assert phase1.preprocess("{@b58}") == "{{0..9},{A..Z},{a..z},!{0,l,I,O}}"
-
-
 def test_macro_word_boundary():
     # @ before a non-macro word is left untouched.
     assert phase1.preprocess("{x@bar}") == "{x@bar}"
@@ -92,9 +87,9 @@ def test_macro_w_case_insensitive_word():
     assert matches("{@w:a..zzzzz}", "!.?") == []
 
 
-def test_macro_x_matches_non_whitespace():
-    # @x is the complement of @s; a run of non-whitespace is [1..] (heterogeneous).
-    assert matches("{@x}[1..]", "ab cd\tef") == ["ab", "cd", "ef"]
+def test_complement_of_whitespace_matches_non_whitespace():
+    # The complement of @s; a run of non-whitespace is [1..] (heterogeneous).
+    assert matches("{!@s}[1..]", "ab cd\tef") == ["ab", "cd", "ef"]
 
 
 def test_macro_s_matches_whitespace():
@@ -108,10 +103,11 @@ def test_implicit_wrap_end_to_end():
     assert matches("a..z", "h e y 9") == ["h", "e", "y"]
 
 
-def test_b58_symbol_order_preserved():
-    # @b58 must keep the 58-symbol order for value arithmetic: '1' is value 0,
-    # '9' is value 8, 'A' is value 9 — so {@b58:..9} admits '9' but not 'A'.
-    result = matches("{@b58:..9}", "9 A")
+def test_ordered_union_value_order_preserved():
+    # An ordered union keeps its symbol order for value arithmetic. With digits
+    # then upper then lower (base58 ordering), '1' is value 0, '9' is value 8,
+    # 'A' is value 9 — so a `..9` band admits '9' but not 'A'.
+    result = matches("{{@d},{@u},{@l},!{0,l,I,O}:..9}", "9 A")
     assert "9" in result
     assert "A" not in result
 
