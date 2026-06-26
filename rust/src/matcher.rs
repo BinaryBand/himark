@@ -436,11 +436,16 @@ fn match_referent(
 
 // ── public entry ──────────────────────────────────────────────────────────────
 
-pub fn find_matches(els: &[Element], chars: &[char]) -> Vec<MatchOut> {
+/// `stop` bounds the positions a match may *begin* at (it still reads forward
+/// freely past `stop`): the incremental-fixed-point caller passes the end of the
+/// previous pass's last change, since a forward-reading rule can begin no new match
+/// beyond it. Pass `chars.len()` for an unbounded scan.
+pub fn find_matches(els: &[Element], chars: &[char], stop: usize) -> Vec<MatchOut> {
     let mut matches = Vec::new();
     let n = chars.len();
+    let limit = stop.min(n);
     let mut pos = 0;
-    while pos < n {
+    while pos < limit {
         let mut caps: Vec<Capture> = Vec::new();
         match match_seq(els, 0, chars, pos, &mut caps) {
             Some(end) if end > pos => {

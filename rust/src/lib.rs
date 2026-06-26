@@ -31,9 +31,11 @@ struct Program {
 impl Program {
     /// Run the pattern over `text`, returning matches as a JSON string:
     /// `[{"s":start,"e":end,"caps":[{"s":rel_start,"e":rel_end,"reps":[..]}]}]`.
-    fn run(&self, text: &str) -> PyResult<String> {
+    /// `stop` caps the positions a match may begin at (the incremental-splice scan
+    /// window); pass the text's char length for an unbounded scan.
+    fn run(&self, text: &str, stop: usize) -> PyResult<String> {
         let chars: Vec<char> = text.chars().collect();
-        let matches = matcher::find_matches(&self.elements, &chars);
+        let matches = matcher::find_matches(&self.elements, &chars, stop);
         serde_json::to_string(&matches)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("himark_rs encode: {e}")))
     }

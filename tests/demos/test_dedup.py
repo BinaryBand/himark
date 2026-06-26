@@ -16,9 +16,9 @@ These tests pin each pass and the merge on small crafted inputs — cross-column
 near-misses the script documents as out of scope — then a slice of the real
 `podcasts.csv` (fast on any backend). The cross-document self-reference scan is
 ~quadratic, so reconciling all 859 rows is only feasible on the native backend:
-`test_full_file_reconciles_under_rust` forces `RustEngine` (~4s, after the QUICK
-pre-pass) and is skipped when the extension isn't built; the runbook does the
-whole file there too.
+`test_full_file_reconciles_under_rust` forces `RustEngine` (~1.5s, after the QUICK
+pre-pass and with the incremental `stop` prune) and is skipped when the extension
+isn't built; the runbook does the whole file there too.
 """
 
 import csv
@@ -145,7 +145,7 @@ def _parse_csv(text: str) -> list[list[str]]:
 )
 def test_full_file_reconciles_under_rust():
     # Reconciling all 859 rows is ~quadratic, infeasible on the Python backend but
-    # ~4s on the native one — so force RustEngine regardless of the default.
+    # ~1.5s on the native one — so force RustEngine regardless of the default.
     src = (RESOURCES / "podcasts.csv").read_text("utf-8")
     with using_backend(RustEngine()):
         parsed = _parse_csv(dedup(src))

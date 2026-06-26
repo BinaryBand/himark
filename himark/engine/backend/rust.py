@@ -77,13 +77,13 @@ class RustEngine:
         if tag == "py":
             return self._fallback.run(handle, text, stages, start, stop)
         # `stages` only feed the (unsupported) reference elements, so the Rust
-        # subset ignores them. The `start`/`stop` scan window is likewise a
-        # speed hint, not a semantic one — the native matcher scans the whole
-        # text; the tail it covers is already match-free, so the result is the
-        # same (it just forgoes the incremental skip). JSON in the seam's
-        # currency: rebuild Match/Capture.
+        # subset ignores them. `stop` bounds where a match may begin (the
+        # incremental-fixed-point scan window); `None` means scan to the end —
+        # the native loop takes the char length for that. (`start` is unused: the
+        # orchestration only ever prunes the tail, never the prefix.) JSON in the
+        # seam's currency: rebuild Match/Capture.
         out: list[Match] = []
-        for m in json.loads(handle.run(text)):
+        for m in json.loads(handle.run(text, len(text) if stop is None else stop)):
             mtext = text[m["s"] : m["e"]]
             captures = [
                 Capture(mtext[c["s"] : c["e"]], (c["s"], c["e"]), c["reps"])
