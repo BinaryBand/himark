@@ -320,3 +320,32 @@ Byte filters work one byte per code point, so they compose. A bare `b256` takes 
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.
 ````
+
+---
+
+## The `.hmk` file
+
+A `.hmk` file is a **pipeline** -- an ordered list of [statements](#repeat-transformers), each spliced over the whole document in turn (the output of one is the input to the next). The file just **names the sequence**; the splice semantics are unchanged. Run one over a document with the CLI:
+
+```sh
+himark transpile in.md --script pipeline.hmk --out out.md
+```
+
+**One statement per logical line.** A statement may span several **physical** lines two ways: a `{...}` group or `"..."` template that runs long stays one logical line (a newline _inside_ a brace or quote does not end the statement), and a line whose first token is an **arrow** (`=>` / `<=>`) **continues** the previous statement -- the chain wrapped across lines for readability. Any other non-blank line **starts** a new statement; a blank line is ignored.
+
+**`//` starts a line comment** -- but only at brace/quote **depth 0**, running to end of line. So a top-level `// note` is stripped, while `{//}` (a literal `//` alphabet) and a `http://...` inside a brace or template survive untouched. (Depth-aware comment stripping and line-joining are a small pre-pass; a flat regex can't express "only at depth 0", which is why the spelling stays structural -- see the [ANTLR branch](#antlr-branch-divergences-from-mainline-011) notes.)
+
+```proto
+// tidy: one statement, wrapped onto continuation lines
+{@^}{#}[1..6]{ }[1..]!{\n}[1..]
+  => "<h{{#0}}>{{$2}}</h{{#0}}>"     // a continuation line (leading arrow)
+
+{ }[2..]{\n} => "<br/>\n"            // the next statement
+```
+
+**The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
+
+- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@d},{@w::..f}`).
+- `filter name = <expr>` binds a [derived filter](#filters): a moustache expression over the primitive filters, with `.` the piped-in value (`filter le16 = . | b256(2,le)`).
+
+A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).

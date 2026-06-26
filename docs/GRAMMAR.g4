@@ -43,17 +43,20 @@ grammar GRAMMAR;
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── File-level entry rules ───────────────────────────────────────────────────
+// `script`/`prelude` parse a whole comment-stripped file. The `//`-comment and
+// statement-splitting *pre-pass* (logical lines, continuations, blank lines) is a
+// depth-aware stateful pass, not a token rule — it is documented in docs/HMK.md
+// ("The .hmk file"). `snippet`/`patternOnly` parse a single statement / query.
 
 script   : sp (statement (sp statement)*)? sp EOF ;
 prelude  : sp (declaration (sp declaration)*)? sp EOF ;
 snippet  : sp statement sp EOF ;
 patternOnly : sp pattern sp EOF ;
 
-// Insignificant top-level whitespace: spaces/newlines around arrows, steps, and
-// declarations are stripped before parsing in the implementation (`phase0`
-// `.strip()`s each step), so they carry no meaning here. Whitespace *inside* a
-// brace is literal (a `{ }` space alphabet) and is handled by `litToken`.
-sp        : (WS | NL)* ;
+// Insignificant newlines around arrows, steps, and declarations (a statement may
+// break across lines on a leading arrow — the `.hmk` continuation form). Spaces
+// and tabs are on the hidden channel (see `WS`), so only `NL` is visible here.
+sp        : NL* ;
 
 // ── Statements: an arrow-chain of steps ──────────────────────────────────────
 // The chain may break across physical lines on a leading arrow (the `.hmk`
@@ -124,8 +127,9 @@ atom      : braceGroup count?
           | litToken
           ;
 
-litToken  : NAME | INT | TEXT | WS | DOT | LT | GT | CARET | EQ
+litToken  : NAME | INT | TEXT | DOT | LT | GT | CARET | EQ
           | LPAREN | RPAREN | STAR | PLUS | PIPE | BANG
+          | AT | DOLLAR | HASH | LBRACK | RBRACK
           | ARROW | FIXARROW | FILTER ;
 
 // `$i` text-ref, `#i` count-ref, `N$M.K…` cross-stage ref. A bare `$`/`#` with no
@@ -216,7 +220,14 @@ INT      : [0-9]+ ;
 NAME     : [A-Za-z_] [A-Za-z0-9_]* ;
 
 NL       : ('\r'? '\n')+ ;
-WS       : [ \t]+ ;
+
+// Spaces/tabs are hidden: they still separate tokens (so `filter le16` stays two
+// tokens) but the parser ignores them, matching the implementation where step
+// whitespace is stripped (`phase0`) and a moustache expression skips whitespace
+// (`engine/_render`). A literal space *inside* a brace (a `{ }` space alphabet)
+// collapses to an empty arm — which the σ-grammar already permits — so the
+// recognizer still accepts it.
+WS       : [ \t]+ -> channel(HIDDEN) ;
 
 // Any other single character (punctuation, Unicode, …) is literal text.
 TEXT     : . ;
