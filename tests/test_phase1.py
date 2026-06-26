@@ -18,7 +18,7 @@ def test_macro_simple_range():
     assert phase1.preprocess("{@u}") == "{A..Z}"
 
 
-# The expanded value of @w: 26 case-fold pairs in one brace, then ',_'.
+# The expanded value of @w:: 26 case-fold pairs in one brace, then ',_'.
 _W = (
     "{" + ",".join(f"{{{c},{c.upper()}}}" for c in "abcdefghijklmnopqrstuvwxyz") + "},_"
 )
@@ -32,8 +32,8 @@ def test_macro_w_case_fold_pairs():
 
 def test_macro_nested_expansion():
     # @hex references @d and @w; expansion repeats until stable. @w slices into a
-    # `:` value bound ({@w:..f}), so the expansion is {{0..9},{…@w…:..f}}.
-    assert phase1.preprocess("{@hex}") == "{{0..9},{" + _W + ":..f}}"
+    # `::` value band ({@w::..f}), so the expansion is {{0..9},{…@w…::..f}}.
+    assert phase1.preprocess("{@hex}") == "{{0..9},{" + _W + "::..f}}"
 
 
 def test_macro_whitespace_set():
@@ -48,15 +48,18 @@ def test_macro_word_boundary():
     assert phase1.preprocess("{x@bar}") == "{x@bar}"
 
 
-# ── Implicit wrapping ─────────────────────────────────────────────────────────
+# ── No implicit wrapping (ANTLR branch) ───────────────────────────────────────
 
 
-def test_implicit_wrap_bare_expression():
-    assert phase1.preprocess("a..z") == "{a..z}"
+def test_no_implicit_wrap_bare_expression():
+    # A first step is no longer auto-wrapped; bare text passes through verbatim
+    # (write `{a..z}`, not `a..z`).
+    assert phase1.preprocess("a..z") == "a..z"
 
 
-def test_implicit_wrap_after_macro_expansion():
-    assert phase1.preprocess("@d") == "{0..9}"
+def test_no_implicit_wrap_after_macro_expansion():
+    # A macro still expands, but the result is not wrapped.
+    assert phase1.preprocess("@d") == "0..9"
 
 
 def test_no_wrap_when_already_braced():
@@ -75,18 +78,18 @@ def test_macro_dec_matches_digits():
 
 
 def test_macro_dec_value_bound():
-    result = matches("{@d:..255}", "192 300 10")
+    result = matches("{@d::..255}", "192 300 10")
     assert "192" in result and "10" in result
     assert "300" not in result
 
 
 def test_macro_w_case_insensitive_word():
     # @w is an ordered folded alphabet (case-fold letters plus '_'), so a word is
-    # a value bounded over it: {@w:a..zzzzz}. Digits are not word symbols.
-    assert matches("{@w:a..zzzzz}", "Ab9") == ["Ab"]
-    assert matches("{@w:a..zzzzz}", "xyz") == ["xyz"]
-    assert matches("{@w:a..zzzzz}", "a_b") == ["a_b"]
-    assert matches("{@w:a..zzzzz}", "!.?") == []
+    # a value bounded over it: {@w::a..zzzzz}. Digits are not word symbols.
+    assert matches("{@w::a..zzzzz}", "Ab9") == ["Ab"]
+    assert matches("{@w::a..zzzzz}", "xyz") == ["xyz"]
+    assert matches("{@w::a..zzzzz}", "a_b") == ["a_b"]
+    assert matches("{@w::a..zzzzz}", "!.?") == []
 
 
 def test_complement_of_whitespace_matches_non_whitespace():
@@ -100,16 +103,18 @@ def test_macro_s_matches_whitespace():
     assert "\t" in result
 
 
-def test_implicit_wrap_end_to_end():
-    # Bare `a..z` is wrapped and read as a char range, not literal text.
-    assert matches("a..z", "h e y 9") == ["h", "e", "y"]
+def test_no_implicit_wrap_end_to_end():
+    # No implicit wrap: bare `a..z` is literal text (matches the substring), while
+    # the explicit `{a..z}` reads as a char range.
+    assert matches("a..z", "say a..z please") == ["a..z"]
+    assert matches("{a..z}", "h e y 9") == ["h", "e", "y"]
 
 
 def test_ordered_union_value_order_preserved():
     # An ordered union keeps its symbol order for value arithmetic. With digits
     # then upper then lower (base58 ordering), '1' is value 0, '9' is value 8,
     # 'A' is value 9 — so a `..9` band admits '9' but not 'A'.
-    result = matches("{{@d},{@u},{@l},!{0,l,I,O}:..9}", "9 A")
+    result = matches("{{@d},{@u},{@l},!{0,l,I,O}::..9}", "9 A")
     assert "9" in result
     assert "A" not in result
 

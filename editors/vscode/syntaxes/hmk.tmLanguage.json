@@ -16,7 +16,7 @@
       "name": "comment.line.double-slash.hmk"
     },
     "arrow": {
-      "match": "=>|<=",
+      "match": "<=>|=>",
       "name": "keyword.operator.arrow.hmk"
     },
     "escape": {
@@ -46,7 +46,7 @@
         { "match": "@(?:\\^\\^|\\$\\$|\\^|\\$)", "name": "keyword.control.anchor.hmk" },
         { "match": "@[A-Za-z][A-Za-z0-9]*", "name": "support.constant.macro.hmk" },
         { "match": "\\$\\d+|#\\d+|\\d+\\$[0-9.]*", "name": "variable.language.reference.hmk" },
-        { "match": "\\.\\.|[,:!]", "name": "keyword.operator.group.hmk" },
+        { "match": "\\.\\.|::|[,!]", "name": "keyword.operator.group.hmk" },
         { "include": "#count" },
         { "include": "#group" }
       ]

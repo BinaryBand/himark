@@ -12,13 +12,12 @@ whose nested braces are sub-captures, `{of{black}{quartz}}`).
 The σ-grammar has two axes: `..` builds an ordered range (≤), and `,` builds a
 congruence class (~) whose members are interchangeable spellings of one
 position. `{a,A}` is one folded position; `{{a,A},{b,B},…}` is an ordered
-alphabet of folded positions. A *band* is `{payload:band}`: a payload alphabet
-restricted by a band over its values — a `..` range (`{@d:0..255}`), a single
-value (`{@d:5}`), or a `,`-union of either (`{@d:1..5,9..12}`). Written endpoint
-widths set the field-width window. The first top-level `:` separates payload from
-band only for a *typed head* (a `@macro`/range/union alphabet, or a braced
-universe) or a band-side `..`; otherwise every colon is literal (`{12:30}`,
-`{std::vector}`, `{https://x.com}`). `\\:` forces a literal colon.
+alphabet of folded positions. A *band* is `{payload::band}`: a payload alphabet
+restricted by a band over its values — a `..` range (`{@d::0..255}`), a single
+value (`{@d::5}`), or a `,`-union of either (`{@d::1..5,9..12}`). Written endpoint
+widths set the field-width window. A brace is a band iff its body holds a
+top-level `::`, which splits payload from band; a single `:` is always literal
+(`{12:30}`, `{https://x.com}`), and a literal `::` is escaped `\\::`.
 """
 
 import re
@@ -61,10 +60,10 @@ def _resolved_brace(child: t.BraceGroupNode) -> t.BraceGroupNode:
     `{…}` is an alphabet expression unless its interior concatenates constructs, in
     which case it is a grouping brace (`SequenceNode`). Any `[count]` suffix is
     parsed too."""
-    # A band with a braced-universe head (`{{a..z}:b}`) reads as a nested brace
+    # A band with a braced-universe head (`{{a..z}::b}`) reads as a nested brace
     # plus adjacent text, so test for a band before the grouping-brace check.
     split = _split_band(child.content)
-    if split is not None and _is_band(*split):
+    if split is not None:
         semantic: t.SemanticNode = _resolve_band(*split)
     elif is_sequence_brace(child.content):
         semantic = _resolve_sequence_brace(child.content)
@@ -105,8 +104,8 @@ def _resolve_sequence_brace(content: str) -> t.SequenceNode:
 
 def _ambient_alpha() -> t.SemanticNode:
     """The ambient Unicode universe (`@uni`): every code point. It is the default
-    alphabet for a band with an empty payload (`{:0..255}`) and for an unnamed
-    multi-char `..` range (`{aa..zz}` == `{@uni:aa..zz}`)."""
+    alphabet for a band with an empty payload (`{::0..255}`) and for an unnamed
+    multi-char `..` range (`{aa..zz}` == `{@uni::aa..zz}`)."""
     return t.CharRangeNode(start="\x00", end="\U0010ffff")
 
 
@@ -121,35 +120,24 @@ def _resolve_universe(expr: str) -> t.SemanticNode:
 
 
 def _split_band(content: str) -> tuple[str, str] | None:
-    """Split a brace body into `(payload, band)` at the **first** top-level `:`, or
-    None when there is no top-level colon. The band keeps every later colon (they
-    read literally), so `{std::vector}` → `('std', ':vector')`."""
-    parts = split_top(":", content)
+    """Split a brace body into `(payload, band)` at the **first** top-level `::`, or
+    None when there is no top-level `::`. The band keeps every later `::` and every
+    single `:` (they read literally), so `{a::b::c}` → `('a', 'b::c')`.
+
+    The presence of a top-level `::` is the *only* signal of a band (ANTLR branch):
+    no inspection of the head or the right side. A single `:` is always literal and
+    never splits, and a literal `::` is escaped `\\::`."""
+    parts = split_top("::", content)
     if len(parts) < 2:
         return None
-    return parts[0], ":".join(parts[1:])
-
-
-def _is_band(payload: str, band: str) -> bool:
-    """Whether a `payload:band` split is a real band rather than literal colons.
-    A band needs a **typed head** — a payload that names a value alphabet: a
-    `..` range (which is what a `@macro` like `@d`→`0..9` expands to) or a braced
-    universe (`{{a..z}:b}`) — or a **band-side `..`** range (`{a,b,g..z:m..p}`).
-    Otherwise every colon is literal: a plain-literal head with a value-only right
-    side (`{12:30}`, `{std::vector}`), or a class whose member is `:` (`{ ,:,-}`)."""
-    head = strip_unescaped(payload)
-    typed_head = len(split_top("..", payload)) > 1 or (
-        head.startswith("{") and brace_end(head) == len(head)
-    )
-    band_has_range = len(split_top("..", band)) > 1
-    return typed_head or band_has_range
+    return parts[0], "::".join(parts[1:])
 
 
 def _resolve_band(payload: str, band: str) -> t.SemanticNode:
-    """Resolve a `{payload:band}` band. The payload is any universe (ambient @uni
+    """Resolve a `{payload::band}` band. The payload is any universe (ambient @uni
     when empty); the band is a `,`-union of arms, each a `lo..hi` range or a single
     value over the payload alphabet. One arm is a `ValueRangeNode`; several fold
-    into a `UnionNode` of ranges (`{@d:1..5,9..12}`)."""
+    into a `UnionNode` of ranges (`{@d::1..5,9..12}`)."""
     payload = strip_unescaped(payload)
     alpha: t.SemanticNode = (
         _ambient_alpha() if payload == "" else _resolve_universe(payload)
@@ -160,7 +148,7 @@ def _resolve_band(payload: str, band: str) -> t.SemanticNode:
 
 def _resolve_band_arm(alpha: t.SemanticNode, arm: str) -> t.ValueRangeNode:
     """One band arm: a `lo..hi` range (either end omittable) or a single value
-    (`{@d:5}` is `5..5`). An endpoint may be a reference (`{@d:0..$0}`), resolved
+    (`{@d::5}` is `5..5`). An endpoint may be a reference (`{@d::0..$0}`), resolved
     to a captured value at match time; else its written width sets the field
     window."""
     parts = split_top("..", arm)
@@ -237,12 +225,12 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if ref is not None:
         return ref
 
-    # `:`-bands: {payload:band}. The first top-level `:` separates a payload
-    # alphabet from a value band — but only for a typed head or a band-side `..`
-    # (the `_is_band` test). Otherwise every colon is literal (`{12:30}`,
-    # `{std::vector}`); `\:` forces a literal colon.
+    # `::`-bands: {payload::band}. A top-level `::` separates a payload alphabet
+    # from a value band; its presence alone marks a band, with no head inspection
+    # (ANTLR branch). A single `:` is always literal (`{12:30}`, `{https://x.com}`),
+    # and a literal `::` is escaped `\::`.
     split = _split_band(content)
-    if split is not None and _is_band(*split):
+    if split is not None:
         return _resolve_band(*split)
 
     # Object nesting `{{X}}`: a brace whose whole content is one nested brace is
@@ -404,8 +392,8 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     """Resolve one arm (no top-level commas) into a typed node.
 
     `..` is a plain range between two concrete endpoints. A *band* (an alphabet
-    plus a value range) is written with `:` (`{alphabet:lo..hi}`), not `..`, so an
-    alphabet endpoint here is an error pointing at the `:` form.
+    plus a value range) is written with `::` (`{alphabet::lo..hi}`), not `..`, so an
+    alphabet endpoint here is an error pointing at the `::` form.
     """
     parts = strict_split("..", arm, arm)
     svals = [_singleton_value(p) for p in parts]
@@ -426,7 +414,7 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         if av is not None and bv is not None:
             # τ..τ — a range between two concrete endpoints. Single chars occupy
             # one position (`{a..z}`); a multi-char range is a value bound over
-            # ambient Unicode (HMK.md §Universes): `{aa..zz}` == `{aa:@uni:zz}`,
+            # ambient Unicode (HMK.md §Universes): `{aa..zz}` == `{@uni::aa..zz}`,
             # the whole value band between the two words, the written widths
             # setting the field-width window.
             if len(av) == 1 and len(bv) == 1:
@@ -435,10 +423,10 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
         # An alphabet endpoint means this is a band, now spelled with `:`.
         raise CompileError(
             f"A '..' range needs concrete endpoints; a band over an alphabet is "
-            f"'{{alphabet:lo..hi}}' with ':': got {arm!r}"
+            f"'{{alphabet::lo..hi}}' with '::': got {arm!r}"
         )
 
     raise CompileError(
-        f"Too many '..' separators in a range (a band is '{{alphabet:lo..hi}}' "
-        f"with ':'): got {arm!r}"
+        f"Too many '..' separators in a range (a band is '{{alphabet::lo..hi}}' "
+        f"with '::'): got {arm!r}"
     )

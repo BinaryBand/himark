@@ -18,7 +18,7 @@ It is a TextMate grammar, so it highlights by token shape — see
 | Macros | `support.constant.macro` | `@d`, `@w`, `@hex` |
 | Anchors | `keyword.control.anchor` | `@^`, `@$`, `@^^`, `@$$` |
 | Self/stage references | `variable.language.reference` | `$0`, `#0`, `1$2.3` |
-| Operators | `keyword.operator` | `,` `..` `:` `!` |
+| Operators | `keyword.operator` | `,` `..` `::` `!` |
 | `[ … ]` counts | `meta.count` + `constant.numeric` | `[1..6]`, `[#0]` |
 | Escapes | `constant.character.escape` | `\{`, `\,`, `\"` |
 

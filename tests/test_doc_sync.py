@@ -62,7 +62,7 @@ def test_doc_subtractive_universe_examples():
 def test_doc_b256_value_filter_example():
     # The Filters section: a group accessor carries its alphabet, so b256 reads
     # '256' as the value 256 and emits it as two big-endian bytes.
-    assert execute(parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
+    assert execute(parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
         "\x01\x00"
     ]
 
@@ -76,36 +76,43 @@ def test_doc_primitives_vs_objects():
     assert matches("{{a,A}}[2]", "aa aA Aa AA") == ["aa", "aA", "Aa", "AA"]
     assert len(matches("{{a,A},{c,C}}[2]", "aa aA Aa AA cc cC Cc CC")) == 8
     # `{a,b}` is `{a..b}`: ordered, so a bound is value-ordered, not folded.
-    assert matches("{{a,b,c}:a..b}", "a b c") == ["a", "b"]
+    assert matches("{{a,b,c}::a..b}", "a b c") == ["a", "b"]
 
 
 def test_doc_band_grammar_examples():
     # The Bands section: a band is `{payload:band}` — the payload alphabet
     # restricted by a `..` range, a single value, or a `,`-union of either.
-    assert matches("{@d:0..255}", "0 200 255 256") == ["0", "200", "255", "25", "6"]
-    assert matches("{@d:5}", "4 5 6") == ["5"]  # single value over a typed head
-    assert matches("{a,b,g..z:m..p}", "a g m n p z") == ["m", "n", "p"]
-    assert matches("{0..9:9..12,1..5}", "0 1 5 6 9 12 13") == ["1", "5", "9", "12", "1", "3"]
-    assert matches("{{a..z}:b}", "a b c") == ["b"]  # braced-universe head
+    assert matches("{@d::0..255}", "0 200 255 256") == ["0", "200", "255", "25", "6"]
+    assert matches("{@d::5}", "4 5 6") == ["5"]  # single value over a typed head
+    assert matches("{a,b,g..z::m..p}", "a g m n p z") == ["m", "n", "p"]
+    assert matches("{0..9::9..12,1..5}", "0 1 5 6 9 12 13") == ["1", "5", "9", "12", "1", "3"]
+    assert matches("{{a..z}::b}", "a b c") == ["b"]  # braced-universe head
     # Drop the prefix for an ambient band; an open end keeps one side unbounded.
-    assert matches("{@d:0..}", "7") == ["7"]
-    assert matches("{@l:aa..zz}", "aa a9 zz") == ["aa", "zz"]
+    assert matches("{@d::0..}", "7") == ["7"]
+    assert matches("{@l::aa..zz}", "aa a9 zz") == ["aa", "zz"]
 
 
 def test_doc_band_literal_colons():
-    # "When `:` separates": the colon is a band separator only for a typed head
-    # or a band-side `..`. A plain-literal head with a value-only right side keeps
-    # every colon literal — no escaping needed.
+    # ANTLR branch: a brace is a band iff its body holds a top-level `::`. A single
+    # `:` is always literal and needs no escape; a literal `::` is escaped `\::`.
     assert matches("{12:30}", "12:30 12:31") == ["12:30"]
-    assert matches("{std::vector}", "std::vector x") == ["std::vector"]
     assert matches("{https://x.com}", "go to https://x.com now") == ["https://x.com"]
+    assert matches(r"{std\::vector}", "std::vector x") == ["std::vector"]
     # A class whose member is `:` is a union, not a band (the colon is a point).
     assert sorted(matches("{ ,:,-}", "a:b-c d")) == [" ", "-", ":"]
 
 
+def test_doc_band_double_colon_is_a_band():
+    # The flip side: an unescaped top-level `::` makes a band, so a literal C++
+    # qualified name must escape it. `{std::vector}` is now a band (alphabet `std`,
+    # band `vector`), which is not a value alphabet — a compile error.
+    with pytest.raises(CompileError):
+        matches("{std::vector}", "std::vector x")
+
+
 def test_doc_word_anchors():
     # The Anchors section: `@<`/`@>` are a `@w` <-> non-`@w` boundary, zero-width.
-    assert matches("{@<}{@w:a..zzzzz}{@>}", "hi there") == ["hi", "there"]
+    assert matches("{@<}{@w::a..zzzzz}{@>}", "hi there") == ["hi", "there"]
     assert len(matches("{@<}{a,b,c}", "a b c")) == 3  # three word starts
     assert matches("{foo}{@>}", "foo foobar") == ["foo"]  # @> only at a boundary
 
@@ -113,16 +120,16 @@ def test_doc_word_anchors():
 def test_doc_filters():
     # The Filters section's core set is pad / b256 / uint (hashes and other derived
     # transforms are deferred to a layer above these primitives).
-    assert execute(parser.parse('{@d:0..} => "{{ 0$0 | pad(4) }}"'), "7") == ["0007"]
+    assert execute(parser.parse('{@d::0..} => "{{ 0$0 | pad(4) }}"'), "7") == ["0007"]
     assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2) | uint }}"'), "258"
+        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2) | uint }}"'), "258"
     ) == ["258"]
     # `v | b256(n) | uint` round-trips when endianness matches; `le` flips it.
     assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | uint(le) }}"'), "258"
+        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) | uint(le) }}"'), "258"
     ) == ["258"]
     assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) | uint }}"'), "258"
+        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) | uint }}"'), "258"
     ) == ["513"]  # 0x0201 big-endian = 513 — confirms le reversed the bytes
 
 
@@ -148,8 +155,8 @@ def test_doc_derived_filter():
     # prelude) is a named moustache expression over the primitives. `le16` is
     # `b256(2,le)`; calling it must equal the expression it stands for.
     assert execute(
-        parser.parse('{@d:0..65535} => "{{ 0$0 | le16 }}"'), "258"
-    ) == execute(parser.parse('{@d:0..65535} => "{{ 0$0 | b256(2,le) }}"'), "258")
+        parser.parse('{@d::0..65535} => "{{ 0$0 | le16 }}"'), "258"
+    ) == execute(parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) }}"'), "258")
     # A derived filter is parameterless this pass.
     with pytest.raises(CompileError):
-        execute(parser.parse('{@d:0..} => "{{ 0$0 | le16(2) }}"'), "5")
+        execute(parser.parse('{@d::0..} => "{{ 0$0 | le16(2) }}"'), "5")

@@ -56,11 +56,12 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
 def _split_fixed_point(statement: str) -> tuple[str, bool]:
     """Rewrite each top-level `<=>` arrow to `=>`, returning `(text, used_<=>)`.
 
-    Depth-aware over `{…}` / `[…]` and skipping `\\`-escapes, like the `=>`
-    splitter — so a `<=>` inside a brace or count is left alone. (A `<=>` inside a
-    quoted template is not distinguished, the same limitation `=>` has.)"""
+    An arrow is recognised only at top level — outside every `{…}`, `[…]`, and
+    `"…"` (ANTLR branch), like the `=>` splitter — so a `<=>` inside a brace,
+    count, or quoted template is left alone."""
     out: list[str] = []
     depth = 0
+    inq = False
     found = False
     i = 0
     n = len(statement)
@@ -70,12 +71,16 @@ def _split_fixed_point(statement: str) -> tuple[str, bool]:
             out.append(statement[i : i + 2])
             i += 2
             continue
-        if ch == "<" and statement[i + 1 : i + 3] == "=>" and depth == 0:
+        if ch == '"':
+            inq = not inq
+        elif inq:
+            pass  # inside a quoted template — braces and `<=>` are literal
+        elif ch == "<" and statement[i + 1 : i + 3] == "=>" and depth == 0:
             out.append("=>")
             found = True
             i += 3
             continue
-        if ch in "[{":
+        elif ch in "[{":
             depth += 1
         elif ch in "]}":
             depth = max(0, depth - 1)

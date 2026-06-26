@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.11.dev | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
+**Version:** 0.12.0 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
 
 <!-- cspell:words himark -->
 
@@ -10,7 +10,7 @@
 
 A pattern is **universes** plus operators. A universe `{...}` is a set of strings; as a pattern it matches **exactly one** element and fills **one position** -- that is all a brace is. Patterns compose by **adjacency**: universes side by side concatenate (Cartesian product), each adding one position. Everything else writes, narrows, or operates on a universe.
 
-A bare `{...}` is **always an alphabet**; its punctuation picks which set: **literal** `{cat}`, **union** `{a,b}`, **range** `{a..z}`, **band** `{@d:0..9}`. Only a **leading sigil** changes the reading: `!{...}` subtracts, `@name` is a macro/anchor, `$`/`#`+index is a reference.
+A bare `{...}` is **always an alphabet**; its punctuation picks which set: **literal** `{cat}`, **union** `{a,b}`, **range** `{a..z}`, **band** `{@d::0..9}`. Only a **leading sigil** changes the reading: `!{...}` subtracts, `@name` is a macro/anchor, `$`/`#`+index is a reference.
 
 **Nesting** is the one structural device, split by whether a nested brace is a _member_ or an _adjacent factor_:
 
@@ -33,17 +33,17 @@ flowchart TD
 {{cat}{dog}}   // grouping: those two as one operand
 ```
 
-| Operator  | Name            | Role                                                |
-| --------- | --------------- | --------------------------------------------------- |
-| `{...}`   | Universe        | set of strings; matches one element                 |
-| `,`       | Union           | `{a,b}` is `a` or `b`                               |
-| `..`      | Range / band    | value band in an alphabet (`{a..z}`, `{@d:0..255}`) |
-| `{X}{Y}`  | Adjacency       | concatenate -- Cartesian product                    |
-| `!{...}`  | Subtractive     | everything _not_ in `{...}` (ambient Unicode)       |
-| `{U:...}` | Alphabet prefix | band over an alphabet (`{@d:0..9}`)                 |
-| `[count]` | Repetition      | base-10 count universe (`[n]`, `[x..y]`, `[a,b,c]`) |
-| `=>`      | Pipe            | feed each match into the next step                  |
-| `<=>`     | Fixed point     | re-apply over the document until it settles         |
+| Operator   | Name            | Role                                                 |
+| ---------- | --------------- | ---------------------------------------------------- |
+| `{...}`    | Universe        | set of strings; matches one element                  |
+| `,`        | Union           | `{a,b}` is `a` or `b`                                |
+| `..`       | Range / band    | value band in an alphabet (`{a..z}`, `{@d::0..255}`) |
+| `{X}{Y}`   | Adjacency       | concatenate -- Cartesian product                     |
+| `!{...}`   | Subtractive     | everything _not_ in `{...}` (ambient Unicode)        |
+| `{U::...}` | Alphabet prefix | band over an alphabet (`{@d::0..9}`)                 |
+| `[count]`  | Repetition      | base-10 count universe (`[n]`, `[x..y]`, `[a,b,c]`)  |
+| `=>`       | Pipe            | feed each match into the next step                   |
+| `<=>`      | Fixed point     | re-apply over the document until it settles          |
 
 A position holds one **point** -- a **primitive** (one char/string) or an **object** (nested, interchangeable members). `[count]` repeats **one point** and is **unidimensional** (it sees only its own level; a nested universe is one opaque object). A primitive repeats its fixed spelling; an object's faces are **free per position** (the operator never sees which face it stamps):
 
@@ -60,12 +60,7 @@ Point **value** is fixed under [Values and ordering](#values-and-ordering).
 
 ## Macros
 
-Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single
-centralized declaration file loaded before every run. Each `@name = <source>` line
-binds a macro: `@name` expands to that Himark source before tokenizing, so the
-engine holds no built-in alphabet knowledge — it only ever sees the ranges and
-congruence classes the source expands to. The same file declares **derived
-filters** (`filter name = <expr>`, see [Filters](#filters)). The shipped set:
+Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a macro: `@name` expands to that Himark source before tokenizing, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source expands to. The same file declares **derived filters** (`filter name = <expr>`, see [Filters](#filters)). The shipped set:
 
 | Name     | Expands to                     |
 | -------- | ------------------------------ |
@@ -74,7 +69,7 @@ filters** (`filter name = <expr>`, see [Filters](#filters)). The shipped set:
 | `@u`     | `A..Z`                         |
 | `@s`     | `\n,\r, ,\t`                   |
 | `@w`     | `0..9,{a,A},{b,B},...,{z,Z},_` |
-| `@hex`   | `{@w:0..f}`                    |
+| `@hex`   | `{@w::0..f}`                   |
 | `@b256`  | `U+0000..U+00FF` (every byte)  |
 | `@ascii` | `U+0000..U+007F`               |
 | `@uni`   | `U+0000..U+10FFFF`             |
@@ -97,9 +92,9 @@ A whole word is `{@<}{@w}[1..]{@>}`.
 
 ## Escaping
 
-Backslash makes the next char literal. Only **framing** chars ever need it: `{` `}` `[` `]` `"` `\`, plus `:` `$` `#` where they'd read as a band separator or reference. All else (`(` `)` `.` `*` `+` `-` `?` `|` ...) is already literal. Invisibles use C spellings `\n` `\r` `\t`; a space is a space. So `{(a|b)?}` matches the literal `(a|b)?`.
+Backslash makes the next char literal. Only **framing** chars ever need it: `{` `}` `[` `]` `"` `\`, plus `$` `#` where they'd read as a reference, and `::` where it would read as a band separator. A **single `:` is always literal** and never needs escaping; to write a literal **`::`** escape either colon (`\::`). All else (`(` `)` `.` `*` `+` `-` `?` `|` `:` ...) is already literal. Invisibles use C spellings `\n` `\r` `\t`; a space is a space. So `{(a|b)?}` matches the literal `(a|b)?`, and `{std\::vector}` matches the literal `std::vector`.
 
-A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). So `\x41` is `A`, and the byte alphabets are spelled `\x00..\xff` (`@b256`), `\x00..\U0010ffff` (`@uni`). Fixed width (not `\u{…}`) keeps the trailing hex from ever reading as a brace.
+A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). So `\x41` is `A`, and the byte alphabets are spelled `\x00..\xff` (`@b256`), `\x00..\U0010ffff` (`@uni`). Fixed width (not `\u{...}`) keeps the trailing hex from ever reading as a brace.
 
 ---
 
@@ -115,7 +110,7 @@ A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\
 
 > `..` is **one-axis**. `{a..z}..{A..Z}` (range between two sets) has no single order -> rejected; write `{a..z}{A..Z}` (product), `{a..z,A..Z}` (either case), or `{{a,A},...,{z,Z}}` (folded).
 
-> An unnamed multi-char range is over **ambient Unicode**: `{aa..zz}` is the value band, including non-letter strings between. For "two lowercase letters": `{@l:aa..zz}`.
+> An unnamed multi-char range is over **ambient Unicode**: `{aa..zz}` is the value band, including non-letter strings between. For "two lowercase letters": `{@l::aa..zz}`.
 
 ### Congruence
 
@@ -163,36 +158,35 @@ Values are integers: `Z` is the carrier of every alphabet (`@d`, `@l`, `@hex`, t
 
 ## Bands
 
-A **band** restricts an alphabet's values. The alphabet is the **payload** (any universe); `:` adds a band -- a `..` range, a `,`-union of ranges/values, or a single value, over the alphabet's values. `{U:x..y}` restricts **inclusively** to values `x`..`y` by [value](#values-and-ordering) (MSB-first). Drop the prefix for an ambient band (`{0..255}`); drop the band for the bare alphabet (`{@d}`).
+A **band** restricts an alphabet's values. The alphabet is the **payload** (any universe); `::` adds a band -- a `..` range, a `,`-union of ranges/values, or a single value, over the alphabet's values. `{U::x..y}` restricts **inclusively** to values `x`..`y` by [value](#values-and-ordering) (MSB-first). Drop the prefix for an ambient band (`{::0..255}`); drop the band for the bare alphabet (`{@d}`).
 
 ```proto
-{@d:0..255}        // decimal 0--255
-{@d:5}             // single value '5' over a typed head
-{a,b,g..z:m..p}    // bare alphabet, banded m--p
-{0..9:9..12,1..5}  // union: 1,2,3,4,5,9,10,11,12
+{@d::0..255}        // decimal 0--255
+{@d::5}             // single value '5' over a typed head
+{a,b,g..z::m..p}    // bare alphabet, banded m--p
+{::9..12,1..5}      // ambient union: 9,10,11,12,1,2,3,4,5
 ```
 
-**When `:` separates.** A brace is a band only if its head is a `@macro` or braced universe (`{@d:5}`, `{{a..z}:b}`), or a top-level `:` is followed by **band syntax** -- a `..` range on its right (`{a..z:b..y}`). That first `:` splits payload (left) from band (right); every other `:` is **literal**, so `{12:30}`, `{std::vector}`, `{https://x.com}` need no escape. Use `\:` to force a literal colon.
+**When `::` separates.** A brace is a **band** when its body holds a **top-level `::`**. That first `::` splits the **payload** (left, the alphabet) from the **band** (right); every other `::`, and **every single `:`**, is **literal**. So `{12:30}`, `{https://x.com}`, and `{key:value}` need no escape -- they hold only single colons. A literal `::` is escaped `\::` (escape either colon), so a C++ qualified name is `{std\::vector}`.
 
-> A single-value or union band needs a **typed head**: `{@d:5}` is `5` over `@d`, `{@d:1,3,5}` the set {1,3,5}. Over a bare range a lone value just restates a literal -- `{a..z:b}` is the string `a..z:b` (write `{b}`); only a band-side `..` makes a bare head a band.
+> The separator is now purely structural: the parser decides band-ness from the presence of a top-level `::` alone, with no inspection of the head or the right side. **Meaning** still wants a **typed head** for a single-value or union band: `{@d::5}` is `5` over `@d`, `{@d::1,3,5}` the set {1,3,5}. A lone-value band over a bare range (`{a..z::b}`) is a degenerate form -- the value just restates a literal, so write `{b}`. A single colon is literal, so `{a..z:b}` is plainly the string `a..z:b`.
 
-Either endpoint may be omitted (`{@d:0..}` is $\geq 0$, `{@d:..255}` is $\leq 255$); **both** omitted is a compile error (write `{@d}`).
+Either endpoint may be omitted (`{@d::0..}` is $\geq 0$, `{@d::..255}` is $\leq 255$); **both** omitted is a compile error (write `{@d}`).
 
-A band's **width follows endpoint widths**: `{@d:00..99}` is two wide, `{@d:000..999}` three, `{@d:0..999}` one-to-three (narrower endpoint = min, wider = max). For a fixed width regardless of value use a count (`{@d}[3]`); to **produce** padded output use `pad` -- padding is never inferred from a bound's spelling.
+A band's **width follows endpoint widths**: `{@d::00..99}` is two wide, `{@d::000..999}` three, `{@d::0..999}` one-to-three (narrower endpoint = min, wider = max). For a fixed width regardless of value use a count (`{@d}[3]`); to **produce** padded output use `pad` -- padding is never inferred from a bound's spelling.
 
-An endpoint is a value, so a **reference** may stand in, resolved at match time by magnitude: `{@d:0..$0}` matches a decimal $\leq$ group 0 (width-agnostic -- more positions than the referent is larger), `{@d:$0..}` matches one $\geq$ it. A reference that didn't capture, or a referent outside the alphabet, does not resolve. `\$` is literal.
+An endpoint is a value, so a **reference** may stand in, resolved at match time by magnitude: `{@d::0..$0}` matches a decimal $\leq$ group 0 (width-agnostic -- more positions than the referent is larger), `{@d::$0..}` matches one $\geq$ it. A reference that didn't capture, or a referent outside the alphabet, does not resolve. `\$` is literal.
 
 ```proto
-{@d}[1..],{@d:0..$0}    // two decimals, second <= first
+{@d}[1..],{@d::0..$0}    // two decimals, second <= first
 ```
 
 ### Subtraction
 
 `!{...}` is the **subtractive universe**: one char that does **not begin any member of `{...}` at this position**. Plain complement is the one-char case (`!{a}` = any char but `a`); a union applies each member's condition. A **multi-char** member is a **break**: `!{ab}` is to `!{a,b}` as `{ab}` is to `{a,b}` -- comma lists members, adjacency makes one member. So a run `!{```}[1..]` stops at the **nearest** sequence -- scanning to a delimiter with no lazy operator:
 
-```proto
-{@d,@l,@u,!{0,l,I,O}}   // base58: digits + letters minus four ambiguous chars
-{<!--}!{-->}[1..]{-->}   // HTML comment: body runs to the nearest -->
+```proto {@d,@l,@u,!{0,l,I,O}}    // base58: digits + letters minus four ambiguous chars {<!--}!{-->}[1..]{-->}   // HTML comment: body runs to the nearest -->
+
 ```
 
 > A break is **not** per-char exclusion -- `!{()}` passes a lone `(` or `)`, stopping only before the sequence `()`. To exclude either: `!{(,)}`.
@@ -219,8 +213,7 @@ A run is **greedy**: it takes the longest count in range that still lets the res
 `[n]` repeats **one point**: a primitive verbatim (`{a..z}[3]`=`aaa`), an object's members free (`{{a..z}}[3]` = any three letters). An **alphabet of objects** stays within one object: `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`. A **grouping brace** under `[count]` matches a **fresh instance per repetition**, captured as one string.
 
 ```proto
-{a..z}[2,4,6]               // same letter 2, 4, or 6 times
-{{|}!{|,\n}[1..]}[2..]{|}   // 2+ '|'+cell units, each cell different
+{a..z}[2,4,6]               // same letter 2, 4, or 6 times {{|}!{|,\n}[1..]}[2..]{|}   // 2+ '|'+cell units, each cell different
 ```
 
 ---
@@ -231,7 +224,7 @@ Every `{...}` in matching position is a **capture group**, numbered from **0** i
 
 A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only. (`{1{am,pm}}` is alternation in a unit; folding the inner to `{1{{am,pm}}}` changes nothing observable -- a brace buried in a grouping brace is never addressed or repeated on its own, so object vs. union there is moot.)
 
-Single-position constructs -- object `{{a,A}}`, band `{A:x..y}`, subtractive `!{...}`, reference, anchor `{@^}` -- are each **one** group regardless of inner braces. An anchor occupies a number and captures the empty string. A repeated group `{X}[n]` is one number, captured as one string.
+Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference, anchor `{@^}` -- are each **one** group regardless of inner braces. An anchor occupies a number and captures the empty string. A repeated group `{X}[n]` is one number, captured as one string.
 
 Input `### Sphinxofblackquartz`, expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
 
@@ -259,8 +252,7 @@ A reference: optional **stage** (a leading number), **sigil** (`$` text, `#` cou
 | `[#i]` / `[N#i]` | (in a count) repeat as group `i` did                      |
 
 ```proto
-{a..z}{$0}        // doubled letter: 'aa','bb' (not 'ab')
-{a}[2..]{-}[#0]   // as many '-' as 'a': 'aaa---','aa--'
+{a..z}{$0}        // doubled letter: 'aa','bb' (not 'ab') {a}[2..]{-}[#0]   // as many '-' as 'a': 'aaa---','aa--'
 ```
 
 An index names a **top-level group** of the addressed step, resolved at **compile time** (an index naming no group is a compile error). At match time, a reference whose group exists but didn't capture (an unmatched alternative, a zero-count run) **does not match**. A bare `$`/`#` is literal (`\$` to be explicit); a sigil is a reference only with a stage or index, so `{#}` is `#` and `{#0}` is group 0's count.
@@ -273,39 +265,38 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 
 `=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`); the first is a query. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
 
-- a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d:0..$0}` for magnitude).
+- a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it. `$` is the flowing text, so templates compose.
 
 A template is literal text plus `{{ ... }}` moustaches. The full render **lands**; what **flows** to the next stage is the concatenation of moustache contents alone. Text outside the braces decorates (lands, never flows). So `"<h{{#0}}>{{$2}}</h{{#0}}>"` flows `#0+$2+#0`, while `"{{ ("<h", #0, ">", $2, "</h", #0, ">") }}"` flows the whole render.
+
+> **Arrows are top-level only.** `=>` and `<=>` are recognised as arrows only outside every `{...}`, `[...]`, and `"..."`. Inside a quoted template they are literal text, so a template may contain `=>` freely and never needs to escape it. Keep arrows out of brace and count bodies too -- there they are literal.
 
 Stages are numbered by `=>` position, **counting queries only** (a template doesn't advance the count), so `{{ i$j }}` and `{N$i}` stay stable when a template is inserted.
 
 A statement's result is **(span, output)** pairs. The semantics is **splice**: every statement, at every depth, lays its outputs back over their spans and keeps the text between -- which lets templates compose, branches nest, and `<=>` iterate. A flat **list** (spans dropped) is a **host projection** for extraction, not a second semantics.
 
 ```proto
-"# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
-// lands "<h1>Hello</h1>"
-{@d:0..}{=}{$0} => "ok"
-// gate: '7=7' passes, '7=8' is dropped
+"# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>" // lands "<h1>Hello</h1>" {@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
 ```
 
 ### Fixed point
 
 `<=>` instead of `=>` **re-splices over the whole document until the result stops changing** -- the splice version of a `while` loop. Each pass is an ordinary `=>` splice; passes repeat until one makes no change. Use it for input-dependent iteration: peel the innermost tag pair, mask an interior newline, swap an out-of-order pair until sorted.
 
-```proto
-{(}!{(,)}[..]{)} <=> "{{$1}}"              // strip innermost (...), deepest first
-{@d:0..},{@d:0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs
-```
+````proto
+{(}!{(,)}[..]{)} <=> "{{$1}}"                // strip innermost (...), deepest first {@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs ```
 
 The rule must **contract** toward a fixed point; one that grows the document (`{a} <=> "aa"`) or oscillates never settles. The runner halts on a pass that lengthens or repeats a state; a provably non-contracting rule is rejected at compile time. Use `=>` for a single pass. `<=>` is an arrow only at top level; only a single statement can be looped, not a whole group.
 
 ### Expressions
 
-A `{{ ... }}` moustache holds one **expression** over captured values. What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$j`), integer/string literals, and parentheses. Operators, tightest to loosest:
+A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
+
+What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$j`), integer/string literals, and parentheses. Operators, tightest to loosest:
 
 - `*` -- multiply
-- `+` -- add (integer or point)
+- `+` -- add
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
@@ -323,8 +314,9 @@ A value is either a **value** (a named-alphabet capture, carrying alphabet/range
 | `b256` / `b256(n)`  | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
 | `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
 
-Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d:0..255}`=1 byte, `{@d:000..999}` and `{@l:aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
+Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d::0..255}`=1 byte, `{@d::000..999}` and `{@l::aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
 
 **Derived filters.** The primitives above are native; new filters are _composed_ from them in the prelude (`himark/std.hmk`) with `filter name = <expr>`, where `<expr>` is a moustache expression over the primitives and operators and `.` is the piped-in value. So `filter le16 = . | b256(2,le)` names a two-byte little-endian encode; `{{ $0 | le16 }}` then stands for `{{ $0 | b256(2,le) }}`. This is the layer-2 extension seam: the irreducible primitives stay in the core, everything else is declared. (Derived filters are parameterless for now.)
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.
+````

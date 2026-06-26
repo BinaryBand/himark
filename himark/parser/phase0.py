@@ -28,20 +28,27 @@ def split_statement(text: str) -> list[str]:
 def _find_arrow(text: str) -> int | None:
     """Index of the first top-level `=>`, or None.
 
-    HMK's delimiters track depth: `{…}` and `[…]`. A single `<` or `>` is plain
-    text (so a template's `<strong>` never reads as an arrow), and a
+    An arrow is recognised only at top level — outside every `{…}`, `[…]`, and
+    `"…"` (ANTLR friendly): inside a quoted template `=>` is literal text and never
+    splits, so a template may contain `=>` freely with no escape. A single `<` or
+    `>` is plain text (a template's `<strong>` never reads as an arrow), and a
     backslash-escaped character is never a delimiter.
     """
     depth = 0
+    inq = False
     i = 0
     while i < len(text):
         ch = text[i]
         if ch == "\\":
             i += 2
             continue
-        if ch == "=" and text[i + 1 : i + 2] == ">" and depth == 0:
+        if ch == '"':
+            inq = not inq
+        elif inq:
+            pass  # inside a quoted template — braces and `=>` are literal
+        elif ch == "=" and text[i + 1 : i + 2] == ">" and depth == 0:
             return i
-        if ch in ("[", "{"):
+        elif ch in ("[", "{"):
             depth += 1
         elif ch in ("]", "}"):
             depth = max(0, depth - 1)

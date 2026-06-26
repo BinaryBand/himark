@@ -5,7 +5,7 @@ The Rust backend ([rust.py](rust.py)) accelerates the **structural** subset of t
 language: literals, anchors, capturing groups over the char-class matcher grammar
 (`_Literal` / `_CharRange` / `_Union` / `_Complement` / `_Group` / `_Het`),
 back-references, and plain repetition. Anything carrying value/alphabet arithmetic
-(`{A:x..y}` bounds), a count/stage reference, a `[#i]` rep, or a grouping brace
+(`{A::x..y}` bounds), a count/stage reference, a `[#i]` rep, or a grouping brace
 (`SeqGroupEl`) raises `Unsupported`, and `RustEngine` falls back to `PythonEngine`
 for that whole pattern. The translation is a pure read of the compiled objects —
 the same `Element`s the Python loop runs — so the two backends stay in lock-step.
@@ -68,7 +68,7 @@ def _excluder(excl) -> dict | None:
 
 
 def _matcher(m) -> dict:
-    # A value-carrying matcher (a `{A:x..y}` bound) is out of the structural subset.
+    # A value-carrying matcher (a `{A::x..y}` bound) is out of the structural subset.
     if getattr(m, "value_alphabet", None) is not None:
         raise Unsupported("value-bound matcher")
     if type(m) is c._Literal:

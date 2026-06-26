@@ -89,8 +89,8 @@ def test_pipeline_golden(name, script, resource, slice_):
 MATCHER = [
     ("char_range_run", r"{a..z}[1..]", "hello world 42"),
     ("het_digit_run", r"{{@d}}[1..]", "ab123cd45ef"),
-    ("value_bound", r"{@d:0..255}", "go 42 200 999 7 here"),
-    ("dyn_value_range", r"{{@d}}[1..]\,{@d:0..$0}", "9,4 and 3,7"),
+    ("value_bound", r"{@d::0..255}", "go 42 200 999 7 here"),
+    ("dyn_value_range", r"{{@d}}[1..]\,{@d::0..$0}", "9,4 and 3,7"),
     ("union_strings", r"{cat,dog}", "a dog and a cat"),
     ("congruence_fold", r"{{a,A},{c,C}}[2]", "aA Cc xx aa Ca"),
     ("back_ref_repeat", r"{abc}{$0}[0..]", "abcabcabc and abc"),

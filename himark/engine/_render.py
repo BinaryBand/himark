@@ -37,7 +37,7 @@ _FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 class _Value:
     """A moustache value flowing through an expression and its filter chain. `text`
     is the surface string; `alphabet` (set only for a **group** accessor over a
-    `{A:x..y}` bound) lets a value filter read it as a number. `num` is set for a
+    `{A::x..y}` bound) lets a value filter read it as a number. `num` is set for a
     **computed** integer (`$0 + 1`, `2 * #0`) — a `Z` result with no alphabet that
     render-casts to decimal. A whole-stage accessor, `{{.}}`, a string literal, and
     any string-filter output carry neither — they are raw strings."""
@@ -103,7 +103,7 @@ def _filter_b256(value: _Value, nums: list[int], little: bool) -> str:
         iv = value.alphabet.value(value.text)
     else:
         raise CompileError(
-            "b256 needs a value (a '{A:x..y}' group or an arithmetic result), "
+            "b256 needs a value (a '{A::x..y}' group or an arithmetic result), "
             "not a raw string"
         )
     try:

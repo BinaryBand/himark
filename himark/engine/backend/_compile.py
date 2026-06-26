@@ -49,7 +49,7 @@ class _Base:
     same congruence group."""
 
     # The value alphabet a capture of this matcher carries (None unless the
-    # matcher is a `{A:x..y}` bound); read by the run loop to type the capture.
+    # matcher is a `{A::x..y}` bound); read by the run loop to type the capture.
     value_alphabet: "Alphabet | RangeAlphabet | None" = None
 
     def match(self, text: str, pos: int) -> int | None:  # pragma: no cover
@@ -111,7 +111,7 @@ def _drop_excluded(groups: list[list[str]], exclusions: list[str]) -> list[list[
     """Remove excluded symbols from an alphabet's groups, dropping any group left
     empty. An excluded symbol is simply not part of the value alphabet, so a run
     stops at it — this is what keeps base58's forbidden `0`/`O`/`I`/`l` out of a
-    `{@d,@u,@l,!{0,l,I,O}:lo..hi}` bound, and keeps the positional values canonical."""
+    `{@d,@u,@l,!{0,l,I,O}::lo..hi}` bound, and keeps the positional values canonical."""
     excl = _excluder(exclusions)
     if excl is None:
         return groups
@@ -231,7 +231,7 @@ def _build_value_view(
 
 
 def _value_view(node: t.ValueRangeNode) -> _ValueView:
-    """The value-arithmetic view of a static `{alphabet:floor..ceiling}` bound."""
+    """The value-arithmetic view of a static `{alphabet::floor..ceiling}` bound."""
     return _build_value_view(
         _value_alphabet(node.alpha), node.lower, node.upper, node.exclusions
     )
@@ -270,7 +270,7 @@ class _CharRange(_Base):
 
 
 class _ValueRange(_Base):
-    """Width-window value match for a `{alphabet:floor..ceiling}` bound: the value
+    """Width-window value match for a `{alphabet::floor..ceiling}` bound: the value
     lies in [floor, ceiling] and the written width lies in the bound's width
     window. Leading zero-padding inside the window is allowed, and the longest
     valid width wins."""

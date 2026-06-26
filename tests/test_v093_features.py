@@ -64,8 +64,8 @@ def test_object_run_does_not_flatten():
 def test_comma_list_is_ordered_like_range():
     # `{a,b,c}` is the ordered alphabet `{a..c}`, so a bound rejects out-of-range
     # 'c' (value 2 > ceiling 'b'); the fold would be `{{a,b,c}}`.
-    assert m("{{a,b,c}:a..b}", "a b c") == ["a", "b"]
-    assert m("{{{a,b,c}}:a..b}", "a b c") == ["a", "b", "c"]
+    assert m("{{a,b,c}::a..b}", "a b c") == ["a", "b"]
+    assert m("{{{a,b,c}}::a..b}", "a b c") == ["a", "b", "c"]
 
 
 def test_no_cross_group():
@@ -125,7 +125,7 @@ def test_unknown_filter_raises():
 def test_b256_value_filter_reads_capture_as_number():
     # A group accessor carries the alphabet it matched under, so b256 reads '256'
     # as the base-10 value 256 and re-encodes it as two big-endian bytes.
-    assert ex('{@d:0..65535} => "{{ 0$0 | b256(2) }}"', "256") == ["\x01\x00"]
+    assert ex('{@d::0..65535} => "{{ 0$0 | b256(2) }}"', "256") == ["\x01\x00"]
 
 
 def test_b256_on_raw_string_stage_ref_raises():
@@ -136,7 +136,7 @@ def test_b256_on_raw_string_stage_ref_raises():
     # `0$` is the whole stage text — a raw string with no alphabet, so a value
     # filter cannot read it as a number.
     with pytest.raises(CompileError):
-        ex('{@d:0..65535} => "{{ 0$ | b256(2) }}"', "256")
+        ex('{@d::0..65535} => "{{ 0$ | b256(2) }}"', "256")
 
 
 def test_b256_overflow_raises():
@@ -145,19 +145,19 @@ def test_b256_overflow_raises():
     from himark.models.exceptions import CompileError
 
     with pytest.raises(CompileError):
-        ex('{@d:0..65535} => "{{ 0$0 | b256(1) }}"', "256")
+        ex('{@d::0..65535} => "{{ 0$0 | b256(1) }}"', "256")
 
 
 def test_string_filter_still_works_on_value_accessor():
     # A value accessor degrades gracefully to its text under a string filter.
-    assert ex('{@d:0..65535} => "{{ 0$0 | len }}"', "256") == ["3"]
+    assert ex('{@d::0..65535} => "{{ 0$0 | len }}"', "256") == ["3"]
 
 
 def test_b58_decodes_as_bitcoin_base58_value():
     # {@d},{@u},{@l},!{0,l,I,O} works as a value alphabet: '21' is base-58 value 58,
     # so b256(1) emits the single byte 0x3a, and uint reads it back as 58.
     assert ex(
-        '{{@d},{@u},{@l},!{0,l,I,O}:1..zz} => "{{ 0$0 | b256(1) | uint }}"', "21"
+        '{{@d},{@u},{@l},!{0,l,I,O}::1..zz} => "{{ 0$0 | b256(1) | uint }}"', "21"
     ) == ["58"]
 
 
@@ -170,7 +170,7 @@ def test_b58_value_round_trips_through_b256_and_uint():
     for c in token:
         iv = iv * 58 + btc.index(c)
     out = ex(
-        '{{@d},{@u},{@l},!{0,l,I,O}:1..zzzzz} => "{{ 0$0 | b256(8) | uint }}"', token
+        '{{@d},{@u},{@l},!{0,l,I,O}::1..zzzzz} => "{{ 0$0 | b256(8) | uint }}"', token
     )
     assert out == [str(iv)]
 

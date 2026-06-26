@@ -93,16 +93,16 @@ class CharRangeNode:
 
 @dataclass(slots=True, kw_only=True)
 class ValueRangeNode:
-    """A value range over `alpha` (a band `{alpha:lower..upper}`). A `None`
+    """A value range over `alpha` (a band `{alpha::lower..upper}`). A `None`
     endpoint is open: no `lower` means a floor of zero (width 1); no `upper` means
-    unbounded. The written forms `{A:..τ}`, `{A:τ..}`, and `{A:τ..τ}` are just
+    unbounded. The written forms `{A::..τ}`, `{A::τ..}`, and `{A::τ..τ}` are just
     which endpoints are given; a single value `{A:τ}` is `lower == upper`."""
 
     alpha: SemanticNode
     type: Literal["value_range"] = "value_range"
     lower: str | None = None
     upper: str | None = None
-    # A reference endpoint (`{@d:0..$0}`) resolves to a captured value at match
+    # A reference endpoint (`{@d::0..$0}`) resolves to a captured value at match
     # time; when set, the matching `lower`/`upper` string is None (dynamic).
     lower_ref: "SemanticNode | None" = None
     upper_ref: "SemanticNode | None" = None

@@ -25,7 +25,7 @@ class Capture:
     # the chosen count here (>= 0) so `_finalize` can trim once the branch commits.
     # -1 means already materialized (text + reps are final), as from the Rust seam.
     count: int = -1
-    # The value alphabet this group matched under, when it was a `{A:x..y}` bound
+    # The value alphabet this group matched under, when it was a `{A::x..y}` bound
     # (else None). It lets a downstream value filter (e.g. `b256`) read the
     # capture as a number in `A`, not just its raw text.
     alphabet: Alphabet | RangeAlphabet | None = None

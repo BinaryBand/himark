@@ -18,7 +18,7 @@
 
 // ── Named alphabets ───────────────────────────────────────────────────────────
 
-// Positional alphabets (ordered — usable as value bounds, e.g. {@d:0..255}).
+// Positional alphabets (ordered — usable as value bounds, e.g. {@d::0..255}).
 @d = 0..9
 @l = a..z
 @u = A..Z
@@ -31,12 +31,12 @@
 
 // Derived alphabet — @w sliced to f carries the fold along, so hex stays base 16
 // and case-insensitive at once.
-@hex = {@d},{@w:..f}
+@hex = {@d},{@w::..f}
 
 // Code-point ranges, written with fixed-width hex escapes (\xHH, \UHHHHHHHH).
 @ascii = \x00..\x7f
 @uni = \x00..\U0010ffff
-// base-256: every byte, an ordered value alphabet (`{@b256:x..y}`). Distinct from
+// base-256: every byte, an ordered value alphabet (`{@b256::x..y}`). Distinct from
 // the `b256` template filter (which re-encodes a value as base-256 bytes).
 @b256 = \x00..\xff
 

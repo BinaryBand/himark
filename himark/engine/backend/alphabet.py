@@ -1,7 +1,7 @@
 """The `Alphabet` value object — an ordered set of symbol groups with
 positional value arithmetic.
 
-A bound like `{{a..z}:aa..zz}` is positional numbering in base |alphabet|:
+A bound like `{{a..z}::aa..zz}` is positional numbering in base |alphabet|:
 each symbol contributes its index, most-significant first. A symbol may be a
 *group* of congruent surface forms (`{f,F}`): every member maps to the same
 index, so values fold across spellings. This object owns that arithmetic so

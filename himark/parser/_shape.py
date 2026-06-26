@@ -21,8 +21,8 @@ def is_sequence_brace(content: str) -> bool:
     bare text or exactly one `{…}` atom. A part that glues a construct onto
     adjacent text — or holds more than one construct — is a sub-pattern.
     """
-    if len(split_top(":", content)) == 3:
-        return False  # a `{alphabet:floor..ceiling}` bound is one value universe
+    if len(split_top("::", content)) >= 2:
+        return False  # a `{alphabet::floor..ceiling}` band is one value universe
     body = content
     if body.startswith("!"):
         body = body[1:]

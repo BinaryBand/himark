@@ -1,4 +1,4 @@
-"""Phase 1: source preprocessing — macro expansion and implicit root wrapping.
+"""Phase 1: source preprocessing — macro expansion and structural rewrites.
 
 Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
@@ -6,16 +6,19 @@ Runs before tokenization (phase 2) on each `=>` step. Two transforms:
                 loaded by `himark/prelude.py`) expands to its HMK source. Macros
                 may reference other macros; expansion repeats until stable.
 
-  Implicit wrap a step with no top-level `{…}` construct is wrapped in `{…}`, so
-                a bare expression like `a..z` reads as arithmetic rather than
-                the literal text "a..z".
+  Rewrites      structural sugar (`himark/parser/rewrites.py`) that runs before
+                tokenizing, so the engine only ever sees plain Himark source.
+
+There is **no implicit first-step wrap** a first step must be an
+explicit universe — write `{a..z}`, not `a..z`. Auto-wrapping bare text, if
+wanted, belongs in a layer-2 preprocess pass.
 """
 
 import re
 
-from himark.prelude import MACROS
 from himark.models.exceptions import CompileError
 from himark.parser import rewrites
+from himark.prelude import MACROS
 
 # Only text macros are expanded here; @alphabet references pass through. Longest
 # names first so e.g. @hexi wins over @hex, and \b prevents partial-name hits.
@@ -41,20 +44,13 @@ def _expand_macros(text: str) -> str:
     return out
 
 
-def _needs_wrap(step: str) -> bool:
-    """A non-empty step holding no `{…}` construct is a bare expression."""
-    return bool(step) and "{" not in step
-
-
 def preprocess(step: str, *, first: bool = True) -> str:
-    """Expand text macros, apply advanced rewrites, then wrap a bare expression.
+    """Expand text macros and apply structural rewrites.
 
     The rewrites (`himark/parser/rewrites.py`) are structural sugar (code rules,
     not prelude declarations) that run before tokenizing, so the engine sees plain
-    Himark source. The wrap applies only to the first step (the pattern
-    position): a bare step after `=>` is a constant template, rendered as-is.
+    Himark source. There is no implicit wrap: a first step must be an explicit
+    universe (`{a..z}`, not `a..z`). The `first` flag is kept for callers but no
+    longer changes the result.
     """
-    expanded = rewrites.apply(_expand_macros(step))
-    if first and _needs_wrap(expanded):
-        return "{" + expanded + "}"
-    return expanded
+    return rewrites.apply(_expand_macros(step))

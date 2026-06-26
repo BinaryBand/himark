@@ -9,10 +9,10 @@
 //  HOW: a bubble sort with no loop and no arithmetic. The whole comparison is one
 //  range — a value bound whose **ceiling is the first value of the pair**:
 //
-//      {@d:0..},{@d:0..$0}        a , (a number ≤ a)
+//      {@d::0..},{@d::0..$0}        a , (a number ≤ a)
 //        a         └─ ceiling $0 is group 0's captured value
 //
-//  `{@d:0..$0}` matches the right number only when it is ≤ the left one, and it is
+//  `{@d::0..$0}` matches the right number only when it is ≤ the left one, and it is
 //  width-agnostic: the ceiling's width caps the field, and a value with more
 //  digits than `a` is larger (no leading zeros), so it is excluded. When the pair
 //  is out of order the template swaps it. The `<=>` arrow re-splices the rule to a
@@ -30,7 +30,7 @@
 {@d}[1..]{@$} => "{{$0}},"
 
 // ── SORT ── compare-and-swap, re-spliced to a fixed point (`<=>`) ─────────────
-{@d:0..},{@d:0..$0}, <=> "{{$1}},{{$0}},"
+{@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"
 
 // ── UNPAD ── remove the trailing comma the PAD added ─────────────────────────
 {\,}{@$} => ""
