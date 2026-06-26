@@ -3,8 +3,9 @@
 
 The Vite dev server pipes a JSON request to this script's stdin and forwards the
 JSON we write to stdout. Because the GUI now lives *inside* the himark repo, we
-import the engine directly instead of shelling out — one warm process, no
-per-request subprocess fan-out.
+import the engine directly instead of shelling out to the CLI per expression — a
+request is one in-process pipeline run, not a fan-out of subprocesses. The native
+backend is selected when it is built (else the default Python one).
 
 Request (stdin):
 
@@ -40,9 +41,23 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from himark import parser  # noqa: E402
-from himark.engine import deltas, find_matches, splice, splice_to_fixed_point  # noqa: E402
+from himark.engine import (  # noqa: E402
+    RUST_AVAILABLE,
+    RustEngine,
+    deltas,
+    find,
+    set_backend,
+    splice,
+    splice_to_fixed_point,
+)
 from himark.models.exceptions import CompileError  # noqa: E402
 from himark.tools import precompiled  # noqa: E402
+
+# Prefer the native matcher when it is built, so the GUI inherits the same
+# speedups the test suite gets from forcing RustEngine. Absent the extension,
+# RUST_AVAILABLE is False and the default PythonEngine stays.
+if RUST_AVAILABLE:
+    set_backend(RustEngine())
 
 
 def _find(expressions: list[str], target: str) -> dict:
@@ -51,28 +66,24 @@ def _find(expressions: list[str], target: str) -> dict:
     spans: list[dict] = []
     for expr in expressions:
         steps = parser.parse(expr)
-        if not steps:
-            continue
-        for m in find_matches(steps[0], target):
-            spans.append({"start": m.start, "end": m.end})
+        if steps:
+            spans.extend({"start": s, "end": e} for s, e in find(steps, target))
     spans.sort(key=lambda s: (s["start"], s["end"]))
     return {"matches": spans, "count": len(spans)}
 
 
 def _execute(expressions: list[str], target: str) -> dict:
-    """Run the expressions as a pipeline over `target`, counting the splices each
-    stage applies along the way (the badge total)."""
+    """Run the expressions as a pipeline over `target` — the same path a `.hmk`
+    script takes (`compile_pipeline` parses them and flags each `<=>` stage as a
+    fixed point) — counting the splices each stage applies (the badge total)."""
     text = target
     count = 0
-    for expr in expressions:
-        converted, loop = precompiled._split_fixed_point(expr)
-        steps = parser.parse(converted)
+    for steps in precompiled.compile_pipeline(expressions):
         if not steps:
             continue
-        if loop:
-            steps[0].fixed_point = True
-            text = splice_to_fixed_point(steps, text)
-            count += 1 if text != target else 0
+        if steps[0].fixed_point:
+            before, text = text, splice_to_fixed_point(steps, text)
+            count += 1 if text != before else 0
         else:
             count += len(deltas(steps, text))
             text = splice(steps, text)
