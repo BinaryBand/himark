@@ -165,8 +165,11 @@ def _resolve_band_arm(alpha: t.SemanticNode, arm: str) -> t.ValueRangeNode:
         if lower is None and upper is None and lower_ref is None and upper_ref is None:
             raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
         return t.ValueRangeNode(
-            alpha=alpha, lower=lower, upper=upper,
-            lower_ref=lower_ref, upper_ref=upper_ref,
+            alpha=alpha,
+            lower=lower,
+            upper=upper,
+            lower_ref=lower_ref,
+            upper_ref=upper_ref,
         )
     raise CompileError(
         f"Too many '..' in a band arm (a range is 'lo..hi'): got {arm!r}"
@@ -208,18 +211,14 @@ def _resolve_reference(content: str) -> t.SemanticNode | None:
 def _resolve_brace(content: str) -> t.SemanticNode:
     """Resolve the inner text of a {…} brace group into a typed semantic node."""
     sa = strip_unescaped(content)
-    if sa == "@^":
-        return t.AnchorNode(at="line_start")
-    if sa == "@$":
-        return t.AnchorNode(at="line_end")
-    if sa == "@^^":
-        return t.AnchorNode(at="scope_start")
-    if sa == "@$$":
-        return t.AnchorNode(at="scope_end")
     if sa == "@<":
-        return t.AnchorNode(at="word_start")
+        return t.AnchorNode(at="line_start")
     if sa == "@>":
-        return t.AnchorNode(at="word_end")
+        return t.AnchorNode(at="line_end")
+    if sa == "@<<":
+        return t.AnchorNode(at="doc_start")
+    if sa == "@>>":
+        return t.AnchorNode(at="doc_end")
 
     ref = _resolve_reference(content)
     if ref is not None:

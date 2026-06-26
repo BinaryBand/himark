@@ -16,7 +16,7 @@ It is a TextMate grammar, so it highlights by token shape — see
 | Moustache refs & filters | `variable.other.accessor`, `support.function.filter` | `{{ 0$0 \| b256(25) }}` |
 | `{ … }` universes | `meta.group` + punctuation | `{a..z}`, `{cat,dog}` |
 | Macros | `support.constant.macro` | `@d`, `@w`, `@hex` |
-| Anchors | `keyword.control.anchor` | `@^`, `@$`, `@^^`, `@$$` |
+| Anchors | `keyword.control.anchor` | `@<`, `@>`, `@<<`, `@>>` |
 | Self/stage references | `variable.language.reference` | `$0`, `#0`, `1$2.3` |
 | Operators | `keyword.operator` | `,` `..` `::` `!` |
 | `[ … ]` counts | `meta.count` + `constant.numeric` | `[1..6]`, `[#0]` |

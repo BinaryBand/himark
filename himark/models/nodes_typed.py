@@ -124,17 +124,15 @@ class ComplementNode:
 
 @dataclass(slots=True, kw_only=True)
 class AnchorNode:
-    """A zero-width anchor: `@^`/`@$` match a **line** start/end; `@^^`/`@$$` the
-    whole **scope** start/end; `@<`/`@>` a **word** start/end (a `@w` <-> non-`@w`
-    boundary). Matches a position without consuming or capturing."""
+    """A zero-width anchor: `@<`/`@>` match a **line** start/end; `@<<`/`@>>` the
+    whole **document** start/end. Matches a position without consuming or
+    capturing."""
 
     at: Literal[
         "line_start",
         "line_end",
-        "scope_start",
-        "scope_end",
-        "word_start",
-        "word_end",
+        "doc_start",
+        "doc_end",
     ]
     type: Literal["anchor"] = "anchor"
 

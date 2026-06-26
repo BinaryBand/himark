@@ -139,7 +139,7 @@ reference : DOLLAR INT
           | HASH INT
           | INT DOLLAR (INT (DOT INT)*)?
           ;
-anchor    : AT (CARET CARET? | DOLLAR DOLLAR? | LT | GT) ;
+anchor    : AT (LT LT? | GT GT?) ;   // @< @> line, @<< @>> document
 macro     : AT NAME ;
 
 // ── Prelude declarations (`std.hmk`) ─────────────────────────────────────────

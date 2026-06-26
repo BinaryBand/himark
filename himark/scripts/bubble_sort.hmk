@@ -27,10 +27,10 @@
 // ============================================================================
 
 // ── PAD ── comma-terminate the last value (so every value has a trailing comma)
-{@d}[1..]{@$} => "{{$0}},"
+{@d}[1..]{@>} => "{{$0}},"
 
 // ── SORT ── compare-and-swap, re-spliced to a fixed point (`<=>`) ─────────────
 {@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"
 
 // ── UNPAD ── remove the trailing comma the PAD added ─────────────────────────
-{\,}{@$} => ""
+{\,}{@>} => ""

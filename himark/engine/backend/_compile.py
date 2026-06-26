@@ -484,9 +484,9 @@ class LiteralEl:
 
 @dataclass(slots=True)
 class AnchorEl:
-    """A zero-width anchor — succeeds at a line/scope/word boundary without
-    consuming or capturing. `at` is line_start / line_end / scope_start /
-    scope_end / word_start / word_end."""
+    """A zero-width anchor — succeeds at a line/document boundary without
+    consuming or capturing. `at` is line_start / line_end / doc_start /
+    doc_end."""
 
     at: str
 

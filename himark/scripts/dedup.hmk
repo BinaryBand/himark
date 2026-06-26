@@ -60,22 +60,22 @@
 // ============================================================================
 
 // ── HEADER ── drop the column-name row ───────────────────────────────────────
-{@^}{youtube_title\,podcast_title\n} => ""
+{@<}{youtube_title\,podcast_title\n} => ""
 
 // ── MASK ── shield commas inside "…" quoted fields from the FLATTEN split ─────
 {\"}{!{\",\n}}[..]{\,}{!{\",\n}}[..]{\"} <=> "\"{{$1}}⸴{{$3}}\""
 
 // ── FLATTEN ── source-tag each title onto its own line (YouTube, then feed) ───
-{@^}{!{\,,\n}}[1..]{\,}{!\n}[1..]{\n} => "Y\t{{$0}}\nP\t{{$2}}\n"
+{@<}{!{\,,\n}}[1..]{\,}{!\n}[1..]{\n} => "Y\t{{$0}}\nP\t{{$2}}\n"
 // A `,pod` row (no YouTube title) keeps just the feed title.
-{@^}{\,}{!\n}[1..]{\n} => "P\t{{$1}}\n"
+{@<}{\,}{!\n}[1..]{\n} => "P\t{{$1}}\n"
 
 // ── KEY ── prepend `<normalized-key>¤`. A Y keeps its original title (counter and
 // all) after the tag; a P's key already *is* its title, so it stores no copy. ─────
-{@^}{Y\t}{Episode\ }{{@d}}[1..]{:\ }{!\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@^}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }{!\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@^}{Y\t}{!\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
-{@^}{P\t}{!\n}[1..]{\n} => "{{$1}}¤P\t\n"
+{@<}{Y\t}{Episode\ }{{@d}}[1..]{:\ }{!\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@<}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }{!\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@<}{Y\t}{!\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
+{@<}{P\t}{!\n}[1..]{\n} => "{{$1}}¤P\t\n"
 
 // ── QUICK MATCH ── a cheap first pass: merge only twins whose partner is within
 // a small look-ahead ([..3000], ~40 rows) instead of scanning the whole document.
@@ -83,21 +83,21 @@
 // robust pass below then settles in far fewer sweeps. Same merge rule, only the
 // scan is bounded — so it can never merge a pair the robust pass wouldn't, and the
 // final result is identical (just reached ~3x faster on the full file).
-{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..3000]{@^}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@^}{!{¤,\n}}[1..]{¤P\t}{\n}{!§}[..3000]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
+{@<}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..3000]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
+{@<}{!{¤,\n}}[1..]{¤P\t}{\n}{!§}[..3000]{@<}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
 // ── MATCH ── the robust pass: merge any equal-key Y/P pair, anywhere (fixed
 // point, both orders). The unbounded `[..]` guarantees full recall — it catches
 // the few twins the quick pass left (partners far apart in the file).
-{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..]{@^}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@^}{!{¤,\n}}[1..]{¤P\t}{\n}{!§}[..]{@^}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
+{@<}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n}{!§}[..]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
+{@<}{!{¤,\n}}[1..]{¤P\t}{\n}{!§}[..]{@<}{$0}{¤Y\t}{!\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
 // ── CLEANUP ── each unmatched keyed line becomes a one-cell row ───────────────
-{@^}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n} => "{{$2}}\,\n"
-{@^}{!{¤,\n}}[1..]{¤P\t}{\n} => "\,{{$0}}\n"
+{@<}{!{¤,\n}}[1..]{¤Y\t}{!\n}[1..]{\n} => "{{$2}}\,\n"
+{@<}{!{¤,\n}}[1..]{¤P\t}{\n} => "\,{{$0}}\n"
 
 // ── RESTORE ── masked commas back inside their quoted fields ──────────────────
 {⸴} => "\,"
 
 // ── HEADER ── re-add the column names ────────────────────────────────────────
-{@^^}{!§}[..] => "youtube_title\,podcast_title\n{{$0}}"
+{@<<}{!§}[..] => "youtube_title\,podcast_title\n{{$0}}"

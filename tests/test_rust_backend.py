@@ -47,12 +47,12 @@ def _norm(ms):
 SUPPORTED = [
     (r"{a..z}[1..]", "hello world 42"),
     (r"{{@d}}[1..]", "ab123cd45ef"),
-    (r"{@^}{!\n}[1..]{\n}", "one\ntwo\nthree\n"),
+    (r"{@<}{!\n}[1..]{\n}", "one\ntwo\nthree\n"),
     (r"{!{x,y}}[1..]", "abxcdyef"),
     (r"{cat,dog}", "a dog and a cat"),
     (r"{{a,A},{c,C}}[2]", "aA Cc xx aa Ca"),
     (r"{abc}{$0}[0..]", "abcabcabc and abc"),  # back-reference repetition
-    (r"{@^}{!{¤,\n}}[1..]{¤}{!\n}[1..]{\n}", "key¤val\nk2¤v2\n"),  # dedup-shaped
+    (r"{@<}{!{¤,\n}}[1..]{¤}{!\n}[1..]{\n}", "key¤val\nk2¤v2\n"),  # dedup-shaped
 ]
 
 

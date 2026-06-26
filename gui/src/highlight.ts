@@ -39,7 +39,7 @@ export const HIGHLIGHT_PATTERNS = HIGHLIGHT_RULES.map((r) => r.pattern);
 export const TOKEN_COLORS: Record<string, string> = {
   bracket: "#7f8ea3", // structural punctuation { } [ ]
   arrow: "#c678dd", // => / <=>
-  anchor: "#e5c07b", // @^ @$
+  anchor: "#e5c07b", // @< @> @<< @>>
   alphabet: "#61afef", // @d @w @hex …
   count: "#d19a66", // [1..] [#0]
   reference: "#56b6c2", // $0 $1

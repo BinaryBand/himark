@@ -78,15 +78,14 @@ Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single c
 
 ## :anchor: Anchors
 
-Zero-width, capture the empty string:
+Zero-width, capture the empty string. A single angle is a **line** edge, a double angle the whole **document** edge; `<` is a start, `>` an end:
 
-| Anchor        | Matches                                              |
-| ------------- | ---------------------------------------------------- |
-| `@^` / `@$`   | start / end of **line** (pos 0 or by `\n`)           |
-| `@^^` / `@$$` | start / end of **scope** (text a stage sees)         |
-| `@<` / `@>`   | start / end of **word** (`@w` <-> non-`@w` boundary) |
+| Anchor        | Matches                                    |
+| ------------- | ------------------------------------------ |
+| `@<` / `@>`   | start / end of **line** (pos 0 or by `\n`) |
+| `@<<` / `@>>` | start / end of the **document**            |
 
-A whole word is `{@<}{@w}[1..]{@>}`.
+A whole line is `{@<}{!\n}[1..]{@>}`.
 
 ---
 
@@ -224,7 +223,7 @@ Every `{...}` in matching position is a **capture group**, numbered from **0** i
 
 A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only. (`{1{am,pm}}` is alternation in a unit; folding the inner to `{1{{am,pm}}}` changes nothing observable -- a brace buried in a grouping brace is never addressed or repeated on its own, so object vs. union there is moot.)
 
-Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference, anchor `{@^}` -- are each **one** group regardless of inner braces. An anchor occupies a number and captures the empty string. A repeated group `{X}[n]` is one number, captured as one string.
+Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference, anchor `{@<}` -- are each **one** group regardless of inner braces. An anchor occupies a number and captures the empty string. A repeated group `{X}[n]` is one number, captured as one string.
 
 Input `### Sphinxofblackquartz`, expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
 
@@ -337,7 +336,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 
 ```proto
 // tidy: one statement, wrapped onto continuation lines
-{@^}{#}[1..6]{ }[1..]!{\n}[1..]
+{@<}{#}[1..6]{ }[1..]!{\n}[1..]
   => "<h{{#0}}>{{$2}}</h{{#0}}>"     // a continuation line (leading arrow)
 
 { }[2..]{\n} => "<br/>\n"            // the next statement

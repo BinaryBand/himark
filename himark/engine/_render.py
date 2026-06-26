@@ -253,7 +253,9 @@ class _ExprParser:
             self.i += 1
             if self._peek() != "filter":
                 raise CompileError("'|' must be followed by a filter")
-            value = _apply_filter(self.toks[self.i][1], value, self.current, self.stages)
+            value = _apply_filter(
+                self.toks[self.i][1], value, self.current, self.stages
+            )
             self.i += 1
         return value
 
@@ -353,7 +355,9 @@ def _apply_derived(name: str, value: _Value, current: str, stages) -> _Value:
         raise CompileError(f"Derived filter '{name}' is recursive")
     _EXPANDING.add(name)
     try:
-        return _ExprParser(_tokenize(_DERIVED[name]), current, stages, dot=value).parse()
+        return _ExprParser(
+            _tokenize(_DERIVED[name]), current, stages, dot=value
+        ).parse()
     finally:
         _EXPANDING.discard(name)
 

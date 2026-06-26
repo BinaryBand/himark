@@ -85,7 +85,14 @@ def test_doc_band_grammar_examples():
     assert matches("{@d::0..255}", "0 200 255 256") == ["0", "200", "255", "25", "6"]
     assert matches("{@d::5}", "4 5 6") == ["5"]  # single value over a typed head
     assert matches("{a,b,g..z::m..p}", "a g m n p z") == ["m", "n", "p"]
-    assert matches("{0..9::9..12,1..5}", "0 1 5 6 9 12 13") == ["1", "5", "9", "12", "1", "3"]
+    assert matches("{0..9::9..12,1..5}", "0 1 5 6 9 12 13") == [
+        "1",
+        "5",
+        "9",
+        "12",
+        "1",
+        "3",
+    ]
     assert matches("{{a..z}::b}", "a b c") == ["b"]  # braced-universe head
     # Drop the prefix for an ambient band; an open end keeps one side unbounded.
     assert matches("{@d::0..}", "7") == ["7"]
@@ -110,11 +117,12 @@ def test_doc_band_double_colon_is_a_band():
         matches("{std::vector}", "std::vector x")
 
 
-def test_doc_word_anchors():
-    # The Anchors section: `@<`/`@>` are a `@w` <-> non-`@w` boundary, zero-width.
-    assert matches("{@<}{@w::a..zzzzz}{@>}", "hi there") == ["hi", "there"]
-    assert len(matches("{@<}{a,b,c}", "a b c")) == 3  # three word starts
-    assert matches("{foo}{@>}", "foo foobar") == ["foo"]  # @> only at a boundary
+def test_doc_anchors():
+    # The Anchors section: single angle is a line edge, double angle the document
+    # edge; `<` a start, `>` an end. All zero-width.
+    assert matches("{@<}{!\n}[1..]{@>}", "hi\nthere") == ["hi", "there"]  # whole line
+    assert matches("{@<<}{!\n}[1..]", "hi\nthere") == ["hi"]  # only the first line
+    assert matches("{!\n}[1..]{@>>}", "hi\nthere") == ["there"]  # only the last line
 
 
 def test_doc_filters():

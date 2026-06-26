@@ -62,18 +62,18 @@
 
 // ── FORMAT ── safe line-local tidies (templates and brace bodies are masked) ──
 // Trim leading, then trailing, blank lines (and stray indent) of the whole file.
-{@^^}{{ ,\t,\n}}[1..] => ""
-{{ ,\t,\n}}[1..]{@$$} => "\n"
+{@<<}{{ ,\t,\n}}[1..] => ""
+{{ ,\t,\n}}[1..]{@>>} => "\n"
 // Strip trailing whitespace at the end of every line.
 {{ ,\t}}[1..]{\n} => "\n"
 // Out-dent a hand-indented top-level statement (a line-start run of whitespace
 // before a `{`). Brace bodies are masked, so this only sees real statement lines.
-{@^}{{ ,\t}}[1..]{\{} => "\{"
+{@<}{{ ,\t}}[1..]{\{} => "\{"
 // Canonical arrow spacing. An inline `=>` follows a step end (`}` `»` `]`, where
 // `»` is a masked template) — anchoring on that leaves a `=>` inside a comment
 // alone. A continuation `=>` at line start gets a four-space indent instead.
 {{\},»,\]}}{{ ,\t}}[0..]{=>}{{ ,\t}}[0..] => "{{$0}} \=> "
-{@^}{{ ,\t}}[0..]{=>}{{ ,\t}}[0..] => "    \=> "
+{@<}{{ ,\t}}[0..]{=>}{{ ,\t}}[0..] => "    \=> "
 // Collapse runs of blank lines down to a single blank line.
 {\n}[3..] => "\n\n"
 

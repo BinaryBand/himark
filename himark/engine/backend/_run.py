@@ -31,12 +31,6 @@ from himark.engine.backend._types import Capture, Match
 Cont = Callable[[int], "int | None"]
 
 
-def _is_word(ch: str) -> bool:
-    """A `@w` symbol — an ASCII letter, digit, or underscore. The alphabet whose
-    boundary the `@<`/`@>` word anchors test against."""
-    return ch == "_" or (ch.isascii() and ch.isalnum())
-
-
 class _State:
     """Captures accumulated during one match attempt, with absolute spans.
 
@@ -142,18 +136,10 @@ def _match_seq(
             ok = pos == 0 or text[pos - 1] == "\n"
         elif at == "line_end":
             ok = pos == len(text) or text[pos] == "\n"
-        elif at == "scope_start":
+        elif at == "doc_start":
             ok = pos == 0
-        elif at == "scope_end":
+        else:  # doc_end
             ok = pos == len(text)
-        elif at == "word_start":
-            ok = (pos < len(text) and _is_word(text[pos])) and not (
-                pos > 0 and _is_word(text[pos - 1])
-            )
-        else:  # word_end
-            ok = (pos > 0 and _is_word(text[pos - 1])) and not (
-                pos < len(text) and _is_word(text[pos])
-            )
         return cont(pos) if ok else None
     return _DISPATCH[type(el)](el, text, pos, state, cont)
 
@@ -404,8 +390,12 @@ def _match_dyn_value_range(
     reps = _resolve_reps(el.reps, state)
     if reps is None:
         return None
-    lower = el.lower if el.lower_ref is None else _endpoint_text(el.lower_ref, state, text)
-    upper = el.upper if el.upper_ref is None else _endpoint_text(el.upper_ref, state, text)
+    lower = (
+        el.lower if el.lower_ref is None else _endpoint_text(el.lower_ref, state, text)
+    )
+    upper = (
+        el.upper if el.upper_ref is None else _endpoint_text(el.upper_ref, state, text)
+    )
     if (el.lower_ref is not None and lower is None) or (
         el.upper_ref is not None and upper is None
     ):

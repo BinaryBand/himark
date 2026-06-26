@@ -43,7 +43,7 @@
       "endCaptures": { "0": { "name": "punctuation.definition.group.end.hmk" } },
       "patterns": [
         { "include": "#escape" },
-        { "match": "@(?:\\^\\^|\\$\\$|\\^|\\$)", "name": "keyword.control.anchor.hmk" },
+        { "match": "@(?:<<|>>|<|>)", "name": "keyword.control.anchor.hmk" },
         { "match": "@[A-Za-z][A-Za-z0-9]*", "name": "support.constant.macro.hmk" },
         { "match": "\\$\\d+|#\\d+|\\d+\\$[0-9.]*", "name": "variable.language.reference.hmk" },
         { "match": "\\.\\.|::|[,!]", "name": "keyword.operator.group.hmk" },

@@ -48,7 +48,7 @@ function initialSession(): { expressions: Expression[]; projectName: string } {
   const saved = store.loadSession();
   if (saved) return saved;
   return {
-    expressions: [{ id: newId(), text: '{@^}{-,*,_}[3..]{@$} => "<hr/>"', enabled: true }],
+    expressions: [{ id: newId(), text: '{@<}{-,*,_}[3..]{@>} => "<hr/>"', enabled: true }],
     projectName: "untitled",
   };
 }
