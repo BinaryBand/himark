@@ -28,6 +28,14 @@ export interface MatchSpan {
   end: number;
 }
 
+// A tokenized span from the "highlight" bridge mode: `cls` indexes the
+// highlight.hmk rule (and thus the token class) that matched it.
+export interface HighlightSpan {
+  start: number;
+  end: number;
+  cls: number;
+}
+
 export interface RunResult {
   matches?: MatchSpan[];
   output?: string;

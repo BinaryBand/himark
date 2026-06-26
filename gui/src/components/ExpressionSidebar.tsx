@@ -6,15 +6,16 @@ import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
-import type { Expression, Project } from "../types";
+import type { Expression, HighlightSpan, Project } from "../types";
+import { HighlightedExpression } from "./HighlightedExpression";
 import { SavedItemsMenu } from "./SavedItemsMenu";
 
 interface Props {
   expressions: Expression[];
+  highlights: Record<string, HighlightSpan[]>;
   projectName: string;
   savedProjects: Project[];
   defaultProjects: Project[];
@@ -28,6 +29,7 @@ interface Props {
 
 export function ExpressionSidebar({
   expressions,
+  highlights,
   projectName,
   savedProjects,
   defaultProjects,
@@ -77,16 +79,11 @@ export function ExpressionSidebar({
                 onChange={(ev) => onChange(e.id, { enabled: ev.target.checked })}
                 sx={{ mt: 0.5 }}
               />
-              <TextField
+              <HighlightedExpression
                 value={e.text}
-                onChange={(ev) => onChange(e.id, { text: ev.target.value })}
-                placeholder="HMK expression…"
-                multiline
-                maxRows={8}
-                size="small"
-                fullWidth
-                slotProps={{ input: { sx: { fontFamily: "var(--mono)", fontSize: 13 } } }}
-                sx={{ opacity: e.enabled ? 1 : 0.5 }}
+                spans={highlights[e.id] ?? []}
+                enabled={e.enabled}
+                onChange={(text) => onChange(e.id, { text })}
               />
               <Tooltip title="Remove">
                 <IconButton size="small" onClick={() => onRemove(e.id)} sx={{ mt: 0.5 }}>

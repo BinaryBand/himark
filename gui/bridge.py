@@ -72,6 +72,34 @@ def _find(expressions: list[str], target: str) -> dict:
     return {"matches": spans, "count": len(spans)}
 
 
+def _highlight(patterns: list[str], targets: list[str]) -> dict:
+    """Tokenize each target by running the syntax-highlight `patterns` (from
+    `gui/highlight.hmk`) over it. Each pattern's index is its *class*; the GUI
+    maps that to a colour. Returns one span list per target — `{start, end, cls}`
+    — so the sidebar can paint a colour backdrop behind every expression.
+
+    A pattern that fails to parse is skipped, not fatal: the highlighter must
+    never break the editor (and an empty/whitespace target just yields no spans).
+    """
+    compiled: list[tuple[int, list]] = []
+    for cls, pat in enumerate(patterns):
+        try:
+            steps = parser.parse(pat)
+        except CompileError:
+            continue
+        if steps:
+            compiled.append((cls, steps))
+    highlights: list[list[dict]] = []
+    for tgt in targets:
+        spans: list[dict] = []
+        for cls, steps in compiled:
+            spans.extend(
+                {"start": s, "end": e, "cls": cls} for s, e in find(steps, tgt) if e > s
+            )
+        highlights.append(spans)
+    return {"highlights": highlights}
+
+
 def _execute(expressions: list[str], target: str) -> dict:
     """Run the expressions as a pipeline over `target` — the same path a `.hmk`
     script takes (`compile_pipeline` parses them and flags each `<=>` stage as a
@@ -99,11 +127,15 @@ def _handle_request() -> None:
     target = req.get("target", "")
     expressions = [e for e in req.get("expressions", []) if e and e.strip()]
     try:
-        payload = (
-            _execute(expressions, target)
-            if mode == "execute"
-            else _find(expressions, target)
-        )
+        if mode == "highlight":
+            # The highlight patterns are a fixed script, not the user's enabled
+            # expressions, so they are passed unfiltered; `targets` are the texts
+            # to tokenize (every sidebar expression).
+            payload = _highlight(req.get("expressions", []), req.get("targets", []))
+        elif mode == "execute":
+            payload = _execute(expressions, target)
+        else:
+            payload = _find(expressions, target)
     except (CompileError, ValueError, IndexError) as exc:
         payload = {"error": str(exc) or exc.__class__.__name__}
     sys.stdout.write(json.dumps(payload))

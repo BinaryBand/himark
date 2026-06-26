@@ -11,16 +11,18 @@ import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { useTheme } from "@mui/material/styles";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { runEngine } from "./api";
+import { highlightExpressions, runEngine } from "./api";
 import { ExpressionSidebar } from "./components/ExpressionSidebar";
 import { FindResults } from "./components/FindResults";
 import { HighlightedInput } from "./components/HighlightedInput";
 import { TestStringTabs } from "./components/TestStringTabs";
 import { defaultProjects, defaultTestStrings } from "./defaults";
+import { HIGHLIGHT_PATTERNS } from "./highlight";
 import * as store from "./storage";
 import {
   newId,
   type Expression,
+  type HighlightSpan,
   type Mode,
   type Project,
   type RunResult,
@@ -42,22 +44,32 @@ function initialTabs(): { tabs: TestTab[]; activeId: string } {
   return { tabs: [tab], activeId: tab.id };
 }
 
+function initialSession(): { expressions: Expression[]; projectName: string } {
+  const saved = store.loadSession();
+  if (saved) return saved;
+  return {
+    expressions: [{ id: newId(), text: '{@^}{-,*,_}[3..]{@$} => "<hr/>"', enabled: true }],
+    projectName: "untitled",
+  };
+}
+
 export function App() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [mode, setMode] = useState<Mode>("execute");
-  const [expressions, setExpressions] = useState<Expression[]>([
-    { id: newId(), text: '{@^}{-,*,_}[3..]{@$} => "<hr/>"', enabled: true },
-  ]);
-  const [projectName, setProjectName] = useState("untitled");
+
+  const session = useMemo(initialSession, []);
+  const [expressions, setExpressions] = useState<Expression[]>(session.expressions);
+  const [projectName, setProjectName] = useState(session.projectName);
 
   const seed = useMemo(initialTabs, []);
   const [tabs, setTabs] = useState<TestTab[]>(seed.tabs);
   const [activeId, setActiveId] = useState(seed.activeId);
 
   const [result, setResult] = useState<RunResult>({});
+  const [highlights, setHighlights] = useState<Record<string, HighlightSpan[]>>({});
   const [savedTick, setSavedTick] = useState(0);
   const savedProjects = useMemo(() => store.listProjects(), [savedTick]);
   const savedTests = useMemo(() => store.listTestStrings(), [savedTick]);
@@ -65,8 +77,10 @@ export function App() {
   const activeTab = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const target = activeTab?.text ?? "";
 
-  // Persist the open tabs (the working set) on every change.
+  // Persist the open tabs and the sidebar (expressions + project) on every
+  // change, so a refresh restores the exact working set.
   useEffect(() => store.saveTabs(tabs, activeId), [tabs, activeId]);
+  useEffect(() => store.saveSession(expressions, projectName), [expressions, projectName]);
 
   // Debounced engine run whenever the inputs change.
   const timer = useRef<number>();
@@ -78,6 +92,21 @@ export function App() {
     }, 200);
     return () => window.clearTimeout(timer.current);
   }, [mode, expressions, target]);
+
+  // Debounced syntax highlighting: tokenize every sidebar expression in one
+  // request (the HMK tokenizer in highlight.hmk), keyed by expression id.
+  const hlTimer = useRef<number>();
+  useEffect(() => {
+    window.clearTimeout(hlTimer.current);
+    hlTimer.current = window.setTimeout(() => {
+      const ids = expressions.map((e) => e.id);
+      highlightExpressions(HIGHLIGHT_PATTERNS, expressions.map((e) => e.text)).then(
+        (spansPerExpr) =>
+          setHighlights(Object.fromEntries(ids.map((id, i) => [id, spansPerExpr[i] ?? []]))),
+      );
+    }, 150);
+    return () => window.clearTimeout(hlTimer.current);
+  }, [expressions]);
 
   // ── expressions ───────────────────────────────────────────────────────────
   const updateExpr = (id: string, patch: Partial<Expression>) =>
@@ -127,6 +156,7 @@ export function App() {
   const sidebar = (
     <ExpressionSidebar
       expressions={expressions}
+      highlights={highlights}
       projectName={projectName}
       savedProjects={savedProjects}
       defaultProjects={defaultProjects}
@@ -201,6 +231,16 @@ export function App() {
             onClose={closeTab}
             onRename={renameTab}
             onLoad={loadTestString}
+            onSaveActive={() => {
+              if (activeTab) {
+                store.saveTestString({ name: activeTab.name, text: activeTab.text });
+                setSavedTick((t) => t + 1);
+              }
+            }}
+            onDeleteSaved={(name) => {
+              store.deleteTestString(name);
+              setSavedTick((t) => t + 1);
+            }}
             defaultTestStrings={defaultTestStrings}
             savedTests={savedTests}
           />

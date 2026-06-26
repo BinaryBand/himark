@@ -1,11 +1,12 @@
 // Persistence layer — projects and test strings are saved to localStorage
 // ("memory") keyed by name, so they survive reloads and can be re-loaded.
 
-import type { Project, TestTab, TestString } from "./types";
+import type { Expression, Project, TestTab, TestString } from "./types";
 
 const PROJECTS_KEY = "himark.projects";
 const TEST_STRINGS_KEY = "himark.testStrings";
 const TABS_KEY = "himark.tabs";
+const SESSION_KEY = "himark.session";
 
 function read<T>(key: string): Record<string, T> {
   try {
@@ -60,4 +61,21 @@ export function loadTabs(): { tabs: TestTab[]; activeId: string } | null {
 
 export function saveTabs(tabs: TestTab[], activeId: string): void {
   localStorage.setItem(TABS_KEY, JSON.stringify({ tabs, activeId }));
+}
+
+// The working expressions and project name persist as a whole, so a reload
+// restores the exact sidebar — the same working-set treatment the tabs get.
+export function loadSession(): { expressions: Expression[]; projectName: string } | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { expressions: Expression[]; projectName: string };
+    return parsed.expressions?.length ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSession(expressions: Expression[], projectName: string): void {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ expressions, projectName }));
 }

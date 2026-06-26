@@ -1,0 +1,37 @@
+// HMK syntax tokenizer — written in HMK itself.
+//
+// The GUI runs each rule below over an expression and gets back the spans it
+// matched, tagged with the rule's class. TypeScript owns the colours (it maps
+// each class name to a swatch); this file owns *what counts as* each token.
+//
+// One `// class: NAME` line names the class of the rule that follows it. Rules
+// are plain `find` patterns (no `=>`). They are listed low→high precedence: a
+// later class repaints a character an earlier one claimed, so a string's
+// interior wins over the braces inside it, and a comment wins over everything.
+
+// class: bracket
+{\{,\},\[,\]}
+
+// class: arrow
+{<=>,=>}
+
+// class: anchor
+{@}{\^,\$}
+
+// class: alphabet
+{@}{a..z,A..Z}[1..]
+
+// class: count
+{\[}{!\]}[..]{\]}
+
+// class: reference
+{\$}{0..9}[1..]
+
+// class: escape
+{\\}{@uni}
+
+// class: template
+{\"}{!\"}[..]{\"}
+
+// class: comment
+{//}{!\n}[..]

@@ -63,6 +63,56 @@ body,
   outline: none;
 }
 
+/* ── syntax-highlighted expression editor (sidebar; auto-grows to content) ──── */
+.expr-hl-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(201, 212, 227, 0.18);
+  border-radius: 4px;
+  background: rgba(201, 212, 227, 0.03);
+}
+
+.expr-hl-wrap:focus-within {
+  border-color: var(--mark-text);
+}
+
+.expr-hl-backdrop,
+.expr-hl-textarea {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 0;
+}
+
+.expr-hl-backdrop {
+  color: var(--text);
+  min-height: 1.5em;
+  pointer-events: none;
+}
+
+.expr-hl-textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  outline: none;
+}
+
+.expr-hl-textarea::placeholder {
+  color: var(--muted);
+}
+
 /* ── Execute output ────────────────────────────────────────────────────────── */
 .output-text,
 .output-error {
