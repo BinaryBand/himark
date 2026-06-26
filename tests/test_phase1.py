@@ -143,6 +143,15 @@ def test_self_binding_count_group_offset():
     assert apply(r"{x}{{a}[#]}[2..]") == r"{x}{a}[..]{{a}[#1]}[2..]"
 
 
+def test_self_binding_count_ignores_escaped_braces():
+    from himark.parser.rewrites import apply
+
+    # A leading escaped brace `\{` is a literal, not a capture group, so it must
+    # not shift the bound index: only the two real groups {x},{y} precede, so the
+    # establishing copy is [#2] (not [#1], which the old depth-blind counter gave).
+    assert apply(r"\{{x}{y}{{a}[#]}[2..]") == r"\{{x}{y}{a}[..]{{a}[#2]}[2..]"
+
+
 def test_self_binding_count_bounds():
     from himark.parser.rewrites import apply
 

@@ -16,7 +16,7 @@ Two layers keep the specifics in data, not code:
 
 import re
 
-from himark.parser._text import brace_end
+from himark.parser._text import brace_end, _is_escaped
 
 _COUNT = re.compile(r"\[[^\]]*\]")
 # A self-binding count token: a `[…]` count holding a lone `#` (not `#N`, which is
@@ -83,29 +83,43 @@ _TOOLS = {
 
 
 def _enclosing_brace(src: str, pos: int) -> int | None:
-    """Index of the `{` directly enclosing `pos` (the brace `pos` sits in), or None."""
+    """Index of the `{` directly enclosing `pos` (the brace `pos` sits in), or None.
+
+    A backslash-escaped brace (`\\{`, `\\}`) is a literal and does not affect depth,
+    matching `brace_end`/`split_top` in `_text`."""
     depth = 0
     for i in range(pos - 1, -1, -1):
         c = src[i]
+        if c not in "{}" or _is_escaped(src, i):
+            continue
         if c == "}":
             depth += 1
-        elif c == "{":
-            if depth == 0:
-                return i
+        elif depth == 0:
+            return i
+        else:
             depth -= 1
     return None
 
 
 def _count_top_groups(text: str) -> int:
-    """Number of top-level `{…}` groups in `text` (each opens one capture)."""
+    """Number of top-level `{…}` groups in `text` (each opens one capture).
+
+    A backslash-escaped brace (`\\{`, `\\}`) is a literal and is not a group, so it
+    never changes depth or the count — consistent with the rest of the parser."""
     depth = n = 0
-    for c in text:
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == "\\":
+            i += 2  # skip the escaped char — a literal, never a delimiter
+            continue
         if c == "{":
             if depth == 0:
                 n += 1
             depth += 1
         elif c == "}":
             depth = max(0, depth - 1)
+        i += 1
     return n
 
 
