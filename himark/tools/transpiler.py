@@ -30,7 +30,7 @@ def _pipeline(script: Path) -> precompiled.Pipeline:
     artifact = DOWNLOADS / f"{script.stem}.hmkc"
     if not artifact.exists() or artifact.stat().st_mtime < script.stat().st_mtime:
         DOWNLOADS.mkdir(parents=True, exist_ok=True)
-        pipeline = precompiled.compile_pipeline(precompiled.load_script(script))
+        pipeline = precompiled.compile_script(script.read_text("utf-8"))
         precompiled.dump(pipeline, artifact)
         return pipeline
     return precompiled.load(artifact)

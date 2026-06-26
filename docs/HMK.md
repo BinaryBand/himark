@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.12.0 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
+**Version:** 0.12.1 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
 
 <!-- cspell:words himark -->
 
@@ -223,7 +223,7 @@ Every `{...}` in matching position is a **capture group**, numbered from **0** i
 
 A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only. (`{1{am,pm}}` is alternation in a unit; folding the inner to `{1{{am,pm}}}` changes nothing observable -- a brace buried in a grouping brace is never addressed or repeated on its own, so object vs. union there is moot.)
 
-Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference, anchor `{@<}` -- are each **one** group regardless of inner braces. An anchor occupies a number and captures the empty string. A repeated group `{X}[n]` is one number, captured as one string.
+Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference -- are each **one** group regardless of inner braces. An **anchor** (`{@<}`) is the exception: zero-width and non-capturing, it takes **no** number, so the groups around it stay contiguous. A repeated group `{X}[n]` is one number, captured as one string.
 
 Input `### Sphinxofblackquartz`, expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
 
@@ -342,9 +342,24 @@ himark transpile in.md --script pipeline.hmk --out out.md
 { }[2..]{\n} => "<br/>\n"            // the next statement
 ```
 
+**Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude macro](#macros), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
+
+```proto
+@head = {@<}{#}[1..6]{ }[1..]      // an ATX head marker at line start
+@eol  = {!\n}[1..]                 // the rest of a line
+
+@head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"   // expands to the full heading rule
+```
+
+Definitions expand **textually before tokenizing** and leave no trace downstream (the compiled pipeline is identical to the hand-inlined one). Three rules keep them honest:
+
+- **Lexical order.** A definition must precede the statements that use it; an unexpanded `@name` is left as literal text, not flagged (as for any macro).
+- **No shadowing, no redefinition.** A local name that collides with a prelude macro or an earlier local is a compile error -- these are definitions, not mutable variables.
+- **Captures number over the expansion.** `$i`/`#i` count groups in the _expanded_ statement, so a fragment is only safely composable when it carries no internal self-references. Above, the author must know `@head` exports groups 0--1 (`#0` is the heading level) and `@eol` adds group 2 (`$2`).
+
 **The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
 
-- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@d},{@w::..f}`).
+- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@d},{@w::..f}`). A script-local definition is the same form, scoped to one file.
 - `filter name = <expr>` binds a [derived filter](#filters): a moustache expression over the primitive filters, with `.` the piped-in value (`filter le16 = . | b256(2,le)`).
 
 A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).

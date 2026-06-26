@@ -22,6 +22,7 @@ Run:  python -m himark.tools.precompiled dump out.hmkc "<stmt>" ["<stmt>" …]
 from __future__ import annotations
 
 import pickle
+import re
 from pathlib import Path
 
 import typer
@@ -29,6 +30,8 @@ import typer
 from himark import parser
 from himark.engine import run_pipeline
 from himark.models import nodes_typed as t
+from himark.models.exceptions import CompileError
+from himark.prelude import MACROS
 
 _MAGIC = b"HMKC\x00"
 _VERSION = 1
@@ -47,6 +50,57 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
     for s in statements:
         converted, loop = _split_fixed_point(s)
         steps = parser.parse(converted)
+        if loop and steps:
+            steps[0].fixed_point = True
+        pipeline.append(steps)
+    return pipeline
+
+
+_DEFINITION_RE = re.compile(r"\s*@(\w+)\s*")
+
+
+def _split_definition(item: str) -> tuple[str, str] | None:
+    """A script definition `@name = body` → `(name, body)`; an ordinary statement
+    → None. The binding `=` must be a lone `=`, not the `=>` arrow (so `@name => …`
+    is a statement that *uses* the fragment, not a definition). A bare top-level `=`
+    never appears in a query, so this leading test is unambiguous."""
+    m = _DEFINITION_RE.match(item)
+    if m is None:
+        return None
+    rest = item[m.end() :]
+    if rest.startswith("=") and not rest.startswith("=>"):
+        return m.group(1), rest[1:].strip()
+    return None
+
+
+def compile_script(source: str) -> Pipeline:
+    """Compile a `.hmk` script that may carry local `@name = <body>` definitions.
+
+    A definition binds `@name` to Himark source — the same mechanism as a prelude
+    macro, but scoped to this script. Definitions expand textually into the
+    statements that *follow* them (lexical order) and leave no trace in the result:
+    the returned pipeline is the same parsed-AST list a definition-free script
+    produces, so `dump`/`load`/`apply` and the `.hmkc` cache are unaffected.
+
+    A local name may not shadow a prelude macro or redefine an earlier local (both
+    are `CompileError`s — these are definitions, not reassignable variables). Scope
+    is lexical: a definition must precede the statements that use it, since (as with
+    any macro) an unexpanded `@name` is left as literal text, not flagged. Capture
+    references (`$i`/`#i`) number over the *expanded* statement, so a fragment that
+    carries internal self-references is not safely composable."""
+    local: dict[str, str] = {}
+    pipeline: Pipeline = []
+    for item in split_statements(source):
+        if (defn := _split_definition(item)) is not None:
+            name, body = defn
+            if name in MACROS:
+                raise CompileError(f"definition @{name} shadows a prelude macro")
+            if name in local:
+                raise CompileError(f"@{name} is already defined")
+            local[name] = body
+            continue
+        converted, loop = _split_fixed_point(item)
+        steps = parser.parse(converted, macros=local)
         if loop and steps:
             steps[0].fixed_point = True
         pipeline.append(steps)

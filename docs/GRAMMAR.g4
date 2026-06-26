@@ -48,10 +48,17 @@ grammar GRAMMAR;
 // depth-aware stateful pass, not a token rule — it is documented in docs/HMK.md
 // ("The .hmk file"). `snippet`/`patternOnly` parse a single statement / query.
 
-script   : sp (statement (sp statement)*)? sp EOF ;
+script   : sp (scriptItem (sp scriptItem)*)? sp EOF ;
 prelude  : sp (declaration (sp declaration)*)? sp EOF ;
 snippet  : sp statement sp EOF ;
 patternOnly : sp pattern sp EOF ;
+
+// A script line is a statement or a local definition. A definition binds `@name`
+// to a pattern fragment — the same construct as the prelude's `macroDecl`, scoped
+// to one file. The lone `EQ` (never the `=>` arrow) after the name is what marks
+// it; the pre-pass classifies the line before this grammar applies.
+scriptItem : definition | statement ;
+definition : AT NAME EQ pattern ;             // @head = {@<}{#}[1..6]{ }[1..]
 
 // Insignificant newlines around arrows, steps, and declarations (a statement may
 // break across lines on a leading arrow — the `.hmk` continuation form). Spaces
