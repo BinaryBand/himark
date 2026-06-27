@@ -99,7 +99,7 @@ A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\
 ```
 
 > `..` is **one-axis**. `{a..z}..{A..Z}` (range between two sets) has no single order -> rejected; write `{a..z}{A..Z}` (product), `{a..z,A..Z}` (either case), or `{{a,A},...,{z,Z}}` (folded).
-
+>
 > An unnamed multi-char range is over **ambient Unicode**: `{aa..zz}` is the value band, including non-letter strings between. For "two lowercase letters": `{@l::aa..zz}`.
 
 ### Congruence
@@ -140,7 +140,7 @@ A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare 
 
 ## :symbols: Carriers and operators
 
-Values are integers: `Z` is the carrier of every alphabet (`@d`, `@l`, `@hex`, the byte alphabets), and a **ring**, so the operators are integer `+` (add) and `*` (multiply). A computed result has **no alphabet**, so it needs a **render-cast**: `Z` defaults to `@d`, `| @hex` re-codecs. (`7 + 8` -> value 15, "15".)
+Values are integers: `Z` is the carrier of every alphabet (`@d`, `@l`, `@hex`, the byte alphabets), and a **ring**, so the operators are integer `+` (add), `-` (subtract), and `*` (multiply). A computed result has **no alphabet**, so it needs a **render-cast**: `Z` defaults to `@d`, `| @hex` re-codecs. (`7 + 8` -> value 15, "15"; `8 - 5` -> 3.) Subtraction is the ring's inverse, so a difference may be **negative** -- the default `@d` cast has no negative spelling, so keep a difference non-negative or consume it in further arithmetic before it renders.
 
 > **Carrier is the extension hook.** Each alphabet's carrier is fixed at compile time. Today every carrier is `Z`, so `*` has one meaning and there is nothing to disambiguate. A future **library alphabet** (a curve group, say) could carry its own algebra -- overloading `*` as a scalar action against ring multiply -- with cross-carrier misuse caught as a compile-time error.
 
@@ -229,7 +229,7 @@ Input `### Sphinxofblackquartz`, expression `{#}[1..]{ }{Sphinx}{of{black}{quart
 | 3     | `ofblackquartz`           | `{of{black}{quartz}}` grouping brace, whole |
 
 > Group 3's inner `{black}`/`{quartz}` are structural, unnumbered (next sibling = `4`). To address separately, lift to top level: `{of}{black}{quartz}` -> `3,4,5`.
-
+>
 > Templates address captures via `{{ [stage]$[index] }}`: `{{ $ }}` current stage whole, `{{ $j }}` its group `j`, `{{ i$ }}` stage `i` whole, `{{ i$j }}` stage `i` group `j`.
 
 ### Self-references
@@ -292,7 +292,7 @@ A `{{ ... }}` moustache holds one **expression** over captured values, and is re
 What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Operators, tightest to loosest:
 
 - `*` -- multiply
-- `+` -- add
+- `+` / `-` -- add / subtract
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
