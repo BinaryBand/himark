@@ -1,7 +1,7 @@
 """Tests for the `std.hmk` prelude loader (`himark/prelude.py`).
 
-The prelude replaces the former `macros.toml`/`macros.py`: alphabets and derived
-filters are declared in Himark's own file, parsed once at import.
+The prelude replaces the former `macros.toml`/`macros.py`: alphabets are declared
+in Himark's own file, parsed once at import.
 """
 
 import pytest
@@ -11,9 +11,8 @@ from himark.models.exceptions import CompileError
 
 
 def test_shipped_prelude_loads():
-    # The shipped prelude populates both registries.
+    # The shipped prelude populates the macro registry.
     assert prelude.MACROS["d"] == "0..9"
-    assert "le16" in prelude.FILTERS
 
 
 def _load(text, tmp_path, monkeypatch):
@@ -24,25 +23,30 @@ def _load(text, tmp_path, monkeypatch):
     return prelude._load()
 
 
-def test_parses_alphabet_and_filter_forms(tmp_path, monkeypatch):
-    macros, filters = _load(
+def test_parses_alphabet_declarations(tmp_path, monkeypatch):
+    macros = _load(
         "@d = 0..9\n"
-        "filter le16 = . | b256(2,le)   // a comment rides along\n"
+        "@hex = {@d},{@w::..f}   // a comment rides along\n"
         "\n"
         "// a full-line comment\n",
         tmp_path,
         monkeypatch,
     )
-    assert macros == {"d": "0..9"}
-    assert filters == {"le16": ". | b256(2,le)"}
+    assert macros == {"d": "0..9", "hex": "{@d},{@w::..f}"}
 
 
 def test_comment_inside_value_survives(tmp_path, monkeypatch):
     # A `//` inside a brace is content, not a comment (depth-aware strip).
-    macros, _ = _load("@u = {http://x}\n", tmp_path, monkeypatch)
+    macros = _load("@u = {http://x}\n", tmp_path, monkeypatch)
     assert macros == {"u": "{http://x}"}
 
 
 def test_non_declaration_line_is_an_error(tmp_path, monkeypatch):
     with pytest.raises(CompileError):
         _load("{a..z} => x\n", tmp_path, monkeypatch)
+
+
+def test_filter_declaration_is_now_rejected(tmp_path, monkeypatch):
+    # Derived filters were removed; a `filter …` line is no longer a declaration.
+    with pytest.raises(CompileError):
+        _load("filter le16 = . | b256(2,le)\n", tmp_path, monkeypatch)

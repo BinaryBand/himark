@@ -51,7 +51,7 @@ Point **value** is fixed under [Values and ordering](#values-and-ordering).
 
 ## Macros
 
-Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a macro: `@name` expands to that Himark source before tokenizing, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source expands to. The same file declares **derived filters** (`filter name = <expr>`, see [Filters](#filters)). The shipped set:
+Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a macro: `@name` expands to that Himark source before tokenizing, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source expands to. The shipped set:
 
 | Name     | Expands to                     |
 | -------- | ------------------------------ |
@@ -289,7 +289,7 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Operators, tightest to loosest:
+What **flows** is every moustache's value concatenated. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Operators, tightest to loosest:
 
 - `*` -- multiply
 - `+` / `-` -- add / subtract
@@ -300,7 +300,7 @@ All left-associative; parens override. So `("<h", #0, ">")` is one value, and `$
 
 ### Filters
 
-A moustache value may be piped through **filters** -- a small, fixed set of pure, deterministic **primitives**: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative. This is deliberately _not_ a general standard library: `b256`/`uint` are the value model's two [projections](#values-and-ordering) surfaced into templates, and `pad` is output formatting -- nothing here is use-case-specific. Derived transforms (hashes, curve operations, ...) are **deferred to a layer built on arithmetic/bit primitives**, where they would be _defined_ rather than baked into the core.
+A moustache value may be piped through **filters** -- a small, fixed set of pure, deterministic **primitives**: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative. This is deliberately _not_ a general standard library: `b256`/`uint` are the value model's two [projections](#values-and-ordering) surfaced into templates, and `pad` is output formatting -- nothing here is use-case-specific. Derived transforms (hashes, curve operations, ...) are **out of scope** -- deferred to a future layer of bit/crypto primitives, not expressible here.
 
 A value is either a **value** (a named-alphabet capture, carrying alphabet/range/value) or a **raw string** (a whole-stage `{{ i$ }}`, the flowing `{{ $ }}`, any string-filter output, a bare-Unicode-range or subtractive capture). **String** filters read either; a **value** filter or arithmetic on a raw string is a compile error.
 
@@ -312,7 +312,7 @@ A value is either a **value** (a named-alphabet capture, carrying alphabet/range
 
 Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d::0..255}`=1 byte, `{@d::000..999}` and `{@l::aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
 
-**Derived filters.** The primitives above are native; new filters are _composed_ from them in the prelude (`himark/std.hmk`) with `filter name = <expr>`, where `<expr>` is a moustache expression over the primitives and operators and `.` is the piped-in value. So `filter le16 = . | b256(2,le)` names a two-byte little-endian encode; `{{ $0 | le16 }}` then stands for `{{ $0 | b256(2,le) }}`. This is the layer-2 extension seam: the irreducible primitives stay in the core, everything else is declared. (Derived filters are parameterless for now.)
+**The filter set is closed.** These primitives are the whole vocabulary -- there is **no user-declared filter form**. A transform that needs more than value/byte arithmetic has two honest homes: a **string-shape** change (trim a run, split on a delimiter) belongs in **matching position**, where the pattern already expresses it -- to trim, capture the non-space core and let the surrounding whitespace fall outside the group; a **value/byte** transform the primitives can't reach (a hash, a curve op) **waits on the deferred crypto layer**. A composition mechanism could return alongside that layer, once there are primitives worth composing.
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.
 
@@ -356,6 +356,5 @@ Definitions expand **textually before tokenizing** and leave no trace downstream
 **The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
 
 - `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
-- `filter name = <expr>` binds a [derived filter](#filters): a moustache expression over the primitive filters, with `.` the piped-in value (`filter le16 = . | b256(2,le)`).
 
 A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).

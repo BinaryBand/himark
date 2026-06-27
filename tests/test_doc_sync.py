@@ -156,15 +156,3 @@ def test_doc_hex_code_point_escapes():
     assert matches(r"{\U00000041}", "A B") == ["A"]
     # @b256 (declared `\x00..\xff`) still matches any byte, as before.
     assert matches("{@b256}", "AB") == ["A", "B"]
-
-
-def test_doc_derived_filter():
-    # The Filters section: a derived filter (declared `filter name = <expr>` in the
-    # prelude) is a named moustache expression over the primitives. `le16` is
-    # `b256(2,le)`; calling it must equal the expression it stands for.
-    assert execute(
-        parser.parse('{@d::0..65535} => "{{ 0$0 | le16 }}"'), "258"
-    ) == execute(parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) }}"'), "258")
-    # A derived filter is parameterless this pass.
-    with pytest.raises(CompileError):
-        execute(parser.parse('{@d::0..} => "{{ 0$0 | le16(2) }}"'), "5")

@@ -105,14 +105,16 @@
 // --- Phase 4: tables --------------------------------------------------------
 // Drop the separator row (pipes, dashes, colons, spaces) and its newline, then
 // wrap a block of 2+ rows that each start with '|'. Each row's cells are split on
-// '|', trimmed, and the outer pipes dropped.
+// '|', trimmed, and the outer pipes dropped. The trim is structural, not a filter:
+// the leading and trailing `{ }[0..]` consume surrounding spaces, while the inner
+// grouping brace `{{!|,\n}[0..]{!|,\n, ,\t}}` captures a core ending on a non-space.
 {@<}{ }[0..]{|}{{ ,:,-,|}}[3..]{@>}{\n} => ""
 {{@<}{ }[0..]{|}{!\n}[0..]{\n}[0,1]}[2..]
     => "<table>{{>.}}</table>"
     => {@<}{{!\n}}[1..]{|}{ }[0..]{@>}
     => "<tr>{{> $0 }}</tr>"
-    => {|}{ }[0..]{!|,\n}[1..]
-    => "<td>{{ $2 | trim }}</td>"
+    => {|}{ }[0..]{{!|,\n}[0..]{!|,\n, ,\t}}{ }[0..]
+    => "<td>{{$2}}</td>"
 
 // --- Phase 5: inline spans (after block, so they format inside block tags) ---
 // Images before links, since `![alt](src)` contains the link shape `[..](..)`.

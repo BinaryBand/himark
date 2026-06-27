@@ -26,7 +26,6 @@ from himark.engine.backend import Match
 from himark.engine.backend.alphabet import Alphabet, RangeAlphabet
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
-from himark.prelude import FILTERS as _DERIVED
 
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 _ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")
@@ -123,15 +122,12 @@ def _filter_uint(value: _Value, nums: list[int], little: bool) -> str:
 # `nums` are the integer arguments, `little` is set by an `le` flag (cleared by
 # `be`). The spec's core set is `pad`/`b256`/`uint` — the value model's two byte
 # projections plus output padding; hashes and other derived transforms are deferred
-# to a layer above these primitives. `upper`/`lower`/`trim`/`indent`/`len` are
-# convenience string filters. *Derived* filters (composed from these in the `.hmk`
+# to a layer above these primitives. `trim`/`indent` are convenience string
+# filters. *Derived* filters (composed from these in the `.hmk`
 # prelude, see `himark/prelude.py`) are dispatched separately in `_apply_filter`.
 _FILTERS = {
-    "upper": lambda v, nums, little: v.text.upper(),
-    "lower": lambda v, nums, little: v.text.lower(),
     "trim": lambda v, nums, little: v.text.strip(),
     "indent": lambda v, nums, little: _indent(v.text),
-    "len": lambda v, nums, little: str(len(v.text)),
     "pad": lambda v, nums, little: v.text.rjust(_arg(nums, "pad"), "0"),
     "b256": _filter_b256,
     "uint": _filter_uint,
@@ -227,14 +223,11 @@ class _ExprParser:
     returns a `_Value`; arithmetic reads `Z` values and yields a computed integer,
     `,` concatenates surface text, `|` applies a filter."""
 
-    def __init__(self, toks: list[tuple[str, str]], current: str, stages, dot=None):
+    def __init__(self, toks: list[tuple[str, str]], current: str, stages):
         self.toks = toks
         self.i = 0
         self.current = current
         self.stages = stages
-        # When evaluating a derived-filter body, `dot` is the piped-in value, so
-        # `.` carries its alphabet/num (letting a body use value filters like b256).
-        self.dot = dot
 
     def _peek(self) -> str:
         return self.toks[self.i][0] if self.i < len(self.toks) else ""
@@ -253,9 +246,7 @@ class _ExprParser:
             self.i += 1
             if self._peek() != "filter":
                 raise CompileError("'|' must be followed by a filter")
-            value = _apply_filter(
-                self.toks[self.i][1], value, self.current, self.stages
-            )
+            value = _apply_filter(self.toks[self.i][1], value)
             self.i += 1
         return value
 
@@ -286,7 +277,7 @@ class _ExprParser:
             return _Value(text, num=int(text))
         if kind == "accessor":
             if text == ".":
-                return self.dot if self.dot is not None else _Value(self.current)
+                return _Value(self.current)
             return _resolve(text, self.stages)
         raise CompileError(f"Expected a value in moustache expression, got {text!r}")
 
@@ -310,24 +301,17 @@ def _eval(inner: str, current: str, stages: list[Match]) -> str:
     return _to_text(_ExprParser(_tokenize(inner), current, stages).parse())
 
 
-def _apply_filter(token: str, value: _Value, current: str, stages) -> _Value:
+def _apply_filter(token: str, value: _Value) -> _Value:
     """Apply one `name` or `name(args)` filter, returning a raw-string `_Value`.
     Arguments are integers (width/count) plus an optional `le`/`be` endianness
-    flag (default big-endian).
-
-    A `name` not in the native primitive set is looked up among the prelude's
-    derived filters (`std.hmk`'s `filter name = …`): its body is a moustache
-    expression evaluated with the piped-in `value` bound to `.`."""
+    flag (default big-endian). The filter set is closed and native; a name outside
+    it is a compile error."""
     m = _FILTER_RE.fullmatch(token)
     if m is None:
         raise CompileError(f"Malformed template filter: '{token.strip()}'")
     name, arg_src = m.group(1), m.group(2)
     fn = _FILTERS.get(name)
     if fn is None:
-        if name in _DERIVED:
-            if arg_src:
-                raise CompileError(f"Derived filter '{name}' takes no arguments")
-            return _apply_derived(name, value, current, stages)
         raise CompileError(f"Unknown template filter: '{name}'")
     nums: list[int] = []
     little = False
@@ -342,24 +326,6 @@ def _apply_filter(token: str, value: _Value, current: str, stages) -> _Value:
                 f"Filter '{name}' argument must be an integer or 'le'/'be': '{a}'"
             ) from None
     return _Value(fn(value, nums, little))
-
-
-# Derived filters currently mid-expansion — a re-entry is a cycle, not a value.
-_EXPANDING: set[str] = set()
-
-
-def _apply_derived(name: str, value: _Value, current: str, stages) -> _Value:
-    """Evaluate a prelude-declared derived filter's body with `value` bound to `.`.
-    The body is a moustache expression over the primitive filters and operators."""
-    if name in _EXPANDING:
-        raise CompileError(f"Derived filter '{name}' is recursive")
-    _EXPANDING.add(name)
-    try:
-        return _ExprParser(
-            _tokenize(_DERIVED[name]), current, stages, dot=value
-        ).parse()
-    finally:
-        _EXPANDING.discard(name)
 
 
 def _resolve(expr: str, stages: list[Match]) -> _Value:

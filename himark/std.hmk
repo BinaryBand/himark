@@ -1,7 +1,7 @@
 // Himark standard prelude — the centralized declaration file loaded before every
-// run. The single source of truth for named alphabets and derived filters.
+// run. The single source of truth for named alphabets.
 //
-// This file holds DECLARATIONS, not match statements. Two forms:
+// This file holds DECLARATIONS, not match statements. One form:
 //
 //   @name = <himark source>   a named alphabet — `@name` expands to the source on
 //                             the right before tokenizing. Macros may reference
@@ -10,11 +10,8 @@
 //                             sees the ranges (`..`) and congruence classes (`,`)
 //                             these expand to.
 //
-//   filter name = <expr>      a derived filter — a named moustache expression over
-//                             the primitive filters (`b256`/`uint`/`pad`) and the
-//                             expression operators, with `.` the piped-in value.
-//                             The primitives stay native; this is the layer-2
-//                             extension point where new filters are composed.
+// (Filters are a closed, native set in `engine/_render`: `b256`/`uint`/`pad` plus
+// the `trim`/`indent` string conveniences. There is no declared filter form.)
 
 // ── Named alphabets ───────────────────────────────────────────────────────────
 
@@ -39,9 +36,3 @@
 // base-256: every byte, an ordered value alphabet (`{@b256::x..y}`). Distinct from
 // the `b256` template filter (which re-encodes a value as base-256 bytes).
 @b256 = \x00..\xff
-
-// ── Derived filters ───────────────────────────────────────────────────────────
-
-// A value as two little-endian bytes — `b256(2,le)` under a friendlier name. A
-// worked example of the mechanism; declare new derived filters here the same way.
-filter le16 = . | b256(2,le)

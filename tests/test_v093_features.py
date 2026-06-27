@@ -100,11 +100,7 @@ def test_guard_before_template_filters():
 
 
 def test_filter_pipe():
-    assert ex('{!\\ }[1..] => "{{ . | upper }}"', "hi there") == ["HI", "THERE"]
-
-
-def test_filter_len():
-    assert ex('{cat}{dog} => "{{ 0$0 | len }}"', "catdog") == ["3"]
+    assert ex('{!x}[1..] => "{{ . | trim }}"', " hi ") == ["hi"]
 
 
 def test_filter_indent_prefixes_each_line():
@@ -150,7 +146,7 @@ def test_b256_overflow_raises():
 
 def test_string_filter_still_works_on_value_accessor():
     # A value accessor degrades gracefully to its text under a string filter.
-    assert ex('{@d::0..65535} => "{{ 0$0 | len }}"', "256") == ["3"]
+    assert ex('{@d::0..65535} => "{{ 0$0 | trim }}"', "256") == ["256"]
 
 
 def test_b58_decodes_as_bitcoin_base58_value():

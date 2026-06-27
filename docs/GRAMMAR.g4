@@ -96,7 +96,7 @@ braceGroup : LBRACE braceBody RBRACE ;
 // always arrows (divergence 3).
 literalRun : (TEXT | ESC | HEX_ESC | DOT | RANGE | BAND | COMMA
              | NAME | INT | AT | DOLLAR | HASH | CARET | LT | GT
-             | PIPE | STAR | PLUS | LPAREN | RPAREN | EQ | FILTER)+ ;
+             | PIPE | STAR | PLUS | LPAREN | RPAREN | EQ)+ ;
 
 // ── Count `[…]` ──────────────────────────────────────────────────────────────
 count     : LBRACK countBody RBRACK ;
@@ -137,7 +137,7 @@ atom      : braceGroup count?
 litToken  : NAME | INT | TEXT | DOT | LT | GT | CARET | EQ
           | LPAREN | RPAREN | STAR | PLUS | PIPE | BANG
           | AT | DOLLAR | HASH | LBRACK | RBRACK
-          | ARROW | FIXARROW | FILTER ;
+          | ARROW | FIXARROW ;
 
 // `$i` text-ref, `#i` count-ref, `N$M.K…` cross-stage ref. A bare `$`/`#` with no
 // index is literal (a `litToken` via the lexer), so a reference needs an index
@@ -150,12 +150,11 @@ anchor    : AT (LT LT? | GT GT?) ;   // @< @> line, @<< @>> document
 macro     : AT NAME ;
 
 // ── Prelude declarations (`std.hmk`) ─────────────────────────────────────────
-declaration : macroDecl | filterDecl ;
+declaration : macroDecl ;
 macroDecl   : AT NAME EQ braceBody ;          // @d = 0..9 , @hex = {@d},{@w::..f}
-filterDecl  : FILTER NAME EQ moustacheExpr ;  // filter le16 = . | b256(2,le)
 
 // ── Moustache expression (second layer — the inside of one `{{ … }}`) ─────────
-// Applied to each `{{ … }}` interior; also the prelude filter RHS. Operators,
+// Applied to each `{{ … }}` interior. Operators,
 // tightest to loosest: `*`  `+`  `|` (filter pipe)  `,` (concatenate, in parens).
 moustacheExpression : GT? moustacheExpr EOF ; // `{{> … }}` payload marker is optional
 moustacheExpr : pipeExpr ;
@@ -168,7 +167,7 @@ primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN
           | STRING
           ;
 accessor  : INT? (DOLLAR | HASH) (INT (DOT INT)*)?   // $  $i  #i  N$M  N$M.K
-          | DOT                                       // the piped-in value `.`
+          | DOT                                       // `.` the current match/value
           ;
 filter    : NAME (LPAREN filterArgs? RPAREN)? ;
 filterArgs : filterArg (COMMA filterArg)* ;
@@ -214,8 +213,6 @@ LT       : '<' ;
 GT       : '>' ;
 CARET    : '^' ;
 
-FILTER   : 'filter' ;
-
 // A fixed-width hex code-point escape (`\xHH` / `\uHHHH` / `\UHHHHHHHH`); HEX_ESC
 // wins over ESC by being longer. Any other `\X` is a one-char escape.
 HEX_ESC  : '\\' ( 'x' HEXDIGIT HEXDIGIT
@@ -228,8 +225,8 @@ NAME     : [A-Za-z_] [A-Za-z0-9_]* ;
 
 NL       : ('\r'? '\n')+ ;
 
-// Spaces/tabs are hidden: they still separate tokens (so `filter le16` stays two
-// tokens) but the parser ignores them, matching the implementation where step
+// Spaces/tabs are hidden: they still separate tokens (so two adjacent names stay
+// two tokens) but the parser ignores them, matching the implementation where step
 // whitespace is stripped (`phase0`) and a moustache expression skips whitespace
 // (`engine/_render`). A literal space *inside* a brace (a `{ }` space alphabet)
 // collapses to an empty arm — which the σ-grammar already permits — so the
