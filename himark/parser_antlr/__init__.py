@@ -30,12 +30,15 @@ free alphabet, which is the whole prelude.
 
 Scope (the `braceBody` σ-core): literal, char-range, multi-char value-range, the
 congruence forms (`{a,A}`, `{cat,dog}`, `{{a,A},{b,B}}`), complement (`{!{x,y}}`),
-member exclusions (`{a..z,!{m..p}}`), and now `@name` variable references that resolve
-to any of those (`{@d}`, `{@w}`, `{!@s}`). Counts on braces are parsed. Everything
-else — `::` bands, `$`/`#`/`N$` references, anchors, grouping `SequenceNode`s,
-heterogeneous `{{…}}`, top-level (un-braced) `@name`, templates with moustaches —
-raises `NotImplementedError`, which the harness records as "not in this slice yet"
-(skipped); an *unhandled* divergence still fails loudly.
+member exclusions (`{a..z,!{m..p}}`), `::` value bands over a literal spec
+(`{@d::0..255}`, `{@d::5}`, `{@d::1..5,9..12}`, the open-ended `{@d::..255}` /
+`{@d::128..}`, and the ambient `{::lo..hi}`), and `@name` variable references that
+resolve to any of those (`{@d}`, `{@w}`, `{!@s}`). Counts on braces are parsed.
+Everything else — `$`/`#`/`N$` references (including a reference *band endpoint*),
+anchors, grouping `SequenceNode`s, heterogeneous `{{…}}`, top-level (un-braced)
+`@name`, templates with moustaches — raises `NotImplementedError`, which the harness
+records as "not in this slice yet" (skipped); an *unhandled* divergence still fails
+loudly.
 
 Entry point: `parse(text, macros=None) -> list[RootNode]`, matching the reference
 `himark.parser.parse` signature so the candidate plugs into the harness unchanged.
@@ -360,27 +363,65 @@ class _Resolver:
             return t.GroupClassNode(groups=groups)
         return _attach_exclusions(t.UnionNode(options=resolved), exclusions)
 
+    # — bands (`{payload::lo..hi}`) —
+
+    def resolve_band(self, band: GRAMMARParser.BandContext) -> t.SemanticNode:
+        """Resolve a `payload :: spec` band into a value range over the payload
+        alphabet. Mirrors phase3._resolve_band: the payload is any universe (ambient
+        `@uni` when empty, the `{::lo..hi}` form), the band-spec is a `,`-union of
+        arms; one arm is a `ValueRangeNode`, several fold into a `UnionNode`."""
+        universes = band.universe()
+        if len(universes) == 2:  # `payload :: spec`
+            alpha = self.resolve_universe(universes[0])
+            spec = universes[1]
+        else:  # `:: spec` — empty payload, ambient Unicode alphabet
+            alpha = _ambient_alpha()
+            spec = universes[0]
+        options = [self.resolve_band_arm(alpha, arm) for arm in spec.arm()]
+        return options[0] if len(options) == 1 else t.UnionNode(options=options)
+
+    def resolve_band_arm(
+        self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext
+    ) -> t.ValueRangeNode:
+        """One band-spec arm: a `lo..hi` range (either end omittable) or a single
+        value (`{@d::5}` is `5..5`). Mirrors phase3._resolve_band_arm; reference
+        endpoints (`$0`) are out of slice."""
+        terms = arm.term()
+        if arm.RANGE() is None:  # single value: lower == upper
+            value = self._band_endpoint(terms[0])
+            return t.ValueRangeNode(alpha=alpha, lower=value, upper=value)
+        lower: str | None = None
+        upper: str | None = None
+        if len(terms) == 2:  # `lo..hi`
+            lower = self._band_endpoint(terms[0])
+            upper = self._band_endpoint(terms[1])
+        elif len(terms) == 1:  # `..hi` (RANGE before term) or `lo..` (RANGE after)
+            if arm.RANGE().getSymbol().tokenIndex < terms[0].start.tokenIndex:
+                upper = self._band_endpoint(terms[0])
+            else:
+                lower = self._band_endpoint(terms[0])
+        if lower is None and upper is None:
+            raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
+        return t.ValueRangeNode(alpha=alpha, lower=lower, upper=upper)
+
+    def _band_endpoint(self, term: GRAMMARParser.TermContext) -> str:
+        """The literal value of a band endpoint. A reference endpoint (`$0`, `#0`)
+        is out of slice (raises NotImplementedError via the atom guard)."""
+        for a in term.atom():
+            _guard_in_slice_atom(a)
+        sval = _term_singleton(term)
+        if sval is None:
+            raise NotImplementedError("non-literal band endpoint not in slice")
+        return sval
+
     # — brace body / pattern —
 
-    def resolve_brace_body(
-        self, body: GRAMMARParser.BraceBodyContext
+    def resolve_universe(
+        self, universe: GRAMMARParser.UniverseContext
     ) -> t.SemanticNode:
-        """Resolve a `braceBody` (`BANG? band`) into a semantic node — the slice's
-        core tree-walk, the phase3 replacement for one rule."""
-        band = body.band()
-        if band.BAND() is not None:
-            raise NotImplementedError("band `::` not in braceBody slice")
-        universe = band.universe()[0]
-
-        # Whole-content single nested brace `{{X}}` (no outer `!`): phase3 treats this
-        # as object/heterogeneous nesting (a fold or a lazy het run), not a plain arm.
-        # Out of the braceBody σ-slice. (A complement `{!{…}}` keeps its BANG, so the
-        # `body.BANG()` guard lets it through to the complement path below.)
-        if body.BANG() is None and _is_whole_nested_brace(universe):
-            raise NotImplementedError(
-                "object/heterogeneous `{{…}}` not in braceBody slice"
-            )
-
+        """Resolve a bare `universe` (a `,`-list of arms) into a semantic node:
+        split off subtractive `!{…}` exclusion arms, then classify the rest. Shared
+        by a `braceBody`'s payload and a band's payload alphabet."""
         arms: list[GRAMMARParser.ArmContext] = []
         exclusions: list[str] = []
         for arm in universe.arm():
@@ -390,9 +431,29 @@ class _Resolver:
             else:
                 arms.append(arm)
         if not arms:
-            raise CompileError(f"Empty brace group: {{{body.getText()}}}")
+            raise CompileError(f"Empty brace group: {{{universe.getText()}}}")
+        return self.classify_arms(arms, exclusions)
 
-        node = self.classify_arms(arms, exclusions)
+    def resolve_brace_body(
+        self, body: GRAMMARParser.BraceBodyContext
+    ) -> t.SemanticNode:
+        """Resolve a `braceBody` (`BANG? band`) into a semantic node — the slice's
+        core tree-walk, the phase3 replacement for one rule."""
+        band = body.band()
+        if band.BAND() is not None:
+            node = self.resolve_band(band)
+        else:
+            universe = band.universe()[0]
+            # Whole-content single nested brace `{{X}}` (no outer `!`): phase3 treats
+            # this as object/heterogeneous nesting (a fold or a lazy het run), not a
+            # plain arm. Out of the braceBody σ-slice. (A complement `{!{…}}` keeps its
+            # BANG, so the `body.BANG()` guard lets it through to the complement path.)
+            if body.BANG() is None and _is_whole_nested_brace(universe):
+                raise NotImplementedError(
+                    "object/heterogeneous `{{…}}` not in braceBody slice"
+                )
+            node = self.resolve_universe(universe)
+
         if body.BANG() is not None:
             node = t.ComplementNode(inner=node)
         return node
