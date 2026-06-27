@@ -49,16 +49,7 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 
 **Join** -- `=>` feeds each match into the next step; `<=>` re-applies over the whole document until it settles (a fixed point).
 
-A position holds one **point** -- a **primitive** (one char/string) or an **object** (nested, interchangeable members). `[count]` repeats **one point** and is **unidimensional** (it sees only its own level; a nested universe is one opaque object). A primitive repeats its fixed spelling; an object's faces are **free per position** (the operator never sees which face it stamps):
-
-```proto
-{a,b}[..]    // 'aa...' or 'bb...' -- primitive, one spelling repeated
-{{a,b}}[..]  // any run of a's and b's -- object, free per position
-{a,A}[2]     // 'aa', 'AA'
-{{a,A}}[2]   // 'aa','aA','Aa','AA'
-```
-
-Point **value** is fixed under [Values and ordering](#values-and-ordering).
+A position holds one **point** -- a **primitive** (one char/string) or an **object** (nested, interchangeable members). `[count]` repeats **one point** and is **unidimensional**: it sees only its own level, so a nested universe is one opaque object whose faces are free per position ([Congruence](#congruence) says why; [Repetition](#repetition) gives the count forms). Point **value** is fixed under [Values and ordering](#values-and-ordering).
 
 ---
 
@@ -121,6 +112,7 @@ A bare `,` **lists points** the enclosing context can tell apart: `{a,b}` = `{a.
 
 ```proto
 {{a,A}}                       // one position, 'a' or 'A'
+{{a,A}}[2]                    // free per position: 'aa','aA','Aa','AA'
 {{color,colour},{gray,grey}}  // faces can be strings
 ```
 
