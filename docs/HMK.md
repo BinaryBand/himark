@@ -86,7 +86,7 @@ A whole line is `{@<}{!\n}[1..]{@>}`.
 
 ## Escaping
 
-Backslash makes the next char literal. Only **framing** chars ever need it: `{` `}` `[` `]` `"` `\`, plus `$` `#` where they'd read as a reference, and `::` where it would read as a band separator. A **single `:` is always literal** and never needs escaping; to write a literal **`::`** escape either colon (`\::`). All else (`(` `)` `.` `*` `+` `-` `?` `|` `:` ...) is already literal. Invisibles use C spellings `\n` `\r` `\t`; a space is a space. So `{(a|b)?}` matches the literal `(a|b)?`, and `{std\::vector}` matches the literal `std::vector`.
+Backslash makes the next char literal. Only **framing** chars ever need it: `{` `}` `[` `]` `"` `\`, plus `$` `#` where they'd read as a reference, `=` where it would read as a definition's `=` (a literal top-level `=` is `\=`, or just `{=}`), and `::` where it would read as a band separator. A **single `:` is always literal** and never needs escaping; to write a literal **`::`** escape either colon (`\::`). All else (`(` `)` `.` `*` `+` `-` `?` `|` `:` ...) is already literal. Invisibles use C spellings `\n` `\r` `\t`; a space is a space. So `{(a|b)?}` matches the literal `(a|b)?`, and `{std\::vector}` matches the literal `std::vector`.
 
 A code point is a fixed-width hex escape, C/Python spelling: `\xHH` (a byte), `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). So `\x41` is `A`, and the byte alphabets are spelled `\x00..\xff` (`@b256`), `\x00..\U0010ffff` (`@uni`). Fixed width (not `\u{...}`) keeps the trailing hex from ever reading as a brace.
 
@@ -317,6 +317,8 @@ himark transpile in.md --script pipeline.hmk --out out.md
 **One statement per logical line.** A statement may span several **physical** lines two ways: a `{...}` group or `"..."` template that runs long stays one logical line (a newline _inside_ a brace or quote does not end the statement), and a line whose first token is an **arrow** (`=>` / `<=>`) **continues** the previous statement -- the chain wrapped across lines for readability. Any other non-blank line **starts** a new statement; a blank line is ignored.
 
 **`//` starts a line comment** -- but only at brace/quote **depth 0**, running to end of line. So a top-level `// note` is stripped, while `{//}` (a literal `//` alphabet) and a `http://...` inside a brace or template survive untouched.
+
+**Insignificant whitespace is stripped in the same depth-aware pre-pass.** Spaces and tabs are literal text **only inside a `{...}` brace body or a `"..."` template** -- so `{ }` matches a space and `@s`'s ` ` member is the space character -- and are dropped everywhere else: around steps and arrows, between top-level constructs (`{a} {b}` == `{a}{b}`), and inside a `[count]` (`[1 .. 6]` == `[1..6]`).
 
 ```proto
 // tidy: one statement, wrapped onto continuation lines

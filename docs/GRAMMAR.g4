@@ -55,14 +55,16 @@ patternOnly : sp pattern sp EOF ;
 
 // A script line is a statement or a local definition. A definition binds `@name`
 // to a pattern fragment — the same construct as the prelude's `macroDecl`, scoped
-// to one file. The lone `EQ` (never the `=>` arrow) after the name is what marks
-// it; the pre-pass classifies the line before this grammar applies.
+// to one file. The lone `EQ` (never the `=>` arrow) after the name marks it. Since
+// `EQ` is not a literal-run token (see `literalRun`), `@name = …` can only be a
+// definition, so the choice is unambiguous to the grammar alone — the pre-pass
+// still classifies the line first, but the grammar no longer depends on it here.
 scriptItem : definition | statement ;
 definition : AT NAME EQ pattern ;             // @head = {@<}{#}[1..6]{ }[1..]
 
 // Insignificant newlines around arrows, steps, and declarations (a statement may
-// break across lines on a leading arrow — the `.hmk` continuation form). Spaces
-// and tabs are on the hidden channel (see `WS`), so only `NL` is visible here.
+// break across lines on a leading arrow — the `.hmk` continuation form). Spaces and
+// tabs are already removed by the pre-pass (see the lexer note), so only `NL` here.
 sp        : NL* ;
 
 // ── Statements: an arrow-chain of steps ──────────────────────────────────────
@@ -91,12 +93,15 @@ complement : BANG braceGroup ;
 braceGroup : LBRACE braceBody RBRACE ;
 
 // A top-level bare literal run: default-mode tokens that are neither a delimiter
-// nor an arrow. (Spaces between braces in a snippet are literal text, matched
-// verbatim, so WS belongs here.) `=>`/`<=>` are excluded — at top level they are
-// always arrows (divergence 3).
+// nor an arrow. Insignificant whitespace between constructs is gone before this
+// grammar runs (the pre-pass), so no WS token appears. `=>`/`<=>` are excluded — at
+// top level they are always arrows (divergence 3) — and `=` (EQ) is excluded so it
+// can never read as a definition's `=`: a literal top-level `=` is `\=` or `{=}`
+// (the idiom HMK.md already uses), which keeps `definition` unambiguous against
+// `statement` to the grammar itself.
 literalRun : (TEXT | ESC | HEX_ESC | DOT | RANGE | BAND | COMMA
-             | NAME | INT | AT | DOLLAR | HASH | CARET | LT | GT
-             | PIPE | STAR | PLUS | LPAREN | RPAREN | EQ)+ ;
+             | NAME | INT | AT | DOLLAR | HASH | LT | GT
+             | PIPE | LPAREN | RPAREN)+ ;
 
 // ── Count `[…]` ──────────────────────────────────────────────────────────────
 count     : LBRACK countBody RBRACK ;
@@ -112,12 +117,14 @@ countRef  : HASH INT? ;                      // # (self-bind) or #i (count-ref)
 // splits payload from band (divergence 1); everything else is a union of arms,
 // each an atom run with an optional `..` range.
 braceBody : BANG? band ;
-band      : universe (BAND universe)? ;
+band      : universe (BAND universe)?        // payload, optional band
+          | BAND universe                    // ambient band: empty payload, e.g. {::0..255}
+          ;
 universe  : arm (COMMA arm)* ;
 arm       : term (RANGE term?)?              // term, term.., term..term
           | RANGE term                       // ..term
           ;
-term      : atom* ;                          // an atom run (may be empty)
+term      : atom+ ;                          // a non-empty atom run
 
 // An atom is a nested brace, an inner subtractive arm, a reference, an anchor, a
 // macro, an escape, or a single literal token. The literal set is broad on
@@ -134,17 +141,18 @@ atom      : braceGroup count?
           | litToken
           ;
 
-litToken  : NAME | INT | TEXT | DOT | LT | GT | CARET | EQ
-          | LPAREN | RPAREN | STAR | PLUS | PIPE | BANG
+litToken  : NAME | INT | TEXT | DOT | LT | GT | EQ
+          | LPAREN | RPAREN | PIPE | BANG
           | AT | DOLLAR | HASH | LBRACK | RBRACK
           | ARROW | FIXARROW ;
 
-// `$i` text-ref, `#i` count-ref, `N$M.K…` cross-stage ref. A bare `$`/`#` with no
-// index is literal (a `litToken` via the lexer), so a reference needs an index
-// (or, for the stage form, an explicit `$`).
-reference : DOLLAR INT
-          | HASH INT
-          | INT DOLLAR (INT (DOT INT)*)?
+// `$i` text-ref, `#i` count-ref, and the stage forms `N$ N$i N# N#i`. A bare
+// `$`/`#` with no stage and no index is literal (a `litToken` via the lexer), so a
+// reference needs a stage, an index, or both. The two sigils are symmetric (the
+// old rule had no `N#i`), and an index is a single top-level group number — flat,
+// no `.K` sub-paths, matching the spec's flat self-reference table.
+reference : INT (DOLLAR | HASH) INT?         // stage form: N$  N$i  N#  N#i
+          | (DOLLAR | HASH) INT              // no stage:   $i  #i  (index required)
           ;
 anchor    : AT (LT LT? | GT GT?) ;   // @< @> line, @<< @>> document
 macro     : AT NAME ;
@@ -164,8 +172,8 @@ primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN
           | INT
           | STRING
           ;
-accessor  : INT? (DOLLAR | HASH) (INT (DOT INT)*)?   // $  $i  #i  N$M  N$M.K
-          | DOT                                       // `.` the current match/value
+accessor  : INT? (DOLLAR | HASH) INT?    // $  $i  #i  N$  N$i  N#  N#i  (flat index)
+          | DOT                          // `.` the current match/value
           ;
 filter    : NAME ;                                   // closed native set, no args
 
@@ -177,7 +185,9 @@ filter    : NAME ;                                   // closed native set, no ar
 // token, and `//` comments are a documented pre-pass (above), so the lexer never
 // needs to know "am I inside a brace / quote / comment". `=>` `<=>` `::` tokenize
 // the same everywhere; the *parser* decides whether each is structure (top level,
-// brace separators) or literal text (inside a brace arm).
+// brace separators) or literal text (inside a brace arm). Insignificant whitespace
+// is likewise removed by the depth-aware pre-pass (it is literal only inside a
+// `{…}` brace body or a `"…"` template), so there is no WS token at all.
 
 FIXARROW : '<=>' ;
 ARROW    : '=>' ;
@@ -200,14 +210,14 @@ AT       : '@' ;
 DOLLAR   : '$' ;
 HASH     : '#' ;
 PIPE     : '|' ;
-STAR     : '*' ;
-PLUS     : '+' ;
 LPAREN   : '(' ;
 RPAREN   : ')' ;
 EQ       : '=' ;
 LT       : '<' ;
 GT       : '>' ;
-CARET    : '^' ;
+
+// `^` `*` `+` have no structural role anywhere — not anchors, not separators, not
+// moustache operators — so they are not tokenized; they fall through to TEXT.
 
 // A fixed-width hex code-point escape (`\xHH` / `\uHHHH` / `\UHHHHHHHH`); HEX_ESC
 // wins over ESC by being longer. Any other `\X` is a one-char escape.
@@ -221,15 +231,17 @@ NAME     : [A-Za-z_] [A-Za-z0-9_]* ;
 
 NL       : ('\r'? '\n')+ ;
 
-// Spaces/tabs are hidden: they still separate tokens (so two adjacent names stay
-// two tokens) but the parser ignores them, matching the implementation where step
-// whitespace is stripped (`phase0`) and a moustache expression skips whitespace
-// (`engine/_render`). A literal space *inside* a brace (a `{ }` space alphabet)
-// collapses to an empty arm — which the σ-grammar already permits — so the
-// recognizer still accepts it.
-WS       : [ \t]+ -> channel(HIDDEN) ;
+// No WS token. Insignificant spaces/tabs are removed by the depth-aware pre-pass
+// (the same pass that strips `//` comments and splits logical lines), which keeps
+// whitespace *only* inside a `{…}` brace body and a `"…"` template — the two places
+// it is literal text — and drops it everywhere else (around steps and arrows,
+// inside a `[count]`). So `{ }` keeps its space and matches one space, and `@s`'s
+// ` ` member is the real space character, while `{a} {b}` and `[1 .. 6]` are
+// whitespace-free by the time this grammar runs. (Previously this was a hidden WS
+// channel, which silently collapsed `{ }` to an empty arm — a lost space.)
 
-// Any other single character (punctuation, Unicode, …) is literal text.
+// Any other single character (punctuation, Unicode, a literal space inside a brace
+// or template, `^` `*` `+`, …) is literal text.
 TEXT     : . ;
 
 fragment HEXDIGIT : [0-9a-fA-F] ;
