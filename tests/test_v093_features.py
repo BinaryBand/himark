@@ -118,57 +118,9 @@ def test_unknown_filter_raises():
         ex('{a} => "{{ . | nope }}"', "a")
 
 
-def test_b256_value_filter_reads_capture_as_number():
-    # A group accessor carries the alphabet it matched under, so b256 reads '256'
-    # as the base-10 value 256 and re-encodes it as two big-endian bytes.
-    assert ex('{@d::0..65535} => "{{ 0$0 | b256(2) }}"', "256") == ["\x01\x00"]
-
-
-def test_b256_on_raw_string_stage_ref_raises():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    # `0$` is the whole stage text — a raw string with no alphabet, so a value
-    # filter cannot read it as a number.
-    with pytest.raises(CompileError):
-        ex('{@d::0..65535} => "{{ 0$ | b256(2) }}"', "256")
-
-
-def test_b256_overflow_raises():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    with pytest.raises(CompileError):
-        ex('{@d::0..65535} => "{{ 0$0 | b256(1) }}"', "256")
-
-
 def test_string_filter_still_works_on_value_accessor():
     # A value accessor degrades gracefully to its text under a string filter.
     assert ex('{@d::0..65535} => "{{ 0$0 | trim }}"', "256") == ["256"]
-
-
-def test_b58_decodes_as_bitcoin_base58_value():
-    # {@d},{@u},{@l},!{0,l,I,O} works as a value alphabet: '21' is base-58 value 58,
-    # so b256(1) emits the single byte 0x3a, and uint reads it back as 58.
-    assert ex(
-        '{{@d},{@u},{@l},!{0,l,I,O}::1..zz} => "{{ 0$0 | b256(1) | uint }}"', "21"
-    ) == ["58"]
-
-
-def test_b58_value_round_trips_through_b256_and_uint():
-    # A multi-byte base-58 value decodes to bytes and back without a hash in sight:
-    # `v | b256(n) | uint` == v is the value model's two projections composing.
-    btc = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-    token = "abc"
-    iv = 0
-    for c in token:
-        iv = iv * 58 + btc.index(c)
-    out = ex(
-        '{{@d},{@u},{@l},!{0,l,I,O}::1..zzzzz} => "{{ 0$0 | b256(8) | uint }}"', token
-    )
-    assert out == [str(iv)]
 
 
 def test_payload_marker_splits_doc_and_pipe():

@@ -117,7 +117,7 @@ A bare `,` **lists points** the enclosing context can tell apart: `{a,b}` = `{a.
 
 ## Values and ordering
 
-Bands, counts, references, and arithmetic all read **value**. An alphabet is an **ordered sequence of points** with an **increment** (successor) and **equality**. Each point has a 0-based **ordinal** (its index in the alphabet in force -- a band's prefix, else ambient `@uni`). An **object** is opaque to a value operator -- its faces share one ordinal, so all spellings compare equal.
+Bands, counts, and references all read **value**. An alphabet is an **ordered sequence of points** with an **increment** (successor) and **equality**. Each point has a 0-based **ordinal** (its index in the alphabet in force -- a band's prefix, else ambient `@uni`). An **object** is opaque to a value operator -- its faces share one ordinal, so all spellings compare equal.
 
 A single point's value is its ordinal. A string $p_0 \ldots p_{k-1}$ over alphabet size $b$ is positional, most-significant-first:
 
@@ -125,24 +125,13 @@ $$\text{value} = \sum_{i} \text{ordinal}(p_i) \cdot b^{k-1-i}$$
 
 Over `@d` `255`=255; over `@l` `aa`=0, `zz`=675. Comparison is **by ordinal, never raw codepoint** (they coincide only for `@uni`, `@ascii`, `@b256`). This is why `@w` slices: ordinals put `a/A`=10 ... `f/F`=15 ... `z/Z`=35, `_`=36, so `0..f` is ordinals 0--15 and stops below `_`.
 
-**A capture is `<alphabet, range, value>`** -- the alphabet matched under (codec), the range in force (band, which fixes **width**), the value (ordinal). The value is what arithmetic reads.
+**A capture is `<alphabet, range, value>`** -- the alphabet matched under (codec), the range in force (band, which fixes **width**), the value (ordinal). The value is what a **band** or **reference** compares (`{@d::0..$0}`, `{$0}`).
 
-Two **projections**:
-
-- **text** -- value rendered back through its alphabet (codec + width); what `{{ $i }}` produces.
-- **bytes** -- value in big-endian base-256, width from the range; what `b256` produces and `uint` reads back.
+It projects back to **text** -- the value rendered through its alphabet (codec + width), which is what `{{ $i }}` produces.
 
 A **named** alphabet makes value meaningful: `{@d}` on "11" is integer 11; bare `{0..9}` on "11" is codepoints 49,49. `{@d}`"11" and `{@l}`"l" are both value 11 (different base/width, same value).
 
 > **Matching position is concrete text** -- the triple is a template/value-time view. A reference re-matches the **exact text**: `{{a,A}}{$0}` matches `aa` or `AA`, never `aA`.
-
----
-
-## :symbols: Carriers and operators
-
-Values are integers: `Z` is the carrier of every alphabet (`@d`, `@l`, `@hex`, the byte alphabets), and a **ring**, so the operators are integer `+` (add), `-` (subtract), and `*` (multiply). A computed result has **no alphabet**, so it needs a **render-cast**: `Z` defaults to `@d`, `| @hex` re-codecs. (`7 + 8` -> value 15, "15"; `8 - 5` -> 3.) Subtraction is the ring's inverse, so a difference may be **negative** -- the default `@d` cast has no negative spelling, so keep a difference non-negative or consume it in further arithmetic before it renders.
-
-> **Carrier is the extension hook.** Each alphabet's carrier is fixed at compile time. Today every carrier is `Z`, so `*` has one meaning and there is nothing to disambiguate. A future **library alphabet** (a curve group, say) could carry its own algebra -- overloading `*` as a scalar action against ring multiply -- with cross-carrier misuse caught as a compile-time error.
 
 ---
 
@@ -163,7 +152,7 @@ A **band** restricts an alphabet's values. The alphabet is the **payload** (any 
 
 Either endpoint may be omitted (`{@d::0..}` is $\geq 0$, `{@d::..255}` is $\leq 255$); **both** omitted is a compile error (write `{@d}`).
 
-A band's **width follows endpoint widths**: `{@d::00..99}` is two wide, `{@d::000..999}` three, `{@d::0..999}` one-to-three (narrower endpoint = min, wider = max). For a fixed width regardless of value use a count (`{@d}[3]`); to **produce** padded output use `pad` -- padding is never inferred from a bound's spelling.
+A band's **width follows endpoint widths**: `{@d::00..99}` is two wide, `{@d::000..999}` three, `{@d::0..999}` one-to-three (narrower endpoint = min, wider = max). For a fixed width regardless of value use a count (`{@d}[3]`) -- padding is never inferred from a bound's spelling.
 
 An endpoint is a value, so a **reference** may stand in, resolved at match time by magnitude: `{@d::0..$0}` matches a decimal $\leq$ group 0 (width-agnostic -- more positions than the referent is larger), `{@d::$0..}` matches one $\geq$ it. A reference that didn't capture, or a referent outside the alphabet, does not resolve. `\$` is literal.
 
@@ -240,7 +229,7 @@ A reference: optional **stage** (a leading number), **sigil** (`$` text, `#` cou
 | ---------------- | --------------------------------------------------------- |
 | `{$i}` / `{N$i}` | the **text** of group `i` -- current match, or stage `N`  |
 | `{#i}` / `{N#i}` | the **count** of group `i` -- current match, or stage `N` |
-| `{N$}`           | stage `N`'s **whole** text (a raw string)                 |
+| `{N$}`           | stage `N`'s **whole** text (plain text)                    |
 | `[#i]` / `[N#i]` | (in a count) repeat as group `i` did                      |
 
 ```proto
@@ -250,7 +239,7 @@ A reference: optional **stage** (a leading number), **sigil** (`$` text, `#` cou
 
 An index names a **top-level group** of the addressed step, resolved at **compile time** (an index naming no group is a compile error). At match time, a reference whose group exists but didn't capture (an unmatched alternative, a zero-count run) **does not match**. A bare `$`/`#` is literal (`\$` to be explicit); a sigil is a reference only with a stage or index, so `{#}` is `#` and `{#0}` is group 0's count.
 
-> In **matching** position a reference is concrete text; the text-vs-value distinction matters only in **template** position, where a filter may consume it.
+> In **matching** position a reference re-matches concrete text; only a band endpoint (`{@d::0..$0}`) reads it as a **value** instead.
 
 ---
 
@@ -289,32 +278,25 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-What **flows** is every moustache's value concatenated. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Operators, tightest to loosest:
+What **flows** is every moustache's value concatenated. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Two operators, tightest to loosest:
 
-- `*` -- multiply
-- `+` / `-` -- add / subtract
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
-All left-associative; parens override. So `("<h", #0, ">")` is one value, and `$0 + $2 | b256` = `($0 + $2) | b256`; to filter one operand first, parenthesize: `($h | uint(le)) * 256`. Carrier typing applies; a computed result is render-cast. The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
+Both left-associative; parens override. So `("<h", #0, ">")` is one value (the three concatenated), and `$2 | trim` pipes group 2 through a filter. The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
 
 ### Filters
 
-A moustache value may be piped through **filters** -- a small, fixed set of pure, deterministic **primitives**: `{{ accessor | f | g }}`. Filters are **template-only**, so the matcher stays declarative. This is deliberately _not_ a general standard library: `b256`/`uint` are the value model's two [projections](#values-and-ordering) surfaced into templates, and `pad` is output formatting -- nothing here is use-case-specific. Derived transforms (hashes, curve operations, ...) are **out of scope** -- deferred to a future layer of bit/crypto primitives, not expressible here.
+A moustache value may be piped through **filters** -- a small, fixed, native set of pure string transforms: `{{ accessor | f | g }}`. Filters are **template-only** (the matcher stays declarative) and take **no arguments**; everything in a template is text.
 
-A value is either a **value** (a named-alphabet capture, carrying alphabet/range/value) or a **raw string** (a whole-stage `{{ i$ }}`, the flowing `{{ $ }}`, any string-filter output, a bare-Unicode-range or subtractive capture). **String** filters read either; a **value** filter or arithmetic on a raw string is a compile error.
+| Filter   | Effect                            |
+| -------- | --------------------------------- |
+| `trim`   | strip leading/trailing whitespace |
+| `indent` | prefix every line with one tab    |
 
-| Filter              | Kind   | Effect                                                                                                   |
-| ------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| `pad(n)`            | string | left-pad with `0` to width `n`                                                                           |
-| `b256` / `b256(n)` / `b256(le)` / `b256(n,le)` | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
-| `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
+`indent` is a **line** filter -- a tab on every line -- so indentation **accumulates** under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
 
-Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d::0..255}`=1 byte, `{@d::000..999}` and `{@l::aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
-
-**The filter set is closed.** These primitives are the whole vocabulary -- there is **no user-declared filter form**. A transform that needs more than value/byte arithmetic has two honest homes: a **string-shape** change (trim a run, split on a delimiter) belongs in **matching position**, where the pattern already expresses it -- to trim, capture the non-space core and let the surrounding whitespace fall outside the group; a **value/byte** transform the primitives can't reach (a hash, a curve op) **waits on the deferred crypto layer**. A composition mechanism could return alongside that layer, once there are primitives worth composing.
-
-No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.
+**The filter set is closed.** These are the whole vocabulary -- there is **no user-declared filter form**. A transform that needs more has two honest homes: a **string-shape** change (split on a delimiter, bound a field) belongs in **matching position**, where the pattern already expresses it -- to trim, capture the non-space core and let the surrounding whitespace fall outside the group; a **value/byte** transform (a hash, a base-256 encode, a curve op) is **out of scope**, deferred to a future layer of bit/crypto primitives. Such a layer could reintroduce value filters and a composition mechanism, once there are primitives worth composing.
 
 ---
 

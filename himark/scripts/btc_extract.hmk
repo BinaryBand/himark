@@ -9,7 +9,7 @@
 //
 //  This is a *structural* (layer-1) extractor. It does NOT validate the
 //  checksum -- base58check is a double SHA-256, a derived transform deferred to
-//  a layer built on the arithmetic/byte primitives (see docs/HMK.md, Filters).
+//  a future bit/crypto layer (see docs/HMK.md, Filters).
 //  So an address-shaped base58 word with a bad checksum is still tagged;
 //  filtering those out is the job of the (layer-2) checksum.
 //

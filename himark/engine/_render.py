@@ -23,7 +23,6 @@ import re
 from dataclasses import dataclass
 
 from himark.engine.backend import Match
-from himark.engine.backend.alphabet import Alphabet, RangeAlphabet
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 
@@ -34,46 +33,11 @@ _FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 
 @dataclass(slots=True)
 class _Value:
-    """A moustache value flowing through an expression and its filter chain. `text`
-    is the surface string; `alphabet` (set only for a **group** accessor over a
-    `{A::x..y}` bound) lets a value filter read it as a number. `num` is set for a
-    **computed** integer (`$0 + 1`, `2 * #0`) — a `Z` result with no alphabet that
-    render-casts to decimal. A whole-stage accessor, `{{.}}`, a string literal, and
-    any string-filter output carry neither — they are raw strings."""
+    """A moustache value flowing through an expression and its filter chain -- a
+    surface string. (The matcher carries the value model; the template layer only
+    ever moves text now that byte filters and arithmetic are gone.)"""
 
     text: str
-    alphabet: Alphabet | RangeAlphabet | None = None
-    num: int | None = None
-
-
-def _to_int(v: _Value) -> int:
-    """The integer value of `v` for arithmetic: a computed `num`, else a typed
-    group read through its alphabet. A raw string has no value — a compile error."""
-    if v.num is not None:
-        return v.num
-    if v.alphabet is not None:
-        return v.alphabet.value(v.text)
-    raise CompileError(
-        f"arithmetic needs a value (a typed-alphabet group or an integer), "
-        f"not the raw string {v.text!r}"
-    )
-
-
-def _to_text(v: _Value) -> str:
-    """The surface text of `v` — a computed integer render-casts to decimal (`@d`)."""
-    return str(v.num) if v.num is not None else v.text
-
-
-def _as_bytes(s: str, filt: str) -> bytes:
-    """The byte string of `s` — one byte per code point, matching b256's latin-1
-    output so a byte string round-trips (`… | b256(n) | uint`)."""
-    try:
-        return s.encode("latin-1")
-    except UnicodeEncodeError:
-        raise CompileError(
-            f"{filt} operates on a byte string (code points 0-255); "
-            "pipe through b256 first"
-        ) from None
 
 
 def _indent(s: str) -> str:
@@ -84,53 +48,13 @@ def _indent(s: str) -> str:
     return "" if s == "" else "\t" + s.replace("\n", "\n\t")
 
 
-def _arg(nums: list[int], name: str) -> int:
-    """The single integer argument a width/count filter needs, or a clear error."""
-    if len(nums) != 1:
-        raise CompileError(f"Filter '{name}' needs exactly one integer argument")
-    return nums[0]
-
-
-def _filter_b256(value: _Value, nums: list[int], little: bool) -> str:
-    """The reference's value as base-256 bytes (latin-1 string), big-endian unless
-    `le`. The only **value** filter — it needs the alphabet the reference matched
-    under. Width is the `b256(n)` argument."""
-    n = _arg(nums, "b256")
-    if value.num is not None:
-        iv = value.num
-    elif value.alphabet is not None:
-        iv = value.alphabet.value(value.text)
-    else:
-        raise CompileError(
-            "b256 needs a value (a '{A::x..y}' group or an arithmetic result), "
-            "not a raw string"
-        )
-    try:
-        return iv.to_bytes(n, "little" if little else "big").decode("latin-1")
-    except OverflowError:
-        raise CompileError(f"b256({n}): value {iv} does not fit in {n} bytes") from None
-
-
-def _filter_uint(value: _Value, nums: list[int], little: bool) -> str:
-    """A byte string back to an unsigned integer (decimal text), big-endian unless
-    `le` — the inverse of `b256`, so `v | b256(n) | uint` round-trips."""
-    raw = _as_bytes(value.text, "uint")
-    return str(int.from_bytes(raw, "little" if little else "big"))
-
-
-# The native primitive filters. Each maps `(value, nums, little)` to a raw string:
-# `nums` are the integer arguments, `little` is set by an `le` flag (cleared by
-# `be`). The spec's core set is `pad`/`b256`/`uint` — the value model's two byte
-# projections plus output padding; hashes and other derived transforms are deferred
-# to a layer above these primitives. `trim`/`indent` are convenience string
-# filters. *Derived* filters (composed from these in the `.hmk`
-# prelude, see `himark/prelude.py`) are dispatched separately in `_apply_filter`.
+# The native filter set — closed and string-only: each maps a `_Value` to a raw
+# string. `trim` strips surrounding whitespace; `indent` tabs every line. Byte
+# projections and arithmetic were removed (no live consumer), so a filter takes no
+# arguments and the template layer only ever moves text.
 _FILTERS = {
-    "trim": lambda v, nums, little: v.text.strip(),
-    "indent": lambda v, nums, little: _indent(v.text),
-    "pad": lambda v, nums, little: v.text.rjust(_arg(nums, "pad"), "0"),
-    "b256": _filter_b256,
-    "uint": _filter_uint,
+    "trim": lambda v: v.text.strip(),
+    "indent": lambda v: _indent(v.text),
 }
 
 
@@ -192,8 +116,6 @@ _EXPR_TOKEN_RE = re.compile(
     | (?P<int>\d+)
     | (?P<lparen>\()
     | (?P<rparen>\))
-    | (?P<star>\*)
-    | (?P<plus>\+)
     | (?P<pipe>\|)
     | (?P<comma>,)
     """,
@@ -218,10 +140,10 @@ def _tokenize(s: str) -> list[tuple[str, str]]:
 
 
 class _ExprParser:
-    """Recursive descent over a moustache expression. Precedence tightest to
-    loosest: `*`, `+`, `|` (filter), `,` (concat, parentheses only). Each rule
-    returns a `_Value`; arithmetic reads `Z` values and yields a computed integer,
-    `,` concatenates surface text, `|` applies a filter."""
+    """Recursive descent over a moustache expression: an operand (accessor, int or
+    string literal, or a parenthesized group) followed by zero or more `| filter`
+    pipes; inside parens, `,` concatenates surface text. Each rule returns a
+    `_Value` (raw text)."""
 
     def __init__(self, toks: list[tuple[str, str]], current: str, stages):
         self.toks = toks
@@ -241,29 +163,13 @@ class _ExprParser:
         return value
 
     def _pipe(self) -> _Value:
-        value = self._add()
+        value = self._atom()
         while self._peek() == "pipe":
             self.i += 1
             if self._peek() != "filter":
                 raise CompileError("'|' must be followed by a filter")
             value = _apply_filter(self.toks[self.i][1], value)
             self.i += 1
-        return value
-
-    def _add(self) -> _Value:
-        value = self._mul()
-        while self._peek() == "plus":
-            self.i += 1
-            n = _to_int(value) + _to_int(self._mul())
-            value = _Value(str(n), num=n)
-        return value
-
-    def _mul(self) -> _Value:
-        value = self._atom()
-        while self._peek() == "star":
-            self.i += 1
-            n = _to_int(value) * _to_int(self._atom())
-            value = _Value(str(n), num=n)
         return value
 
     def _atom(self) -> _Value:
@@ -274,7 +180,7 @@ class _ExprParser:
         if kind == "string":
             return _Value(text[1:-1])  # a raw string
         if kind == "int":
-            return _Value(text, num=int(text))
+            return _Value(text)
         if kind == "accessor":
             if text == ".":
                 return _Value(self.current)
@@ -292,20 +198,19 @@ class _ExprParser:
         self.i += 1  # consume ')'
         if len(members) == 1:
             return members[0]  # plain grouping
-        return _Value("".join(_to_text(m) for m in members))  # concatenation
+        return _Value("".join(m.text for m in members))  # concatenation
 
 
 def _eval(inner: str, current: str, stages: list[Match]) -> str:
-    """Evaluate a moustache body — an expression over accessors, integer/string
-    literals, `*`/`+` arithmetic, `,` concatenation, and `|` filters — to text."""
-    return _to_text(_ExprParser(_tokenize(inner), current, stages).parse())
+    """Evaluate a moustache body — accessors, integer/string literals, `,`
+    concatenation, and `|` filters — to text."""
+    return _ExprParser(_tokenize(inner), current, stages).parse().text
 
 
 def _apply_filter(token: str, value: _Value) -> _Value:
-    """Apply one `name` or `name(args)` filter, returning a raw-string `_Value`.
-    Arguments are integers (width/count) plus an optional `le`/`be` endianness
-    flag (default big-endian). The filter set is closed and native; a name outside
-    it is a compile error."""
+    """Apply one named filter, returning a raw-string `_Value`. The filter set is
+    closed and native (`trim`, `indent`); an unknown name or any argument is a
+    compile error."""
     m = _FILTER_RE.fullmatch(token)
     if m is None:
         raise CompileError(f"Malformed template filter: '{token.strip()}'")
@@ -313,19 +218,9 @@ def _apply_filter(token: str, value: _Value) -> _Value:
     fn = _FILTERS.get(name)
     if fn is None:
         raise CompileError(f"Unknown template filter: '{name}'")
-    nums: list[int] = []
-    little = False
-    for a in (p.strip() for p in arg_src.split(",")) if arg_src else ():
-        if a in ("le", "be"):
-            little = a == "le"
-            continue
-        try:
-            nums.append(int(a))
-        except ValueError:
-            raise CompileError(
-                f"Filter '{name}' argument must be an integer or 'le'/'be': '{a}'"
-            ) from None
-    return _Value(fn(value, nums, little))
+    if arg_src:
+        raise CompileError(f"Filter '{name}' takes no arguments")
+    return _Value(fn(value))
 
 
 def _resolve(expr: str, stages: list[Match]) -> _Value:
@@ -349,6 +244,5 @@ def _resolve(expr: str, stages: list[Match]) -> _Value:
     if capture is None:
         raise CompileError(f"Moustache index out of range in {{{{{expr}}}}}")
     if sigil == "#":
-        return _Value(str(len(capture.reps)))  # repetition count — a number
-    # A group accessor carries the alphabet it matched under (its value type).
-    return _Value(capture.text, capture.alphabet)
+        return _Value(str(len(capture.reps)))  # repetition count
+    return _Value(capture.text)

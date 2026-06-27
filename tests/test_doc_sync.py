@@ -59,14 +59,6 @@ def test_doc_subtractive_universe_examples():
     assert matches("!{|,\\n}", "a|b") == ["a", "b"]
 
 
-def test_doc_b256_value_filter_example():
-    # The Filters section: a group accessor carries its alphabet, so b256 reads
-    # '256' as the value 256 and emits it as two big-endian bytes.
-    assert execute(parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2) }}"'), "256") == [
-        "\x01\x00"
-    ]
-
-
 def test_doc_primitives_vs_objects():
     # Headline model: a comma-list is ordered primitives; nesting makes an object
     # whose faces are interchangeable. So `{a,A}[2]` stays in one point (aa/AA),
@@ -126,19 +118,11 @@ def test_doc_anchors():
 
 
 def test_doc_filters():
-    # The Filters section's core set is pad / b256 / uint (hashes and other derived
-    # transforms are deferred to a layer above these primitives).
-    assert execute(parser.parse('{@d::0..} => "{{ 0$0 | pad(4) }}"'), "7") == ["0007"]
-    assert execute(
-        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2) | uint }}"'), "258"
-    ) == ["258"]
-    # `v | b256(n) | uint` round-trips when endianness matches; `le` flips it.
-    assert execute(
-        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) | uint(le) }}"'), "258"
-    ) == ["258"]
-    assert execute(
-        parser.parse('{@d::0..65535} => "{{ 0$0 | b256(2,le) | uint }}"'), "258"
-    ) == ["513"]  # 0x0201 big-endian = 513 — confirms le reversed the bytes
+    # The Filters section: the closed native set is the string filters trim / indent.
+    assert execute(parser.parse('{!x}[1..] => "{{ . | trim }}"'), "  hi  ") == ["hi"]
+    assert execute(parser.parse('{!x}[1..] => "{{ . | indent }}"'), "a\nb") == [
+        "\ta\n\tb"
+    ]
 
 
 def test_doc_filters_omit_deferred_crypto():

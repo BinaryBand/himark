@@ -49,4 +49,4 @@ def test_non_declaration_line_is_an_error(tmp_path, monkeypatch):
 def test_filter_declaration_is_now_rejected(tmp_path, monkeypatch):
     # Derived filters were removed; a `filter …` line is no longer a declaration.
     with pytest.raises(CompileError):
-        _load("filter le16 = . | b256(2,le)\n", tmp_path, monkeypatch)
+        _load("filter trimmed = . | trim\n", tmp_path, monkeypatch)

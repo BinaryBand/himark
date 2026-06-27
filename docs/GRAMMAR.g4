@@ -154,13 +154,11 @@ declaration : macroDecl ;
 macroDecl   : AT NAME EQ braceBody ;          // @d = 0..9 , @hex = {@d},{@w::..f}
 
 // ── Moustache expression (second layer — the inside of one `{{ … }}`) ─────────
-// Applied to each `{{ … }}` interior. Operators,
-// tightest to loosest: `*`  `+`  `|` (filter pipe)  `,` (concatenate, in parens).
+// Applied to each `{{ … }}` interior. An operand, then `|`-piped filters; inside
+// parens, `,` concatenates surface text. (Byte filters and arithmetic were removed.)
 moustacheExpression : GT? moustacheExpr EOF ; // `{{> … }}` payload marker is optional
 moustacheExpr : pipeExpr ;
-pipeExpr  : addExpr (PIPE filter)* ;
-addExpr   : mulExpr (PLUS mulExpr)* ;
-mulExpr   : primary (STAR primary)* ;
+pipeExpr  : primary (PIPE filter)* ;
 primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN
           | accessor
           | INT
@@ -169,9 +167,7 @@ primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN
 accessor  : INT? (DOLLAR | HASH) (INT (DOT INT)*)?   // $  $i  #i  N$M  N$M.K
           | DOT                                       // `.` the current match/value
           ;
-filter    : NAME (LPAREN filterArgs? RPAREN)? ;
-filterArgs : filterArg (COMMA filterArg)* ;
-filterArg  : INT | NAME ;
+filter    : NAME ;                                   // closed native set, no args
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Lexer
