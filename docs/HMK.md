@@ -159,9 +159,9 @@ A **band** restricts an alphabet's values. The alphabet is the **payload** (any 
 {::9..12,1..5}      // ambient union: 9,10,11,12,1,2,3,4,5
 ```
 
-**When `::` separates.** A brace is a **band** when its body holds a **top-level `::`**. That first `::` splits the **payload** (left, the alphabet) from the **band** (right); every other `::`, and **every single `:`**, is **literal**. So `{12:30}`, `{https://x.com}`, and `{key:value}` need no escape -- they hold only single colons. A literal `::` is escaped `\::` (escape either colon), so a C++ qualified name is `{std\::vector}`.
+**When `::` separates.** A brace is a **band** when its body holds a **top-level `::`**: that first `::` splits the **payload** (left, the alphabet) from the **band** (right). Every other `::` and every single `:` is literal -- the escaping mechanics, and `{std\::vector}`, are under [Escaping](#escaping).
 
-> The separator is purely structural: band-ness comes from a top-level `::` alone, with no inspection of the head or the right side. **Meaning** still wants a **typed head** for a single-value or union band: `{@d::5}` is `5` over `@d`, `{@d::1,3,5}` the set {1,3,5}. A lone-value band over a bare range (`{a..z::b}`) is a degenerate form -- the value just restates a literal, so write `{b}`. A single colon is literal, so `{a..z:b}` is plainly the string `a..z:b`.
+> The separator is purely structural: band-ness comes from a top-level `::` alone, with no inspection of the head or the right side. **Meaning** still wants a **typed head** for a single-value or union band: `{@d::5}` is `5` over `@d`, `{@d::1,3,5}` the set {1,3,5}. A lone-value band over a bare range (`{a..z::b}`) is degenerate -- the value just restates a literal, so write `{b}`.
 
 Either endpoint may be omitted (`{@d::0..}` is $\geq 0$, `{@d::..255}` is $\leq 255$); **both** omitted is a compile error (write `{@d}`).
 
@@ -286,7 +286,7 @@ A statement's result is **(span, output)** pairs. The semantics is **splice**: e
 {@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs
 ```
 
-The rule must **contract** toward a fixed point; one that grows the document (`{a} <=> "aa"`) or oscillates never settles. The runner halts on a pass that lengthens or repeats a state; a provably non-contracting rule is rejected at compile time. Use `=>` for a single pass. `<=>` is an arrow only at top level; only a single statement can be looped, not a whole group.
+The rule must **contract** toward a fixed point; one that grows the document (`{a} <=> "aa"`) or oscillates never settles. The runner halts on a pass that lengthens or repeats a state; a provably non-contracting rule is rejected at compile time. Use `=>` for a single pass; only a single statement can be looped, not a whole group.
 
 ### Expressions
 
