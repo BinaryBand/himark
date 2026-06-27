@@ -17,15 +17,6 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 - **member** (comma-listed or lone) -> **object**: one position an enclosing operator sees as **one opaque point** -- it can't tell the interchangeable spellings ("faces") apart. `{{a,A}}` is one case-folded position. **Value-bearing** (see [Congruence](#congruence)).
 - **adjacent** -> **grouping brace**: packaging so an operator binds the whole sequence. `{of{black}{quartz}}` is one operand. **Content-only** (see [Captures](#captures)).
 
-```mermaid
-flowchart TD
-  U[universe] -->|matches exactly one| Pt[point]
-  Pt --> Pr["primitive -- one char/string"]
-  Pt --> Ob["object -- one opaque point"]
-  Nest[nesting] -->|member| Ob
-  Nest -->|adjacent| Grp["grouping brace -- one operand"]
-```
-
 ```proto
 {a,A}          // one alphabet, two points: 'a' or 'A'
 {{a,A}}        // one object, one position: 'a'/'A' folded to one value
@@ -182,10 +173,11 @@ An endpoint is a value, so a **reference** may stand in, resolved at match time 
 
 ### Subtraction
 
-`!{...}` is the **subtractive universe**: one char that does **not begin any member of `{...}` at this position**. Plain complement is the one-char case (`!{a}` = any char but `a`); a union applies each member's condition. A **multi-char** member is a **break**: `!{ab}` is to `!{a,b}` as `{ab}` is to `{a,b}` -- comma lists members, adjacency makes one member. So a run `!{```}[1..]` stops at the **nearest** sequence -- scanning to a delimiter with no lazy operator:
+`!{...}` is the **subtractive universe**: one char that does **not begin any member of `{...}` at this position**. Plain complement is the one-char case (`!{a}` = any char but `a`); a union applies each member's condition. A **multi-char** member is a **break**: `!{ab}` is to `!{a,b}` as `{ab}` is to `{a,b}` -- comma lists members, adjacency makes one member. So a run ```` !{```}[1..] ```` stops at the **nearest** sequence -- scanning to a delimiter with no lazy operator:
 
-```proto {@d,@l,@u,!{0,l,I,O}}    // base58: digits + letters minus four ambiguous chars {<!--}!{-->}[1..]{-->}   // HTML comment: body runs to the nearest -->
-
+```proto
+{@d,@l,@u,!{0,l,I,O}}    // base58: digits + letters minus four ambiguous chars
+{<!--}!{-->}[1..]{-->}   // HTML comment: body runs to the nearest -->
 ```
 
 > A break is **not** per-char exclusion -- `!{()}` passes a lone `(` or `)`, stopping only before the sequence `()`. To exclude either: `!{(,)}`.
@@ -212,7 +204,8 @@ A run is **greedy**: it takes the longest count in range that still lets the res
 `[n]` repeats **one point**: a primitive verbatim (`{a..z}[3]`=`aaa`), an object's members free (`{{a..z}}[3]` = any three letters). An **alphabet of objects** stays within one object: `{{a,A},{c,C}}[2]` is `{a,A}{a,A}` or `{c,C}{c,C}`, never a cross like `ac`. A **grouping brace** under `[count]` matches a **fresh instance per repetition**, captured as one string.
 
 ```proto
-{a..z}[2,4,6]               // same letter 2, 4, or 6 times {{|}!{|,\n}[1..]}[2..]{|}   // 2+ '|'+cell units, each cell different
+{a..z}[2,4,6]               // same letter 2, 4, or 6 times
+{{|}!{|,\n}[1..]}[2..]{|}   // 2+ '|'+cell units, each cell different
 ```
 
 ---
@@ -251,7 +244,8 @@ A reference: optional **stage** (a leading number), **sigil** (`$` text, `#` cou
 | `[#i]` / `[N#i]` | (in a count) repeat as group `i` did                      |
 
 ```proto
-{a..z}{$0}        // doubled letter: 'aa','bb' (not 'ab') {a}[2..]{-}[#0]   // as many '-' as 'a': 'aaa---','aa--'
+{a..z}{$0}        // doubled letter: 'aa','bb' (not 'ab')
+{a}[2..]{-}[#0]   // as many '-' as 'a': 'aaa---','aa--'
 ```
 
 An index names a **top-level group** of the addressed step, resolved at **compile time** (an index naming no group is a compile error). At match time, a reference whose group exists but didn't capture (an unmatched alternative, a zero-count run) **does not match**. A bare `$`/`#` is literal (`\$` to be explicit); a sigil is a reference only with a stage or index, so `{#}` is `#` and `{#0}` is group 0's count.
@@ -276,15 +270,18 @@ Stages are numbered by `=>` position, **counting queries only** (a template does
 A statement's result is **(span, output)** pairs. The semantics is **splice**: every statement, at every depth, lays its outputs back over their spans and keeps the text between -- which lets templates compose, branches nest, and `<=>` iterate. A flat **list** (spans dropped) is a **host projection** for extraction, not a second semantics.
 
 ```proto
-"# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>" // lands "<h1>Hello</h1>" {@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
+"# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>" // lands "<h1>Hello</h1>"
+{@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
 ```
 
 ### Fixed point
 
 `<=>` instead of `=>` **re-splices over the whole document until the result stops changing** -- the splice version of a `while` loop. Each pass is an ordinary `=>` splice; passes repeat until one makes no change. Use it for input-dependent iteration: peel the innermost tag pair, mask an interior newline, swap an out-of-order pair until sorted.
 
-````proto
-{(}!{(,)}[..]{)} <=> "{{$1}}"                // strip innermost (...), deepest first {@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs ```
+```proto
+{(}!{(,)}[..]{)} <=> "{{$1}}"                // strip innermost (...), deepest first
+{@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs
+```
 
 The rule must **contract** toward a fixed point; one that grows the document (`{a} <=> "aa"`) or oscillates never settles. The runner halts on a pass that lengthens or repeats a state; a provably non-contracting rule is rejected at compile time. Use `=>` for a single pass. `<=>` is an arrow only at top level; only a single statement can be looped, not a whole group.
 
@@ -292,7 +289,7 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$j`), integer/string literals, and parentheses. Operators, tightest to loosest:
+What **flows** is every moustache's value concatenated. Operands: accessors (`$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Operators, tightest to loosest:
 
 - `*` -- multiply
 - `+` -- add
@@ -310,7 +307,7 @@ A value is either a **value** (a named-alphabet capture, carrying alphabet/range
 | Filter              | Kind   | Effect                                                                                                   |
 | ------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
 | `pad(n)`            | string | left-pad with `0` to width `n`                                                                           |
-| `b256` / `b256(n)`  | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
+| `b256` / `b256(n)` / `b256(le)` / `b256(n,le)` | value  | value as base-256 bytes, big-endian (`b256(le)` little); width from band high endpoint, or forced by `n` |
 | `uint` / `uint(le)` | string | byte string -> unsigned integer, big-endian (`le` little) -- inverse of `b256`                           |
 
 Byte filters work one byte per code point, so they compose. A bare `b256` takes its width from the band's **high endpoint** (`{@d::0..255}`=1 byte, `{@d::000..999}` and `{@l::aa..zz}`=2); pass `b256(n)` for an open/wider band. `b256` needs a value; on a raw string it errors. `uint` is its inverse (byte string -> `Z`, render-cast applies). Both default big-endian; match endianness to round-trip -- `v | b256(n) | uint` = `v`.
@@ -318,7 +315,6 @@ Byte filters work one byte per code point, so they compose. A bare `b256` takes 
 **Derived filters.** The primitives above are native; new filters are _composed_ from them in the prelude (`himark/std.hmk`) with `filter name = <expr>`, where `<expr>` is a moustache expression over the primitives and operators and `.` is the piped-in value. So `filter le16 = . | b256(2,le)` names a two-byte little-endian encode; `{{ $0 | le16 }}` then stands for `{{ $0 | b256(2,le) }}`. This is the layer-2 extension seam: the irreducible primitives stay in the core, everything else is declared. (Derived filters are parameterless for now.)
 
 No slice filters -- adjacency and counts already cut a byte string by position. Emit with `b256`, then a query slices: `{{@b256}}[21]{{@b256}}[4]` captures a 25-byte body `$0` and checksum `$1` (use the object form; `{@b256}[n]` repeats one byte). A prefix test needs no slice: `{$1}{{@b256}}[..]` matches a byte string only when it **begins with** `$1` -- the adjacency-as-prefix mechanic Base58Check uses to test a checksum without ever slicing the first four bytes. Computing that checksum is a double hash, so end-to-end Base58Check waits on the layer-2 crypto; the **structural** match -- version byte, 20-byte payload, 4-byte checksum -- needs only `b256` and adjacency and is fully layer 1.
-````
 
 ---
 
@@ -332,7 +328,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 
 **One statement per logical line.** A statement may span several **physical** lines two ways: a `{...}` group or `"..."` template that runs long stays one logical line (a newline _inside_ a brace or quote does not end the statement), and a line whose first token is an **arrow** (`=>` / `<=>`) **continues** the previous statement -- the chain wrapped across lines for readability. Any other non-blank line **starts** a new statement; a blank line is ignored.
 
-**`//` starts a line comment** -- but only at brace/quote **depth 0**, running to end of line. So a top-level `// note` is stripped, while `{//}` (a literal `//` alphabet) and a `http://...` inside a brace or template survive untouched. (Depth-aware comment stripping and line-joining are a small pre-pass; a flat regex can't express "only at depth 0", which is why the spelling stays structural -- see the [ANTLR branch](#antlr-branch-divergences-from-mainline-011) notes.)
+**`//` starts a line comment** -- but only at brace/quote **depth 0**, running to end of line. So a top-level `// note` is stripped, while `{//}` (a literal `//` alphabet) and a `http://...` inside a brace or template survive untouched.
 
 ```proto
 // tidy: one statement, wrapped onto continuation lines
@@ -359,7 +355,7 @@ Definitions expand **textually before tokenizing** and leave no trace downstream
 
 **The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
 
-- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@d},{@w::..f}`). A script-local definition is the same form, scoped to one file.
+- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
 - `filter name = <expr>` binds a [derived filter](#filters): a moustache expression over the primitive filters, with `.` the piped-in value (`filter le16 = . | b256(2,le)`).
 
 A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).
