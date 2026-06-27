@@ -138,7 +138,11 @@ def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
     atoms = term.atom()
     if all(_atom_is_literal(a) for a in atoms):
         return unescape(term.getText())
-    if len(atoms) == 1 and atoms[0].braceGroup() is not None and atoms[0].count() is None:
+    if (
+        len(atoms) == 1
+        and atoms[0].braceGroup() is not None
+        and atoms[0].count() is None
+    ):
         return _brace_singleton(atoms[0].braceGroup())
     return None
 
@@ -192,7 +196,11 @@ def _resolve_term(term: GRAMMARParser.TermContext) -> t.SemanticNode:
 
     # A single nested brace: transparent (`{ {a..z} }` == `{a..z}`) unless it is a
     # singleton, in which case it is a literal match of that value.
-    if len(atoms) == 1 and atoms[0].braceGroup() is not None and atoms[0].count() is None:
+    if (
+        len(atoms) == 1
+        and atoms[0].braceGroup() is not None
+        and atoms[0].count() is None
+    ):
         sval = _brace_singleton(atoms[0].braceGroup())
         if sval is not None:
             return t.LiteralNode(content=sval)
@@ -394,7 +402,9 @@ def parse(text: str, macros: dict[str, str] | None = None) -> list[t.RootNode]:
         pre = phase1.preprocess(step, macros=macros)
         stripped = pre.strip()
         if len(stripped) >= 2 and stripped.startswith('"') and stripped.endswith('"'):
-            roots.append(t.RootNode(children=[t.LeafNode(content=unescape(stripped[1:-1]))]))
+            roots.append(
+                t.RootNode(children=[t.LeafNode(content=unescape(stripped[1:-1]))])
+            )
             continue
         roots.append(_resolve_pattern(_parse_pattern_tree(pre)))
     return roots

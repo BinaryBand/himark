@@ -248,13 +248,17 @@ def _check_golden(built: dict[str, Any], path: Path, label: str) -> None:
 
 def test_pattern_ast_golden():
     """The reference parser's AST over the pattern corpus matches its pin."""
-    _check_golden(_build_pattern_asts(parser.parse), GOLDEN / "patterns.json", "pattern")
+    _check_golden(
+        _build_pattern_asts(parser.parse), GOLDEN / "patterns.json", "pattern"
+    )
 
 
 def test_script_ast_golden():
     """The reference parser's AST over every shipped `.hmk` matches its pin."""
     _check_golden(
-        _build_script_asts(precompiled.compile_script), GOLDEN / "scripts.json", "script"
+        _build_script_asts(precompiled.compile_script),
+        GOLDEN / "scripts.json",
+        "script",
     )
 
 

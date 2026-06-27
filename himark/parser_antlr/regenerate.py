@@ -48,10 +48,15 @@ def main() -> None:
     jar = _find_jar()
     OUT.mkdir(parents=True, exist_ok=True)
     cmd = [
-        "java", "-jar", str(jar),
+        "java",
+        "-jar",
+        str(jar),
         "-Dlanguage=Python3",
-        "-visitor", "-no-listener",
-        "-o", str(OUT), "-Xexact-output-dir",
+        "-visitor",
+        "-no-listener",
+        "-o",
+        str(OUT),
+        "-Xexact-output-dir",
         str(GRAMMAR),
     ]
     print("$", " ".join(cmd))
