@@ -34,12 +34,12 @@ member exclusions (`{a..z,!{m..p}}`), `::` value bands over a literal spec
 (`{@d::0..255}`, `{@d::5}`, `{@d::1..5,9..12}`, the open-ended `{@d::..255}` /
 `{@d::128..}`, and the ambient `{::lo..hi}`), the references `{$i}` (back-ref),
 `{#i}` (count-ref) and `{N$}`/`{N$i}` (stage-ref) — including as a band endpoint
-(`{@d::0..$0}`) — and `@name` variable references that resolve to any of those
-(`{@d}`, `{@w}`, `{!@s}`). Counts on braces are parsed. Everything else — the `N#`
-stage count-ref (no phase3 oracle), anchors, grouping `SequenceNode`s, heterogeneous
-`{{…}}`, top-level (un-braced) `@name`, templates with moustaches — raises
-`NotImplementedError`, which the harness records as "not in this slice yet" (skipped);
-an *unhandled* divergence still fails loudly.
+(`{@d::0..$0}`) — the anchors `{@<}`/`{@>}`/`{@<<}`/`{@>>}`, and `@name` variable
+references that resolve to any of those (`{@d}`, `{@w}`, `{!@s}`). Counts on braces
+are parsed. Everything else — the `N#` stage count-ref (no phase3 oracle), grouping
+`SequenceNode`s, heterogeneous `{{…}}`, top-level (un-braced) `@name`, templates with
+moustaches — raises `NotImplementedError`, which the harness records as "not in this
+slice yet" (skipped); an *unhandled* divergence still fails loudly.
 
 Entry point: `parse(text, macros=None) -> list[RootNode]`, matching the reference
 `himark.parser.parse` signature so the candidate plugs into the harness unchanged.
@@ -184,6 +184,16 @@ def _resolve_reference_atom(
     return t.StageRefNode(stage=stage, path=path)
 
 
+def _resolve_anchor_atom(anchor: GRAMMARParser.AnchorContext) -> t.AnchorNode:
+    """Resolve an `anchor` atom (`AT (LT LT? | GT GT?)`) to its zero-width position,
+    mirroring phase3's `@<`/`@>`/`@<<`/`@>>` map. One bracket is a line anchor, two a
+    document anchor; `<` is a start, `>` an end."""
+    lts = anchor.LT()
+    if lts:
+        return t.AnchorNode(at="doc_start" if len(lts) == 2 else "line_start")
+    return t.AnchorNode(at="doc_end" if len(anchor.GT()) == 2 else "line_end")
+
+
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
     """The single concrete value of a `term`, or None if it is not a singleton.
 
@@ -244,7 +254,9 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
 
 def _is_whole_nested_brace(universe: GRAMMARParser.UniverseContext) -> bool:
     """True if a universe is exactly one un-counted nested brace (`{{X}}`) — the
-    object/heterogeneous nesting phase3 resolves specially."""
+    nesting that **constructs** a single opaque congruence position (a listed fold
+    for an enumerable inner, a lazy heterogeneous run for a range/value inner).
+    phase3 resolves it specially; here it is the marker for the (out-of-slice) fold."""
     arms = universe.arm()
     if len(arms) != 1 or arms[0].RANGE() is not None:
         return False
@@ -327,6 +339,8 @@ class _Resolver:
         atoms = term.atom()
         if len(atoms) == 1 and atoms[0].reference() is not None:
             return _resolve_reference_atom(atoms[0].reference())
+        if len(atoms) == 1 and atoms[0].anchor() is not None:
+            return _resolve_anchor_atom(atoms[0].anchor())
         for a in atoms:
             _guard_in_slice_atom(a)
 
@@ -491,10 +505,12 @@ class _Resolver:
             node = self.resolve_band(band)
         else:
             universe = band.universe()[0]
-            # Whole-content single nested brace `{{X}}` (no outer `!`): phase3 treats
-            # this as object/heterogeneous nesting (a fold or a lazy het run), not a
-            # plain arm. Out of the braceBody σ-slice. (A complement `{!{…}}` keeps its
-            # BANG, so the `body.BANG()` guard lets it through to the complement path.)
+            # Whole-content single nested brace `{{X}}` (no outer `!`): the nesting
+            # *constructs* one opaque congruence position — a listed fold for an
+            # enumerable inner (`{{a,A}}`), a lazy het run for a range/value inner
+            # (`{{a..z}}`). Distinct from a bare `{a,A}` (two primitives), so it is not
+            # a plain arm. Out of the braceBody σ-slice. (A complement `{!{…}}` keeps
+            # its BANG, so the `body.BANG()` guard lets it through to the complement.)
             if body.BANG() is None and _is_whole_nested_brace(universe):
                 raise NotImplementedError(
                     "object/heterogeneous `{{…}}` not in braceBody slice"

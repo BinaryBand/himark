@@ -232,10 +232,13 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if split is not None:
         return _resolve_band(*split)
 
-    # Object nesting `{{X}}`: a brace whose whole content is one nested brace is
-    # a single object. A materialisable inner (`{{a,A}}`) folds its members into
-    # one congruence group, repeated with faces free; a range/value inner
-    # (`{{a..z}}`) stays a lazy heterogeneous run (a fresh match per rep).
+    # Object nesting `{{X}}`: a brace whose whole content is one nested brace folds
+    # to a single opaque **position** — this nesting *is* the congruence step (the
+    # single-axis operators `[count]`/`..`/band/ref each act on one point, so a
+    # multi-face point must be built by nesting). A materialisable inner (`{{a,A}}`)
+    # lists its faces as one congruence group; a range/value inner (`{{a..z}}`) keeps
+    # that one position lazy as a heterogeneous run. "Faces free per `[count]`" is a
+    # consequence of the opacity the nesting created, not its cause.
     stripped = strip_unescaped(content)
     if stripped.startswith("{") and brace_end(stripped) == len(stripped):
         inner = _resolve_brace(inner_of(stripped))
@@ -315,11 +318,13 @@ def _apply_member_exclusions(members: list[str], exclusions: list[str]) -> list[
 
 def _arm_group(node: t.SemanticNode) -> list[list[str]] | None:
     """The congruence groups one comma-arm contributes, or None when the arm is a
-    range/value/complement that cannot be materialised. A bare token is one
-    singleton group; a flat class of primitives folds into a single object
-    (`{a,A}` → `[[a, A]]`); a class that is already an ordered alphabet of objects
-    keeps its groups in order (`{{a,A},{b,B}}` stays two folded positions, so `@w`
-    is 26 ordered case-folds)."""
+    range/value/complement that cannot be materialised. A bare token is one singleton
+    group. The fold here **is** the nesting step: an arm that is itself a flat class
+    of primitives — the inner `{a,A}` of `{{a,A},…}`, or the whole inner of `{{a,A}}`
+    — collapses to one congruence group (`[[a, A]]`, one opaque position); an arm
+    already an ordered alphabet of objects (`{{a,A},{b,B}}`) keeps its groups in order
+    (two folded positions, so `@w` is 26 ordered case-folds). A non-nested `{a,A}`
+    never reaches this fold — it is two singleton groups."""
     if isinstance(node, t.LiteralNode):
         return [[node.content]]
     if isinstance(node, t.GroupClassNode):

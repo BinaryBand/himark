@@ -139,9 +139,13 @@ class AnchorNode:
 
 @dataclass(slots=True, kw_only=True)
 class HeterogeneousNode:
-    """A nested universe `{{U}}` — repeats **heterogeneously**: a fresh match of
-    `inner` per rep (`{{a,A}}[2]` is aa/aA/Aa/AA), unlike a bare `{U}[n]` which
-    repeats the same matched string."""
+    """A nested universe `{{U}}` whose inner is a **lazy** alphabet (a range/value,
+    not an enumerable member list) — one opaque position that repeats
+    **heterogeneously**: a fresh match of `inner` per rep (`{{a..z}}[2]` is any two
+    letters — `ab`, `zq`, …), unlike a bare `{U}[n]` which repeats the same matched
+    string. The position, and its opacity, come from the **nesting**; a nesting with
+    an enumerable inner (`{{a,A}}`) folds to a `GroupClassNode` instead. Both are one
+    position built by `{{…}}`, differing only in whether the faces are listed or lazy."""
 
     inner: SemanticNode
     type: Literal["heterogeneous"] = "heterogeneous"
@@ -152,11 +156,14 @@ class GroupClassNode:
     """The single congruence primitive: an ordered list of congruence groups,
     each a set of interchangeable spellings of one position.
 
-    A bare comma-list `{a,A}` is one group (`[[a, A]]`) — its members are
-    interchangeable, so `[2]` folds case (`aa`, `aA`, `Aa`, `AA`). An ordered
-    alphabet of classes `{{a,A},{b,B},…}` is many groups (`[[a,A],[b,B],…]`),
-    built by a union of single-group classes. This is `~` in the `(Σ, ≤, ~)`
-    model; `..` builds `≤` (ordered ranges) instead."""
+    The **outer** list is positions (distinguishable points); the **inner** list is
+    the congruent faces at one position. A face count > 1 comes **only from nesting**
+    — never from a bare `,`. A bare comma-list `{a,A}` is two primitives an operator
+    picks between, so it is two singleton groups (`[[a], [A]]`, the same as `{a..b}`);
+    nesting `{{a,A}}` folds them into one position with two faces (`[[a, A]]`), so
+    `[2]` frees the faces (`aa`/`aA`/`Aa`/`AA`). An ordered alphabet of folded
+    positions `{{a,A},{b,B},…}` is many two-face groups (`[[a,A],[b,B],…]`). This is
+    `~` in the `(Σ, ≤, ~)` model; `..` builds `≤` (ordered ranges) instead."""
 
     type: Literal["group_class"] = "group_class"
     groups: list[list[str]] = field(default_factory=list)
