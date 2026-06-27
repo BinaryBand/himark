@@ -645,10 +645,11 @@ def test_moustache_count_ref():
 
 
 def test_moustache_multi_stage_index():
-    # Stages are numbered by => position, templates included: stage 0 is the
-    # query, stage 1 the template before this one (addressable by its render).
+    # Stages are numbered by => position, templates included. Each stage's `N$` is
+    # the branch's flowing value (not its decorated render), and a downstream result
+    # splices back into the moustache's span -- so `got 1` lands inside `<...>`.
     out = execute(parser.parse('{@d} => "<{{0$}}>" => "got {{1$}}"'), "1 2")
-    assert out == ["got <1>", "got <2>"]
+    assert out == ["<got 1>", "<got 2>"]
 
 
 def test_moustache_splices_in_place():
@@ -754,12 +755,13 @@ def test_stage_ref_distinct_from_back_ref():
 
 
 def test_template_composes_via_flowing_text():
-    # {{.}} is the flowing text, so a later template wraps the earlier render.
+    # {{.}} is the flowing value; decoration does not flow, so the later template
+    # wraps just `cat` and nests inside the earlier `<table>`.
     out = execute(
         parser.parse('{cat} => "<table>{{.}}</table>" => "<super>{{.}}</super>"'),
         "cat",
     )
-    assert out == ["<super><table>cat</table></super>"]
+    assert out == ["<table><super>cat</super></table>"]
 
 
 def test_query_after_template_matches_the_render():

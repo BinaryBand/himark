@@ -67,7 +67,7 @@
 // a '|'. Every such line not already starting with '|' gets a leading + trailing
 // one; Phase 4 then handles both forms with the same machinery.
 {@<}{!{\n,|}}[..]{|}{!\n}[..]{\n}{@<}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@>}{\n}{{@<}{!{\n,|}}[..]{|}{!\n}[..]{\n}[0,1]}[0..]
-    => "{{>.}}"
+    => "{{.}}"
     => {@<}{!{|,\n}}{!\n}[..]
     => "|{{.}}|"
 
@@ -86,19 +86,19 @@
 
 // Blockquote: a run of '>' lines, joined inside one <blockquote>.
 {{@<}{>}{ }[0,1]{!\n}[1..]{\n}[0,1]}[1..]
-    => "<blockquote>{{>.}}</blockquote>"
+    => "<blockquote>{{.}}</blockquote>"
     => {@<}{>}{ }[0,1]{!\n}[1..]
     => "{{$2}} "
 
 // Unordered list: a run of -, *, or + bullet lines, wrapped in <ul>.
 {{@<}{-,*,+}{ }[1..]{!\n}[1..]{\n}[0,1]}[1..]
-    => "<ul>{{>.}}</ul>"
+    => "<ul>{{.}}</ul>"
     => {@<}{-,*,+}{ }[1..]{!\n}[1..]
     => "<li>{{$2}}</li>"
 
 // Ordered list: a run of `N.` lines, wrapped in <ol> (renumbered by the browser).
 {{@<}{{@d}}[1..]{.}{ }[1..]{!\n}[1..]{\n}[0,1]}[1..]
-    => "<ol>{{>.}}</ol>"
+    => "<ol>{{.}}</ol>"
     => {@<}{{@d}}[1..]{.}{ }[1..]{!\n}[1..]
     => "<li>{{$3}}</li>"
 
@@ -110,9 +110,9 @@
 // grouping brace `{{!|,\n}[0..]{!|,\n, ,\t}}` captures a core ending on a non-space.
 {@<}{ }[0..]{|}{{ ,:,-,|}}[3..]{@>}{\n} => ""
 {{@<}{ }[0..]{|}{!\n}[0..]{\n}[0,1]}[2..]
-    => "<table>{{>.}}</table>"
+    => "<table>{{.}}</table>"
     => {@<}{{!\n}}[1..]{|}{ }[0..]{@>}
-    => "<tr>{{> $0 }}</tr>"
+    => "<tr>{{ $0 }}</tr>"
     => {|}{ }[0..]{{!|,\n}[0..]{!|,\n, ,\t}}{ }[0..]
     => "<td>{{$2}}</td>"
 

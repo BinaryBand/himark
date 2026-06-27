@@ -156,7 +156,7 @@ macroDecl   : AT NAME EQ braceBody ;          // @d = 0..9 , @hex = {@d},{@w::..
 // ── Moustache expression (second layer — the inside of one `{{ … }}`) ─────────
 // Applied to each `{{ … }}` interior. An operand, then `|`-piped filters; inside
 // parens, `,` concatenates surface text. (Byte filters and arithmetic were removed.)
-moustacheExpression : GT? moustacheExpr EOF ; // `{{> … }}` payload marker is optional
+moustacheExpression : moustacheExpr EOF ;
 moustacheExpr : pipeExpr ;
 pipeExpr  : primary (PIPE filter)* ;
 primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN

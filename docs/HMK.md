@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.12.1 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
+**Version:** 0.12.2 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
 
 <!-- cspell:words himark -->
 
@@ -162,7 +162,7 @@ An endpoint is a value, so a **reference** may stand in, resolved at match time 
 
 ### Subtraction
 
-`!{...}` is the **subtractive universe**: one char that does **not begin any member of `{...}` at this position**. Plain complement is the one-char case (`!{a}` = any char but `a`); a union applies each member's condition. A **multi-char** member is a **break**: `!{ab}` is to `!{a,b}` as `{ab}` is to `{a,b}` -- comma lists members, adjacency makes one member. So a run ```` !{```}[1..] ```` stops at the **nearest** sequence -- scanning to a delimiter with no lazy operator:
+`!{...}` is the **subtractive universe**: one char that does **not begin any member of `{...}` at this position**. Plain complement is the one-char case (`!{a}` = any char but `a`); a union applies each member's condition. A **multi-char** member is a **break**: `!{ab}` is to `!{a,b}` as `{ab}` is to `{a,b}` -- comma lists members, adjacency makes one member. So a run `!{```}[1..]` stops at the **nearest** sequence -- scanning to a delimiter with no lazy operator:
 
 ```proto
 {@d,@l,@u,!{0,l,I,O}}    // base58: digits + letters minus four ambiguous chars
@@ -229,7 +229,7 @@ A reference: optional **stage** (a leading number), **sigil** (`$` text, `#` cou
 | ---------------- | --------------------------------------------------------- |
 | `{$i}` / `{N$i}` | the **text** of group `i` -- current match, or stage `N`  |
 | `{#i}` / `{N#i}` | the **count** of group `i` -- current match, or stage `N` |
-| `{N$}`           | stage `N`'s **whole** text (plain text)                    |
+| `{N$}`           | stage `N`'s **whole** text (plain text)                   |
 | `[#i]` / `[N#i]` | (in a count) repeat as group `i` did                      |
 
 ```proto
@@ -250,7 +250,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it. `$` is the flowing text, so templates compose.
 
-A template is literal text plus `{{ ... }}` moustaches. The full render **lands**; what **flows** to the next stage is the concatenation of moustache contents alone. Text outside the braces decorates (lands, never flows). So `"<h{{#0}}>{{$2}}</h{{#0}}>"` flows `#0+$2+#0`, while `"{{ ("<h", #0, ">", $2, "</h", #0, ">") }}"` flows the whole render.
+A template is literal text plus `{{ ... }}` moustaches. The full render **lands**; text outside the moustaches **decorates** -- it lands but never flows. **Each `{{ ... }}` is its own branch**: its value flows to the next step, is transformed there, and the result is spliced back over just that moustache, the decoration between kept. A template is thus a query's mirror -- a query branches per match, a template per moustache. Use the `,` form to flow several values as **one** branch: `"{{ ("<h", #0, ">") }}"` flows `<h1>` whole, where `"{{"<h"}}{{#0}}{{">"}}"` flows three. A template with **no** moustache flows its whole render as one branch.
 
 > **Arrows are top-level only.** `=>` and `<=>` are recognised as arrows only outside every `{...}`, `[...]`, and `"..."`. Inside a quoted template they are literal text, so a template may contain `=>` freely and never needs to escape it. Keep arrows out of brace and count bodies too -- there they are literal.
 

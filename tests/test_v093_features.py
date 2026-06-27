@@ -1,6 +1,6 @@
 """Tests for the v0.9.3 engine features: count unions, the homogeneity
 flip, and the transformer rework (eager-commit branches, `|` filters,
-`{{> }}` payload, `@<`/`@>` anchors)."""
+branch-per-moustache flow, `@<`/`@>` anchors)."""
 
 from himark import parser
 from himark.engine import execute, find_matches
@@ -123,21 +123,25 @@ def test_string_filter_still_works_on_value_accessor():
     assert ex('{@d::0..65535} => "{{ 0$0 | trim }}"', "256") == ["256"]
 
 
-def test_payload_marker_splits_doc_and_pipe():
-    # {{> }} sends the full render to the document but only the payload downstream.
-    out = ex(
-        '{#}[1..]{!{\\n}}[1..] => "<h{{#0}}>{{> $1 }}</h{{#0}}>" => "[{{.}}]"', "#Hi"
-    )
-    assert out == ["<h1>[Hi]</h1>"]
+def test_decoration_lands_but_does_not_flow():
+    # A template's literal text lands in the document but never flows downstream:
+    # only the moustache value does, so the next query sees "x", not "<div>x</div>",
+    # and {div} finds nothing — the render is left as-is.
+    assert ex('{x} => "<div>{{.}}</div>" => {div} => "HIT"', "x") == ["<div>x</div>"]
 
 
-def test_two_payload_markers_raise():
-    import pytest
+def test_each_moustache_branches_independently():
+    # Two moustaches are two branches: each flows and is transformed on its own,
+    # with the decoration between them (the `<sep>`) kept in place.
+    assert ex('{x} => "{{.}}<sep>{{.}}" => {!q}[1..] => "[{{.}}]"', "x") == [
+        "[x]<sep>[x]"
+    ]
 
-    from himark.models.exceptions import CompileError
 
-    with pytest.raises(CompileError):
-        ex('{a} => "{{> . }}{{> . }}"', "a")
+def test_zero_moustache_template_flows_whole_render():
+    # A template with no moustaches has nothing to single out, so its whole render
+    # flows on as one branch — here {a} matches inside "ab" and is rewritten.
+    assert ex('{x} => "ab" => {a} => "Z"', "x") == ["Zb"]
 
 
 def test_line_anchor_start():

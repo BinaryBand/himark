@@ -126,17 +126,28 @@ def _transform(
     head, rest = steps[0], steps[1:]
 
     if _is_template(head):
-        full, payload, span = _render(head, text, list(ancestors))
-        stage = Match(payload, 0, len(payload), [])
-        if span is None:  # no `{{> }}` — the whole render flows on
+        full, spans = _render(head, text, list(ancestors))
+        if spans is None:  # no moustaches — the whole render flows on as one branch
+            stage = Match(full, 0, len(full), [])
             return _transform(rest, full, (*ancestors, stage), committed=True)
-        # `{{> }}`: `full` lands in the document; only `payload` flows downstream.
         if not rest:
             return full
-        downstream = _transform(rest, payload, (*ancestors, stage), committed=True)
-        if downstream is None:
-            return None
-        return full[: span[0]] + downstream + full[span[1] :]
+        # Each moustache is a branch: its value flows downstream and its result is
+        # spliced back over its own span, keeping the decoration between (the same
+        # splice the query branch below runs, with moustaches playing the matches).
+        pieces: list[str] = []
+        last = 0
+        for start, end in spans:
+            payload = full[start:end]
+            stage = Match(payload, 0, len(payload), [])
+            sub = _transform(rest, payload, (*ancestors, stage), committed=True)
+            if sub is None:
+                return None
+            pieces.append(full[last:start])
+            pieces.append(sub)
+            last = end
+        pieces.append(full[last:])
+        return "".join(pieces)
 
     pieces: list[str] = []
     last = 0

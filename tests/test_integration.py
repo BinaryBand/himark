@@ -94,10 +94,10 @@ def test_http_token_class():
 
 
 def test_template_is_not_terminal():
-    # A template's render flows on: a later query matches it, a later template
-    # wraps it ({{.}} composes).
+    # A template is not terminal: a later template wraps the flowing value. Only the
+    # moustache flows (the `<a>` decoration does not), so `<b>` nests *inside* `<a>`.
     out = execute(parser.parse('{cat} => "<a>{{.}}</a>" => "<b>{{.}}</b>"'), "cat")
-    assert out == ["<b><a>cat</a></b>"]
+    assert out == ["<a><b>cat</b></a>"]
 
 
 def test_counted_group_open_ended():

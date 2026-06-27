@@ -66,14 +66,17 @@ def is_template(tree: t.RootNode) -> bool:
 
 def render(
     template_tree: t.RootNode, current: str, stages: list[Match]
-) -> tuple[str, str, tuple[int, int] | None]:
-    """Render a template into `(full, payload, span)`. `full` is the whole render
-    (what lands in the document); `payload` is the text that flows downstream and
-    `span` its `(start, end)` within `full`. With no `{{> }}` marker the payload
-    is the whole render and `span` is None. `current` is `{{.}}`."""
+) -> tuple[str, list[tuple[int, int]] | None]:
+    """Render a template into `(full, spans)`. `full` is the whole render -- what
+    **lands** in the document. `spans` are the `(start, end)` of each moustache's
+    value within `full`: each is a **branch** that flows downstream independently,
+    spliced back over its own span, with the literal text between (decoration) kept
+    -- the same splice a query runs, with each moustache playing the part of a match.
+    A template with **no** moustaches has nothing to single out, so its whole render
+    flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`."""
     out: list[str] = []
     length = 0
-    payload: tuple[str, int] | None = None
+    spans: list[tuple[int, int]] = []
     for n in template_tree.children:
         if not isinstance(n, t.LeafNode):
             continue
@@ -83,26 +86,17 @@ def render(
             literal = text[last : mo.start()]
             out.append(literal)
             length += len(literal)
-            inner = mo.group(1).strip()
-            is_payload = inner.startswith(">")
-            if is_payload:
-                inner = inner[1:].strip()
-            value = _eval(inner, current, stages)
-            if is_payload:
-                if payload is not None:
-                    raise CompileError("At most one '{{> }}' marker per template")
-                payload = (value, length)
+            value = _eval(mo.group(1).strip(), current, stages)
+            start = length
             out.append(value)
             length += len(value)
+            spans.append((start, length))
             last = mo.end()
         tail = text[last:]
         out.append(tail)
         length += len(tail)
     full = "".join(out)
-    if payload is None:
-        return full, full, None
-    ptext, pstart = payload
-    return full, ptext, (pstart, pstart + len(ptext))
+    return full, (spans or None)
 
 
 # One expression token. Order matters: a string and an accessor (`0$0`, `$`, `.`)
