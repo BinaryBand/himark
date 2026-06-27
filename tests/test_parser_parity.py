@@ -70,13 +70,26 @@ ParseFn = Callable[..., list]
 # parsing) are omitted, so two ASTs are canon-equal exactly when they are `==`.
 
 
+# `BraceGroupNode.content` is the raw inside-brace *source* echo, not behavior: the
+# engine lowers the `semantic` node and only ever reads `content` in an error message
+# (himark/engine/backend/_compile.py "Unresolved brace group"). It legitimately
+# differs between the text-macro reference (`{@d}` → content `0..9`) and the variable
+# candidate (content `@d`), so comparing it would flag a non-divergence. Excluded so
+# the harness tests *behavioral* AST equivalence. (`LeafNode`/`LiteralNode.content`
+# ARE semantic and stay compared.)
+_INCIDENTAL = {("BraceGroupNode", "content")}
+
+
 def canon(obj: Any) -> Any:
     """Project a node / list / scalar into a JSON-stable comparable structure."""
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        out: dict[str, Any] = {"_t": type(obj).__name__}
+        cls = type(obj).__name__
+        out: dict[str, Any] = {"_t": cls}
         for f in dataclasses.fields(obj):
             # `type` is the Literal discriminator — `_t` already carries it.
             if f.compare is False or f.name == "type":
+                continue
+            if (cls, f.name) in _INCIDENTAL:
                 continue
             out[f.name] = canon(getattr(obj, f.name))
         return out
@@ -184,6 +197,13 @@ PATTERNS: list[tuple[str, str]] = [
     ("count_ref_spec", r"{a}[2..]{b}[#0]"),
     ("multi_step_template", r'{#}[1..] => "<h1>{{.}}</h1>"'),
     ("chained_steps", r"{a..z} => {A..Z} => upper"),
+    # Variable references (`@name`): the reference expands them as text macros, the
+    # candidate resolves them structurally — both must reach the same semantic node.
+    ("var_digit", r"{@d}"),
+    ("var_lower", r"{@l}"),
+    ("var_upper", r"{@u}"),
+    ("var_word", r"{@w}"),
+    ("var_complement_ws", r"{!@s}"),
 ]
 
 # Script tier: every shipped `.hmk` pipeline, parsed end-to-end (macro expansion,
@@ -298,3 +318,16 @@ def test_script_parity_against_candidate(name):
     except NotImplementedError as e:
         pytest.skip(f"candidate does not implement: {e}")
     assert (d := diff(ref, cand, name)) is None, f"parser divergence at {d}"
+
+
+@pytest.mark.skipif(CANDIDATE is None, reason="no ANTLR candidate parser importable")
+def test_candidate_no_macro_leak_in_template():
+    """The variable model's hygiene win: a `@name` inside a `"…"` template is opaque
+    text, never expanded. The text-macro reference leaks here (expands `@u`); the
+    candidate must not — this is the one *intended* divergence, so it is asserted
+    directly rather than via the parity corpus."""
+    leaf = CANDIDATE.parse('"see @u here"')[0].children[0]
+    assert leaf.content == "see @u here", "candidate expanded a macro inside a template"
+    # Document the reference's leak, so this test fails loudly if the reference is
+    # ever fixed too (at which point the corpus could carry templates-with-@name).
+    assert parser.parse('"see @u here"')[0].children[0].content == "see A..Z here"

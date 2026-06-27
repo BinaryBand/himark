@@ -62,7 +62,7 @@ from himark.prelude import MACROS
 try:  # pragma: no cover - typing-only convenience when generated code is present
     from himark.parser_antlr._generated.GRAMMARParser import GRAMMARParser
 except ModuleNotFoundError:  # pragma: no cover - parser not generated yet
-    GRAMMARParser = None  # type: ignore[assignment]
+    GRAMMARParser = None  # ty:ignore[invalid-assignment]
 
 
 # ── ANTLR plumbing ────────────────────────────────────────────────────────────
