@@ -33,7 +33,7 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 | `!{...}`   | Subtractive     | everything _not_ in `{...}` (ambient Unicode)        |
 | `{U::...}` | Alphabet prefix | band over an alphabet (`{@d::0..9}`)                 |
 | `[count]`  | Repetition      | base-10 count universe (`[n]`, `[x..y]`, `[a,b,c]`)  |
-| `=>`       | Pipe            | feed each match into the next step                   |
+| `=>`       | Arrow           | feed each match into the next step                   |
 | `<=>`      | Fixed point     | re-apply over the document until it settles          |
 
 A position holds one **point** -- a **primitive** (one char/string) or an **object** (nested, interchangeable members). `[count]` repeats **one point** and is **unidimensional** (it sees only its own level; a nested universe is one opaque object). A primitive repeats its fixed spelling; an object's faces are **free per position** (the operator never sees which face it stamps):
@@ -148,7 +148,7 @@ A **band** restricts an alphabet's values. The alphabet is the **payload** (any 
 
 **When `::` separates.** A brace is a **band** when its body holds a **top-level `::`**. That first `::` splits the **payload** (left, the alphabet) from the **band** (right); every other `::`, and **every single `:`**, is **literal**. So `{12:30}`, `{https://x.com}`, and `{key:value}` need no escape -- they hold only single colons. A literal `::` is escaped `\::` (escape either colon), so a C++ qualified name is `{std\::vector}`.
 
-> The separator is now purely structural: the parser decides band-ness from the presence of a top-level `::` alone, with no inspection of the head or the right side. **Meaning** still wants a **typed head** for a single-value or union band: `{@d::5}` is `5` over `@d`, `{@d::1,3,5}` the set {1,3,5}. A lone-value band over a bare range (`{a..z::b}`) is a degenerate form -- the value just restates a literal, so write `{b}`. A single colon is literal, so `{a..z:b}` is plainly the string `a..z:b`.
+> The separator is purely structural: band-ness comes from a top-level `::` alone, with no inspection of the head or the right side. **Meaning** still wants a **typed head** for a single-value or union band: `{@d::5}` is `5` over `@d`, `{@d::1,3,5}` the set {1,3,5}. A lone-value band over a bare range (`{a..z::b}`) is a degenerate form -- the value just restates a literal, so write `{b}`. A single colon is literal, so `{a..z:b}` is plainly the string `a..z:b`.
 
 Either endpoint may be omitted (`{@d::0..}` is $\geq 0$, `{@d::..255}` is $\leq 255$); **both** omitted is a compile error (write `{@d}`).
 
@@ -203,7 +203,7 @@ A run is **greedy**: it takes the longest count in range that still lets the res
 
 Every `{...}` in matching position is a **capture group**, numbered from **0** in source order (assigned when the opening brace is read). Numbering is **flat** -- each group takes the next number.
 
-A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only. (`{1{am,pm}}` is alternation in a unit; folding the inner to `{1{{am,pm}}}` changes nothing observable -- a brace buried in a grouping brace is never addressed or repeated on its own, so object vs. union there is moot.)
+A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only.
 
 Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference -- are each **one** group regardless of inner braces. An **anchor** (`{@<}`) is the exception: zero-width and non-capturing, it takes **no** number, so the groups around it stay contiguous. A repeated group `{X}[n]` is one number, captured as one string.
 
@@ -248,7 +248,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 `=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`); the first is a query. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
 
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
-- a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it. `$` is the flowing text, so templates compose.
+- a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it.
 
 A template is literal text plus `{{ ... }}` moustaches. The full render **lands**; text outside the moustaches **decorates** -- it lands but never flows. **Each `{{ ... }}` is its own branch**: its value flows to the next step, is transformed there, and the result is spliced back over just that moustache, the decoration between kept. A template is thus a query's mirror -- a query branches per match, a template per moustache. Use the `,` form to flow several values as **one** branch: `"{{ ("<h", #0, ">") }}"` flows `<h1>` whole, where `"{{"<h"}}{{#0}}{{">"}}"` flows three. A template with **no** moustache flows its whole render as one branch.
 
@@ -256,7 +256,7 @@ A template is literal text plus `{{ ... }}` moustaches. The full render **lands*
 
 Stages are numbered by `=>` position, **counting queries only** (a template doesn't advance the count), so `{{ i$j }}` and `{N$i}` stay stable when a template is inserted.
 
-A statement's result is **(span, output)** pairs. The semantics is **splice**: every statement, at every depth, lays its outputs back over their spans and keeps the text between -- which lets templates compose, branches nest, and `<=>` iterate. A flat **list** (spans dropped) is a **host projection** for extraction, not a second semantics.
+A statement's result is **(span, output)** pairs. The semantics is **splice**: every statement, at every depth, lays its outputs back over their spans and keeps the text between -- which lets templates compose, branches nest, and `<=>` iterate. A flat **list** (spans dropped) is just the **extraction** view of the same splice.
 
 ```proto
 "# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>" // lands "<h1>Hello</h1>"
@@ -278,7 +278,7 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-What **flows** is every moustache's value concatenated. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Two operators, tightest to loosest:
+A moustache evaluates to one **value**, rendered to text. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Two operators, tightest to loosest:
 
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
@@ -296,7 +296,7 @@ A moustache value may be piped through **filters** -- a small, fixed, native set
 
 `indent` is a **line** filter -- a tab on every line -- so indentation **accumulates** under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
 
-**The filter set is closed.** These are the whole vocabulary -- there is **no user-declared filter form**. A transform that needs more has two honest homes: a **string-shape** change (split on a delimiter, bound a field) belongs in **matching position**, where the pattern already expresses it -- to trim, capture the non-space core and let the surrounding whitespace fall outside the group; a **value/byte** transform (a hash, a base-256 encode, a curve op) is **out of scope**, deferred to a future layer of bit/crypto primitives. Such a layer could reintroduce value filters and a composition mechanism, once there are primitives worth composing.
+**The set is closed** -- no user-declared filters, no arguments. A reshaping that needs more belongs in **matching position**, where the pattern already expresses it: to trim, capture the non-space core and let the surrounding whitespace fall outside the group.
 
 ---
 
