@@ -215,6 +215,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# ANTLR-generated parser (slice migration). Regenerate from docs/GRAMMAR.g4 with
+#   python -m himark.parser_antlr.regenerate
+# Generated code is not checked in — it is a build product of the grammar.
+himark/parser_antlr/_generated/
+
 # Private project files
 .vscode
 static/**/.*

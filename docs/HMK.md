@@ -302,8 +302,6 @@ A moustache value may be piped through **filters** -- a small, fixed, native set
 
 `indent` is a **line** filter -- a tab on every line -- so indentation **accumulates** under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
 
-**The set is closed** -- no user-declared filters, no arguments. A reshaping that needs more belongs in **matching position**, where the pattern already expresses it: to trim, capture the non-space core and let the surrounding whitespace fall outside the group.
-
 ---
 
 ## The `.hmk` file

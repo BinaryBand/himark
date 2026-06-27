@@ -261,12 +261,21 @@ def test_script_ast_golden():
 # ── Tests: live differential (skip without a candidate) ───────────────────────
 
 
+# A candidate may be a *partial* implementation (e.g. the braceBody slice). It
+# signals "this construct isn't implemented yet" by raising `NotImplementedError`,
+# which skips that row. Any *other* outcome — a wrong AST, or a different
+# exception — still fails, so the harness never silently accepts a divergence.
+
+
 @pytest.mark.skipif(CANDIDATE is None, reason="no ANTLR candidate parser importable")
 @pytest.mark.parametrize("pid,src", PATTERNS, ids=[p[0] for p in PATTERNS])
 def test_pattern_parity_against_candidate(pid, src):
     """Reference and candidate parsers agree on the pattern's AST."""
     ref = canon(parser.parse(src))
-    cand = canon(CANDIDATE.parse(src))
+    try:
+        cand = canon(CANDIDATE.parse(src))
+    except NotImplementedError as e:
+        pytest.skip(f"candidate does not implement: {e}")
     assert (d := diff(ref, cand, pid)) is None, f"parser divergence at {d}"
 
 
@@ -277,8 +286,11 @@ def test_script_parity_against_candidate(name):
     candidate's own `compile_script` if it has one, else the injected splitter."""
     source = (SCRIPTS / name).read_text("utf-8")
     ref = canon(precompiled.compile_script(source))
-    if hasattr(CANDIDATE, "compile_script"):
-        cand = canon(CANDIDATE.compile_script(source))
-    else:
-        cand = canon(compile_script_with(source, CANDIDATE.parse))
+    try:
+        if hasattr(CANDIDATE, "compile_script"):
+            cand = canon(CANDIDATE.compile_script(source))
+        else:
+            cand = canon(compile_script_with(source, CANDIDATE.parse))
+    except NotImplementedError as e:
+        pytest.skip(f"candidate does not implement: {e}")
     assert (d := diff(ref, cand, name)) is None, f"parser divergence at {d}"
