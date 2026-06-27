@@ -1,0 +1,910 @@
+{
+  "literal": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "hello",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "hello"
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "char_range": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a..z",
+          "semantic": {
+            "_t": "CharRangeNode",
+            "start": "a",
+            "end": "z",
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "char_range_multi": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "aa..zz",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "aa",
+            "upper": "zz",
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_upper": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::..255",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": null,
+            "upper": "255",
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_lower": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::128..",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": "128",
+            "upper": null,
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_both": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::0..255",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": "0",
+            "upper": "255",
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_single": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::5",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": "5",
+            "upper": "5",
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_union": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::1..5,9..12",
+          "semantic": {
+            "_t": "UnionNode",
+            "options": [
+              {
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "0",
+                  "end": "9",
+                  "exclusions": []
+                },
+                "lower": "1",
+                "upper": "5",
+                "lower_ref": null,
+                "upper_ref": null,
+                "exclusions": []
+              },
+              {
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "0",
+                  "end": "9",
+                  "exclusions": []
+                },
+                "lower": "9",
+                "upper": "12",
+                "lower_ref": null,
+                "upper_ref": null,
+                "exclusions": []
+              }
+            ],
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "value_range_dyn_ref": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "{0..9}",
+          "semantic": {
+            "_t": "HeterogeneousNode",
+            "inner": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            }
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 1,
+            "max": null,
+            "group": null
+          },
+          "count_src": null
+        },
+        {
+          "_t": "LeafNode",
+          "content": "\\,"
+        },
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::0..$0",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": "0",
+            "upper": null,
+            "lower_ref": null,
+            "upper_ref": {
+              "_t": "BackRefNode",
+              "group": 0
+            },
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "union_strings": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "cat,dog",
+          "semantic": {
+            "_t": "GroupClassNode",
+            "groups": [
+              [
+                "cat"
+              ],
+              [
+                "dog"
+              ]
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "group_class_one": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a,A",
+          "semantic": {
+            "_t": "GroupClassNode",
+            "groups": [
+              [
+                "a"
+              ],
+              [
+                "A"
+              ]
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "group_class_alphabet": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "{a,A},{b,B}",
+          "semantic": {
+            "_t": "GroupClassNode",
+            "groups": [
+              [
+                "a",
+                "A"
+              ],
+              [
+                "b",
+                "B"
+              ]
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "complement": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "!{x,y}",
+          "semantic": {
+            "_t": "ComplementNode",
+            "inner": {
+              "_t": "GroupClassNode",
+              "groups": [
+                [
+                  "x"
+                ],
+                [
+                  "y"
+                ]
+              ]
+            }
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "complement_multichar": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "!{-->}",
+          "semantic": {
+            "_t": "ComplementNode",
+            "inner": {
+              "_t": "LiteralNode",
+              "content": "-->"
+            }
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "heterogeneous": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "{0..9}",
+          "semantic": {
+            "_t": "HeterogeneousNode",
+            "inner": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            }
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "anchor_line_start": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "@<",
+          "semantic": {
+            "_t": "AnchorNode",
+            "at": "line_start"
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "anchor_line_end": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "@>",
+          "semantic": {
+            "_t": "AnchorNode",
+            "at": "line_end"
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "anchor_doc_start": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "@<<",
+          "semantic": {
+            "_t": "AnchorNode",
+            "at": "doc_start"
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "anchor_doc_end": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "@>>",
+          "semantic": {
+            "_t": "AnchorNode",
+            "at": "doc_end"
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "sequence": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "of {black} {quartz}",
+          "semantic": {
+            "_t": "SequenceNode",
+            "children": [
+              {
+                "_t": "LeafNode",
+                "content": "of "
+              },
+              {
+                "_t": "BraceGroupNode",
+                "content": "black",
+                "semantic": {
+                  "_t": "LiteralNode",
+                  "content": "black"
+                },
+                "count": null,
+                "count_src": null
+              },
+              {
+                "_t": "LeafNode",
+                "content": " "
+              },
+              {
+                "_t": "BraceGroupNode",
+                "content": "quartz",
+                "semantic": {
+                  "_t": "LiteralNode",
+                  "content": "quartz"
+                },
+                "count": null,
+                "count_src": null
+              }
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "back_ref": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "abc",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "abc"
+          },
+          "count": null,
+          "count_src": null
+        },
+        {
+          "_t": "BraceGroupNode",
+          "content": "$0",
+          "semantic": {
+            "_t": "BackRefNode",
+            "group": 0
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_ref_node": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 2,
+            "max": null,
+            "group": null
+          },
+          "count_src": null
+        },
+        {
+          "_t": "BraceGroupNode",
+          "content": " ",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": " "
+          },
+          "count": null,
+          "count_src": null
+        },
+        {
+          "_t": "BraceGroupNode",
+          "content": "#0",
+          "semantic": {
+            "_t": "CountRefNode",
+            "group": 0
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "stage_ref_whole": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "1$",
+          "semantic": {
+            "_t": "StageRefNode",
+            "stage": 1,
+            "path": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "stage_ref_indexed": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "1$0",
+          "semantic": {
+            "_t": "StageRefNode",
+            "stage": 1,
+            "path": [
+              0
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "exclusion_range": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a..z,!{m..p}",
+          "semantic": {
+            "_t": "CharRangeNode",
+            "start": "a",
+            "end": "z",
+            "exclusions": [
+              "m..p"
+            ]
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "band_ambient": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "0..9::0..255",
+          "semantic": {
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "0",
+              "end": "9",
+              "exclusions": []
+            },
+            "lower": "0",
+            "upper": "255",
+            "lower_ref": null,
+            "upper_ref": null,
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_exact": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 3,
+            "max": 3,
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_range": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 1,
+            "max": 6,
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_open_upper": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 2,
+            "max": null,
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_open_lower": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 0,
+            "max": 5,
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_set": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountSet",
+            "values": [
+              1,
+              3,
+              5
+            ],
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "count_ref_spec": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "a"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 2,
+            "max": null,
+            "group": null
+          },
+          "count_src": null
+        },
+        {
+          "_t": "BraceGroupNode",
+          "content": "b",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "b"
+          },
+          "count": {
+            "_t": "CountRefSpec",
+            "group": 0
+          },
+          "count_src": null
+        }
+      ]
+    }
+  ],
+  "multi_step_template": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "#",
+          "semantic": {
+            "_t": "LiteralNode",
+            "content": "#"
+          },
+          "count": {
+            "_t": "CountRange",
+            "min": 1,
+            "max": null,
+            "group": null
+          },
+          "count_src": null
+        }
+      ]
+    },
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "LeafNode",
+          "content": "<h1>{{.}}</h1>"
+        }
+      ]
+    }
+  ],
+  "chained_steps": [
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "a..z",
+          "semantic": {
+            "_t": "CharRangeNode",
+            "start": "a",
+            "end": "z",
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    },
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "BraceGroupNode",
+          "content": "A..Z",
+          "semantic": {
+            "_t": "CharRangeNode",
+            "start": "A",
+            "end": "Z",
+            "exclusions": []
+          },
+          "count": null,
+          "count_src": null
+        }
+      ]
+    },
+    {
+      "_t": "RootNode",
+      "children": [
+        {
+          "_t": "LeafNode",
+          "content": "upper"
+        }
+      ]
+    }
+  ]
+}
