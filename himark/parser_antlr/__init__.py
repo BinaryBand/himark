@@ -268,7 +268,9 @@ class _Resolver:
         if name not in self._env:
             return t.LiteralNode(content="@" + name)
         if name in self._resolving:
-            raise CompileError(f"circular variable definition: @{name} references itself")
+            raise CompileError(
+                f"circular variable definition: @{name} references itself"
+            )
         self._resolving.add(name)
         try:
             # The body is a σ-universe; wrap it so it parses as one brace group, then
@@ -322,7 +324,9 @@ class _Resolver:
         av = _term_singleton(terms[0])
         bv = _term_singleton(terms[1])
         if av is None or bv is None:
-            raise NotImplementedError("non-literal `..` endpoint not in braceBody slice")
+            raise NotImplementedError(
+                "non-literal `..` endpoint not in braceBody slice"
+            )
         if len(av) == 1 and len(bv) == 1:
             return t.CharRangeNode(start=av, end=bv)
         return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
