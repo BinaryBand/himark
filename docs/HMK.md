@@ -8,6 +8,8 @@
 
 ## :jigsaw: Model
 
+A statement has two first-class sides, joined by the **arrow** `=>`: a **query** that matches and a **template** that emits. This section models the query side -- a pattern; the operator tables below index both.
+
 A pattern is **universes** plus operators. A universe `{...}` is a set of strings; as a pattern it matches **exactly one** element and fills **one position** -- that is all a brace is. Patterns compose by **adjacency**: universes side by side concatenate (Cartesian product), each adding one position. Everything else writes, narrows, or operates on a universe.
 
 A bare `{...}` is **always an alphabet**; its punctuation picks which set: **literal** `{cat}`, **union** `{a,b}`, **range** `{a..z}`, **band** `{@d::0..9}`. Only a **leading sigil** changes the reading: `!{...}` subtracts, `@name` is a macro/anchor, `$`/`#`+index is a reference.
@@ -24,6 +26,8 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 {{cat}{dog}}   // grouping: those two as one operand
 ```
 
+**Match** -- the query side:
+
 | Operator   | Name            | Role                                                 |
 | ---------- | --------------- | ---------------------------------------------------- |
 | `{...}`    | Universe        | set of strings; matches one element                  |
@@ -33,8 +37,17 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 | `!{...}`   | Subtractive     | everything _not_ in `{...}` (ambient Unicode)        |
 | `{U::...}` | Alphabet prefix | band over an alphabet (`{@d::0..9}`)                 |
 | `[count]`  | Repetition      | base-10 count universe (`[n]`, `[x..y]`, `[a,b,c]`)  |
-| `=>`       | Arrow           | feed each match into the next step                   |
-| `<=>`      | Fixed point     | re-apply over the document until it settles          |
+
+**Emit** -- the template side, inside `"..."`:
+
+| Operator      | Name      | Role                                          |
+| ------------- | --------- | --------------------------------------------- |
+| `{{ ... }}`   | Moustache | emit a captured value into output             |
+| `$i` `#i` `.` | Accessor  | a group's text / count, or the current match  |
+| `\|`          | Filter    | transform an emitted value (`trim`, `indent`) |
+| `,`           | Concat    | join values in a moustache (parens only)      |
+
+**Join** -- `=>` feeds each match into the next step; `<=>` re-applies over the whole document until it settles (a fixed point).
 
 A position holds one **point** -- a **primitive** (one char/string) or an **object** (nested, interchangeable members). `[count]` repeats **one point** and is **unidimensional** (it sees only its own level; a nested universe is one opaque object). A primitive repeats its fixed spelling; an object's faces are **free per position** (the operator never sees which face it stamps):
 
@@ -245,7 +258,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 
 ## :repeat: Transformers
 
-`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`); the first is a query. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
+`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The **first** is a query; after it, **each step may be either, in any order** -- a query may follow a query, a template may follow a query, and either may follow a template. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
 
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it.
