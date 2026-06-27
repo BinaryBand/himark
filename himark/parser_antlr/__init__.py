@@ -124,11 +124,6 @@ def _apply_member_exclusions(members: list[str], exclusions: list[str]) -> list[
 # ── Tree-walk: braceBody → semantic node (the phase3 replacement) ─────────────
 
 
-def _terminals(ctx) -> bool:
-    """True if `ctx` is None — small readability helper for optional-token checks."""
-    return ctx is None
-
-
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
     """The single concrete value of a `term`, or None if it is not a singleton.
 
