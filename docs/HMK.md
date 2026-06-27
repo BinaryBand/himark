@@ -258,7 +258,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 
 ## :repeat: Transformers
 
-`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The **first** is a query (a leading template is a **compile error** -- it has no input to match); after it, **each step may be either, in any order** -- a query may follow a query, a template may follow a query, and either may follow a template. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
+`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The first step **bootstraps the branches**: a **query** starts one branch per match, while a leading **template** starts a single branch over the **whole document** (`{{.}}` is the entire input) -- so a bare leading template replaces the document and `"<wrap>{{.}}</wrap>"` wraps it. After the first step, **each step may be either, in any order**. Each branch is transformed independently and outputs **whatever it commits**:
 
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it.
@@ -274,6 +274,7 @@ A statement's result is **(span, output)** pairs. The semantics is **splice**: e
 ```proto
 {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // "# Hello" -> "<h1>Hello</h1>"
 {@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
+"<html>{{.}}</html>"     // leading template: wrap the whole document
 ```
 
 ### Fixed point

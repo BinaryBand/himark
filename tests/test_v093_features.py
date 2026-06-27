@@ -144,17 +144,16 @@ def test_zero_moustache_template_flows_whole_render():
     assert ex('{x} => "ab" => {a} => "Z"', "x") == ["Zb"]
 
 
-def test_statement_must_begin_with_a_query():
-    import pytest
-
-    from himark.models.exceptions import CompileError
-
-    # A leading template has no input to match, so it is rejected -- not silently
-    # read as a literal matcher of its own text.
-    with pytest.raises(CompileError):
-        ex('"hi" => {h}', "hi")
-    with pytest.raises(CompileError):
-        ex('"x"', "x")
+def test_leading_template_is_the_whole_document_branch():
+    # A leading template has no query to locate matches, so the whole document is
+    # one branch with `{{.}}` the entire input: a bare template replaces the
+    # document, and a moustache wraps it.
+    assert ex('"replaced"', "anything") == ["replaced"]
+    assert ex('"<doc>{{.}}</doc>"', "hi") == ["<doc>hi</doc>"]
+    # The chain then continues on that render (the inline-input idiom).
+    assert ex('"# Hi" => {#}[1..]{ }{!\\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"', "x") == [
+        "<h1>Hi</h1>"
+    ]
 
 
 def test_line_anchor_start():

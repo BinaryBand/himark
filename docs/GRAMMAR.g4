@@ -71,9 +71,9 @@ sp        : NL* ;
 statement : step (sp arrow sp step)* ;
 arrow     : ARROW | FIXARROW ;
 
-// A step is a quoted template or a query. The first step is a query in practice;
-// the query-only / template-only split is semantic (enforced by the engine), so
-// the grammar accepts either in any position.
+// A step is a quoted template or a query, either in any position. The first step
+// bootstraps the branches (a query per match, or a leading template over the whole
+// document) -- a semantic distinction the engine makes, not the grammar.
 step      : template
           | pattern
           ;

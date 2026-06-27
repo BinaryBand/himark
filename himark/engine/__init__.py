@@ -1,10 +1,12 @@
 """Direct execution engine for parsed HMK expressions.
 
 A `=>` chain is `step => step => ...`, where each step is a **query** (a matcher)
-or a **template** (plain text with no matchable `{...}`). The first step is a query.
+or a **template** (plain text with no matchable `{...}`).
 
-Execution is a **branch model**. Each match of the first query starts a branch;
-the rest of the chain transforms that branch's text independently:
+Execution is a **branch model**. The first step bootstraps the branches: a **query**
+starts one per match, while a leading **template** starts a single branch over the
+whole document (`{{.}}` is the entire input). The rest of the chain transforms each
+branch's text independently:
 
 * a **query** matches within the branch's text and splices each match's transform
   back in place (keeping the text between matches); a query that matches nothing
@@ -18,7 +20,7 @@ so `{{ i$j }}` / `{N$M}` address any earlier step by position.
 
 The branches render two ways, neither privileged:
 
-* `execute` — the **list** of branch results (one per first-query match that survives).
+* `execute` — the **list** of branch results (one per surviving branch).
 * `splice`  — the source with each branch's span replaced by its result, the text
   between branches kept verbatim (in-place transform).
 """
@@ -100,24 +102,14 @@ def find_matches(
 
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
-    """Return (start, end) positions of all matches of steps[0] in target."""
-    require_query_head(steps)
+    """Return (start, end) positions of all matches of steps[0] in target. A leading
+    template is the whole-document branch, so its span is the whole input."""
+    if steps and _is_template(steps[0]):
+        return [(0, len(target))]
     return [(m.start, m.end) for m in find_matches(steps[0], target)]
 
 
 # ── Branch building ───────────────────────────────────────────────────────────
-
-
-def require_query_head(steps: list[t.RootNode]) -> None:
-    """A statement must begin with a **query** -- the first step locates the matches
-    that become branches, a role a template cannot fill: it has no input to match,
-    and as plain literal text it would be silently read as a matcher of its own
-    text. A leading `"..."` is therefore a `CompileError`."""
-    if steps and _is_template(steps[0]):
-        raise CompileError(
-            'a statement must begin with a query, not a template: a leading "..." '
-            "has no input to match"
-        )
 
 
 def _transform(
@@ -186,9 +178,13 @@ def deltas(
     source span and its transformed result. `execute` lists the texts; `splice`
     lays them back over the source. `stop` caps where a branch may begin (used by
     `splice_to_fixed_point` to skip the already-settled tail)."""
-    require_query_head(steps)
     if not steps:
         return []
+    if _is_template(steps[0]):
+        # A leading template has no query to locate matches: the whole document is
+        # one branch, with `{{.}}` the entire input. Render the chain over it.
+        text = _transform(steps, target, ())
+        return [] if text is None else [(0, len(target), text)]
     head, rest = steps[0], steps[1:]
     result: list[tuple[int, int, str]] = []
     for m in find_matches(head, target, stop=stop):
