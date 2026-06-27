@@ -28,7 +28,7 @@ from pathlib import Path
 import typer
 
 from himark import parser
-from himark.engine import run_pipeline
+from himark.engine import require_query_head, run_pipeline
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 from himark.prelude import MACROS
@@ -50,6 +50,7 @@ def compile_pipeline(statements: list[str]) -> Pipeline:
     for s in statements:
         converted, loop = _split_fixed_point(s)
         steps = parser.parse(converted)
+        require_query_head(steps)
         if loop and steps:
             steps[0].fixed_point = True
         pipeline.append(steps)
@@ -101,6 +102,7 @@ def compile_script(source: str) -> Pipeline:
             continue
         converted, loop = _split_fixed_point(item)
         steps = parser.parse(converted, macros=local)
+        require_query_head(steps)
         if loop and steps:
             steps[0].fixed_point = True
         pipeline.append(steps)

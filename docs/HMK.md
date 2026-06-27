@@ -258,7 +258,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 
 ## :repeat: Transformers
 
-`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The **first** is a query; after it, **each step may be either, in any order** -- a query may follow a query, a template may follow a query, and either may follow a template. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
+`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The **first** is a query (a leading template is a **compile error** -- it has no input to match); after it, **each step may be either, in any order** -- a query may follow a query, a template may follow a query, and either may follow a template. Each match of the first query starts a **branch**, transformed independently. A branch outputs **whatever it commits**:
 
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it.
@@ -272,7 +272,7 @@ Stages are numbered by `=>` position, **counting queries only** (a template does
 A statement's result is **(span, output)** pairs. The semantics is **splice**: every statement, at every depth, lays its outputs back over their spans and keeps the text between -- which lets templates compose, branches nest, and `<=>` iterate. A flat **list** (spans dropped) is just the **extraction** view of the same splice.
 
 ```proto
-"# Hello" => {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>" // lands "<h1>Hello</h1>"
+{#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // "# Hello" -> "<h1>Hello</h1>"
 {@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
 ```
 

@@ -144,6 +144,19 @@ def test_zero_moustache_template_flows_whole_render():
     assert ex('{x} => "ab" => {a} => "Z"', "x") == ["Zb"]
 
 
+def test_statement_must_begin_with_a_query():
+    import pytest
+
+    from himark.models.exceptions import CompileError
+
+    # A leading template has no input to match, so it is rejected -- not silently
+    # read as a literal matcher of its own text.
+    with pytest.raises(CompileError):
+        ex('"hi" => {h}', "hi")
+    with pytest.raises(CompileError):
+        ex('"x"', "x")
+
+
 def test_line_anchor_start():
     # @< is a line start: position 0 or just after a newline.
     assert m("{@<}{x}", "x yx x") == ["x"]

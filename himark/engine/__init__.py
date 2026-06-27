@@ -101,10 +101,23 @@ def find_matches(
 
 def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
     """Return (start, end) positions of all matches of steps[0] in target."""
+    require_query_head(steps)
     return [(m.start, m.end) for m in find_matches(steps[0], target)]
 
 
 # ── Branch building ───────────────────────────────────────────────────────────
+
+
+def require_query_head(steps: list[t.RootNode]) -> None:
+    """A statement must begin with a **query** -- the first step locates the matches
+    that become branches, a role a template cannot fill: it has no input to match,
+    and as plain literal text it would be silently read as a matcher of its own
+    text. A leading `"..."` is therefore a `CompileError`."""
+    if steps and _is_template(steps[0]):
+        raise CompileError(
+            'a statement must begin with a query, not a template: a leading "..." '
+            "has no input to match"
+        )
 
 
 def _transform(
@@ -173,6 +186,7 @@ def deltas(
     source span and its transformed result. `execute` lists the texts; `splice`
     lays them back over the source. `stop` caps where a branch may begin (used by
     `splice_to_fixed_point` to skip the already-settled tail)."""
+    require_query_head(steps)
     if not steps:
         return []
     head, rest = steps[0], steps[1:]
