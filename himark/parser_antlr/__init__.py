@@ -32,13 +32,14 @@ Scope (the `braceBody` σ-core): literal, char-range, multi-char value-range, th
 congruence forms (`{a,A}`, `{cat,dog}`, `{{a,A},{b,B}}`), complement (`{!{x,y}}`),
 member exclusions (`{a..z,!{m..p}}`), `::` value bands over a literal spec
 (`{@d::0..255}`, `{@d::5}`, `{@d::1..5,9..12}`, the open-ended `{@d::..255}` /
-`{@d::128..}`, and the ambient `{::lo..hi}`), and `@name` variable references that
-resolve to any of those (`{@d}`, `{@w}`, `{!@s}`). Counts on braces are parsed.
-Everything else — `$`/`#`/`N$` references (including a reference *band endpoint*),
-anchors, grouping `SequenceNode`s, heterogeneous `{{…}}`, top-level (un-braced)
-`@name`, templates with moustaches — raises `NotImplementedError`, which the harness
-records as "not in this slice yet" (skipped); an *unhandled* divergence still fails
-loudly.
+`{@d::128..}`, and the ambient `{::lo..hi}`), the references `{$i}` (back-ref),
+`{#i}` (count-ref) and `{N$}`/`{N$i}` (stage-ref) — including as a band endpoint
+(`{@d::0..$0}`) — and `@name` variable references that resolve to any of those
+(`{@d}`, `{@w}`, `{!@s}`). Counts on braces are parsed. Everything else — the `N#`
+stage count-ref (no phase3 oracle), anchors, grouping `SequenceNode`s, heterogeneous
+`{{…}}`, top-level (un-braced) `@name`, templates with moustaches — raises
+`NotImplementedError`, which the harness records as "not in this slice yet" (skipped);
+an *unhandled* divergence still fails loudly.
 
 Entry point: `parse(text, macros=None) -> list[RootNode]`, matching the reference
 `himark.parser.parse` signature so the candidate plugs into the harness unchanged.
@@ -145,12 +146,42 @@ def _atom_is_literal(atom: GRAMMARParser.AtomContext) -> bool:
 
 
 def _guard_in_slice_atom(atom: GRAMMARParser.AtomContext) -> None:
-    """Raise for atoms outside the braceBody σ-slice (references / anchors). A `macro`
-    atom is resolved by `_Resolver`, not rejected here."""
+    """Raise for atoms outside the braceBody σ-slice (anchors, and a `reference`
+    glued into a multi-atom term — a sequence). A standalone `reference` atom is
+    resolved by `_resolve_reference_atom`, and a `macro` atom by `_Resolver`, before
+    this guard runs, so neither is rejected here."""
     if atom.reference() is not None:
-        raise NotImplementedError("reference ($/#/N$) not in braceBody slice")
+        raise NotImplementedError(
+            "glued reference ($/#/N$) is a sequence, not in slice"
+        )
     if atom.anchor() is not None:
         raise NotImplementedError("anchor (@</@>) not in braceBody slice")
+
+
+def _resolve_reference_atom(
+    ref: GRAMMARParser.ReferenceContext,
+) -> t.SemanticNode:
+    """Resolve a `reference` atom to its typed node, mirroring phase3._resolve_reference.
+
+    The grammar's `reference` covers `$i  #i  N$  N$i  N#  N#i`, but the parity oracle
+    (phase3) only recognises four: `{$i}` → BackRef, `{#i}` → CountRef, `{N$}`/`{N$i}`
+    → StageRef (flat path). `N#`/`N#i` have no phase3 regex (it would treat them as a
+    literal), so they stay out of slice rather than diverge. The leading-INT alternative
+    is distinguished from the no-stage one by token order (sigil before vs. after INT)."""
+    sigil = ref.DOLLAR() or ref.HASH()
+    is_dollar = ref.DOLLAR() is not None
+    ints = ref.INT()
+    leading_int = (
+        bool(ints) and ints[0].getSymbol().tokenIndex < sigil.getSymbol().tokenIndex
+    )
+    if not leading_int:  # `$i` / `#i` — the no-stage form (index required by grammar)
+        group = int(ints[0].getText())
+        return t.BackRefNode(group=group) if is_dollar else t.CountRefNode(group=group)
+    if not is_dollar:  # `N#` / `N#i` — no phase3 oracle, keep out of slice
+        raise NotImplementedError("stage count-ref `N#` not in references slice")
+    stage = int(ints[0].getText())
+    path = (int(ints[1].getText()),) if len(ints) == 2 else ()  # `{N$}` whole match
+    return t.StageRefNode(stage=stage, path=path)
 
 
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
@@ -294,6 +325,8 @@ class _Resolver:
         """Resolve a single (non-ranged) arm term. Mirrors the single-part path of
         phase3._resolve_arm, plus `@name` variable resolution."""
         atoms = term.atom()
+        if len(atoms) == 1 and atoms[0].reference() is not None:
+            return _resolve_reference_atom(atoms[0].reference())
         for a in atoms:
             _guard_in_slice_atom(a)
 
@@ -387,32 +420,46 @@ class _Resolver:
         value (`{@d::5}` is `5..5`). Mirrors phase3._resolve_band_arm; reference
         endpoints (`$0`) are out of slice."""
         terms = arm.term()
-        if arm.RANGE() is None:  # single value: lower == upper
-            value = self._band_endpoint(terms[0])
-            return t.ValueRangeNode(alpha=alpha, lower=value, upper=value)
-        lower: str | None = None
-        upper: str | None = None
+        if arm.RANGE() is None:  # single value: lower == upper (one endpoint, reused)
+            value, ref = self._band_endpoint(terms[0])
+            return t.ValueRangeNode(
+                alpha=alpha, lower=value, upper=value, lower_ref=ref, upper_ref=ref
+            )
+        lower = upper = None
+        lower_ref = upper_ref = None
         if len(terms) == 2:  # `lo..hi`
-            lower = self._band_endpoint(terms[0])
-            upper = self._band_endpoint(terms[1])
+            lower, lower_ref = self._band_endpoint(terms[0])
+            upper, upper_ref = self._band_endpoint(terms[1])
         elif len(terms) == 1:  # `..hi` (RANGE before term) or `lo..` (RANGE after)
             if arm.RANGE().getSymbol().tokenIndex < terms[0].start.tokenIndex:
-                upper = self._band_endpoint(terms[0])
+                upper, upper_ref = self._band_endpoint(terms[0])
             else:
-                lower = self._band_endpoint(terms[0])
-        if lower is None and upper is None:
+                lower, lower_ref = self._band_endpoint(terms[0])
+        if lower is None and upper is None and lower_ref is None and upper_ref is None:
             raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
-        return t.ValueRangeNode(alpha=alpha, lower=lower, upper=upper)
+        return t.ValueRangeNode(
+            alpha=alpha,
+            lower=lower,
+            upper=upper,
+            lower_ref=lower_ref,
+            upper_ref=upper_ref,
+        )
 
-    def _band_endpoint(self, term: GRAMMARParser.TermContext) -> str:
-        """The literal value of a band endpoint. A reference endpoint (`$0`, `#0`)
-        is out of slice (raises NotImplementedError via the atom guard)."""
-        for a in term.atom():
+    def _band_endpoint(
+        self, term: GRAMMARParser.TermContext
+    ) -> tuple[str | None, t.SemanticNode | None]:
+        """A band endpoint as `(literal, reference)` — mirrors phase3._bound_endpoint.
+        A `$i`/`#i`/`N$i` endpoint is a dynamic reference node (the literal is None);
+        anything else is a literal value. Anchors and glued runs are out of slice."""
+        atoms = term.atom()
+        if len(atoms) == 1 and atoms[0].reference() is not None:
+            return None, _resolve_reference_atom(atoms[0].reference())
+        for a in atoms:
             _guard_in_slice_atom(a)
         sval = _term_singleton(term)
         if sval is None:
             raise NotImplementedError("non-literal band endpoint not in slice")
-        return sval
+        return sval, None
 
     # — brace body / pattern —
 
