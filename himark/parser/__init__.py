@@ -1,10 +1,5 @@
 """ANTLR-backed front-end for the parser (see docs/GRAMMAR.g4).
 
-The candidate the differential harness (tests/test_parser_parity.py) diffs against the
-reference `himark.parser`: both emit the same typed `nodes_typed` AST over the corpus,
-so they are interchangeable for everything downstream (engine, renderer, transpiler).
-Unlike the reference, it resolves `@name` as a **scoped variable**, not a text macro.
-
 Pipeline:
   • ANTLR is the whole front-end: the generated lexer+parser (`_generated/GRAMMAR*`)
     turns a statement into a validated parse tree, splitting the `=>`/`<=>` chain in
@@ -858,6 +853,8 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[t.RootNode
             # step's own source slice and re-parse it (templates are untouched —
             # they took the branch above).
             src = text[step.start.start : step.stop.stop + 1]
-            pattern = _parse_pattern_tree(_text_expand_variables(src, variables)).pattern()
+            pattern = _parse_pattern_tree(
+                _text_expand_variables(src, variables)
+            ).pattern()
         roots.append(resolver.resolve_pattern(pattern))
     return roots
