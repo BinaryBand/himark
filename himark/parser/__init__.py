@@ -6,8 +6,8 @@ so they are interchangeable for everything downstream (engine, renderer, transpi
 Unlike the reference, it resolves `@name` as a **scoped variable**, not a text macro.
 
 Pipeline:
-  • Pre-pass: `phase0.split_statement` (top-level `=>` split) + `rewrites.apply`
-    (structural sugar) + script-local variable text expansion (see below).
+  • Pre-pass: `phase0.split_statement` (top-level `=>` split) + script-local
+    variable text expansion (see below).
   • ANTLR replaces phase2: the generated lexer+parser (`_generated/GRAMMAR*`) turns a
     pattern string into a validated parse tree, `@name` left intact as a `macro` atom.
   • A tree-walking `_Resolver` replaces phase3: it walks `band → universe → arm → term
@@ -45,7 +45,7 @@ from antlr4.error.ErrorListener import ErrorListener
 
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
-from himark.parser import phase0, rewrites
+from himark.parser import phase0
 from himark.parser._count import parse_count
 from himark.parser._text import ESCAPES, split_top, unescape
 from himark.prelude import VARIABLES
@@ -624,9 +624,7 @@ class _Resolver:
         flush_leaf()
         return children
 
-    def resolve_brace_body(
-        self, band: GRAMMARParser.BandContext
-    ) -> t.SemanticNode:
+    def resolve_brace_body(self, band: GRAMMARParser.BandContext) -> t.SemanticNode:
         """Resolve a `band` (a `{…}` interior) into a semantic node — the slice's
         core tree-walk, the phase3 replacement for one rule. Subtraction is never
         here: it is the leading-sigil `!{…}` `complement` atom/factor, resolved
@@ -647,7 +645,9 @@ class _Resolver:
         if _cst_is_sequence_brace(universe):
             # Concatenation grouping (`{of {black} {quartz}}`, several glued
             # constructs): one capture-group scope over a sub-pattern.
-            return t.SequenceNode(children=self._universe_to_sequence_children(universe))
+            return t.SequenceNode(
+                children=self._universe_to_sequence_children(universe)
+            )
         return self.resolve_universe(universe)
 
     def resolve_pattern(self, ctx: GRAMMARParser.PatternOnlyContext) -> t.RootNode:
@@ -691,8 +691,8 @@ class _Resolver:
 def parse(text: str, variables: dict[str, str] | None = None) -> list[t.RootNode]:
     """ANTLR-backed `parse`, signature-compatible with `himark.parser.parse`.
 
-    Shared pre-pass (`phase0` split + `rewrites` sugar), then ANTLR + the slice
-    tree-walk per step, with `@name` resolved as a scoped variable from `VARIABLES`
+    Shared pre-pass (`phase0` split), then ANTLR + the slice tree-walk per step,
+    with `@name` resolved as a scoped variable from `VARIABLES`
     overlaid with `variables`. A whole-step `"…"` template is one verbatim leaf (no
     variable expansion → no template leak); its moustaches are a separate layer.
     Out-of-slice constructs raise `NotImplementedError`.
@@ -703,8 +703,7 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[t.RootNode
     Prelude variables stay structural — they only appear inside braces."""
     resolver = _Resolver({**VARIABLES, **(variables or {})})
     roots: list[t.RootNode] = []
-    for step in phase0.split_statement(text):
-        pre = rewrites.apply(step)
+    for pre in phase0.split_statement(text):
         stripped = pre.strip()
         if len(stripped) >= 2 and stripped.startswith('"') and stripped.endswith('"'):
             roots.append(
