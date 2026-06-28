@@ -54,6 +54,7 @@ from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 from himark.parser import phase0, rewrites
 from himark.parser._count import parse_count
+from himark.parser._shape import is_sequence_brace
 from himark.parser._text import ESCAPES, split_top, unescape
 from himark.prelude import VARIABLES
 
@@ -104,7 +105,10 @@ def _ambient_alpha() -> t.SemanticNode:
     return t.CharRangeNode(start="\x00", end="\U0010ffff")
 
 
-_EXCLUDABLE = (t.CharRangeNode, t.ValueRangeNode, t.UnionNode)
+# A written `{a..z,!…}` range now resolves to a `ValueRangeNode` (over @uni), so
+# `CharRangeNode` — the bare @uni alpha primitive — never reaches exclusion attach.
+# Mirrors phase3._EXCLUDABLE.
+_EXCLUDABLE = (t.ValueRangeNode, t.UnionNode)
 
 
 def _attach_exclusions(node: t.SemanticNode, exclusions: list[str]) -> t.SemanticNode:
@@ -377,8 +381,10 @@ class _Resolver:
             raise NotImplementedError(
                 "non-literal `..` endpoint not in braceBody slice"
             )
-        if len(av) == 1 and len(bv) == 1:
-            return t.CharRangeNode(start=av, end=bv)
+        # τ..τ — a range between two concrete endpoints is a band over ambient @uni
+        # (HMK.md §Universes): `{a..z}` == `{@uni::a..z}`. Single- and multi-char
+        # ranges are one node, mirroring phase3 (`_resolve_universe`'s τ..τ arm);
+        # the engine fast-paths a single-code-point @uni band back to a direct matcher.
         return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
 
     def resolve_arm(self, arm: GRAMMARParser.ArmContext) -> t.SemanticNode:
@@ -506,16 +512,29 @@ class _Resolver:
         else:
             universe = band.universe()[0]
             # Whole-content single nested brace `{{X}}` (no outer `!`): the nesting
-            # *constructs* one opaque congruence position — a listed fold for an
-            # enumerable inner (`{{a,A}}`), a lazy het run for a range/value inner
-            # (`{{a..z}}`). Distinct from a bare `{a,A}` (two primitives), so it is not
-            # a plain arm. Out of the braceBody σ-slice. (A complement `{!{…}}` keeps
-            # its BANG, so the `body.BANG()` guard lets it through to the complement.)
+            # *constructs* one capture-group scope (`SequenceNode`) around the inner
+            # alphabet — a listed fold for an enumerable inner (`{{a,A}}`), a lazy het
+            # run for a range/value inner (`{{a..z}}`) — where re-entry per rep frees
+            # its members afresh. Distinct from a bare `{a,A}` (two primitives). Mirrors
+            # phase3.resolve_grouping_brace's single-nested-brace form. (A complement
+            # `{!{…}}` keeps its BANG, so the guard lets it through to the complement.)
             if body.BANG() is None and _is_whole_nested_brace(universe):
-                raise NotImplementedError(
-                    "object/heterogeneous `{{…}}` not in braceBody slice"
+                inner = universe.arm()[0].term()[0].atom()[0].braceGroup()
+                node = t.SequenceNode(
+                    children=[self.resolve_brace_body(inner.braceBody())]
                 )
-            node = self.resolve_universe(universe)
+            elif body.BANG() is None and is_sequence_brace(universe.getText()):
+                # Concatenation grouping (`{of {black} {quartz}}`, several glued
+                # constructs): one capture-group scope over a sub-pattern. Mirrors
+                # phase3.resolve_grouping_brace's `parse(phase2.parse(content))` — the
+                # grammar already lexed the interior, so re-parsing the universe span as
+                # a `pattern` reuses the same factor structure and the children match
+                # phase3's exactly. Shares phase3's `is_sequence_brace` decision so the
+                # two parsers cannot diverge on grouping-vs-alphabet.
+                sub = self.resolve_pattern(_parse_pattern_tree(universe.getText()))
+                node = t.SequenceNode(children=sub.children)
+            else:
+                node = self.resolve_universe(universe)
 
         if body.BANG() is not None:
             node = t.ComplementNode(inner=node)

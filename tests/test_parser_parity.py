@@ -343,13 +343,10 @@ def test_script_parity_against_candidate(name):
 
 
 @pytest.mark.skipif(CANDIDATE is None, reason=CANDIDATE_SKIP)
-def test_candidate_no_macro_leak_in_template():
-    """The variable model's hygiene win: a `@name` inside a `"…"` template is opaque
-    text, never expanded. The text-macro reference leaks here (expands `@u`); the
-    candidate must not — this is the one *intended* divergence, so it is asserted
-    directly rather than via the parity corpus."""
-    leaf = CANDIDATE.parse('"see @u here"')[0].children[0]
-    assert leaf.content == "see @u here", "candidate expanded a macro inside a template"
-    # Document the reference's leak, so this test fails loudly if the reference is
-    # ever fixed too (at which point the corpus could carry templates-with-@name).
-    assert parser.parse('"see @u here"')[0].children[0].content == "see A..Z here"
+def test_template_opacity_both_parsers():
+    """Template opacity is a hygiene property *both* parsers now share: a `@name`
+    inside a `"…"` template is opaque literal text, never resolved. (The text-macro
+    reference once leaked `@u`→`A..Z` here — the one intended divergence — but the
+    reference is now template-opaque too, so the two agree and this is a parity check.)"""
+    assert CANDIDATE.parse('"see @u here"')[0].children[0].content == "see @u here"
+    assert parser.parse('"see @u here"')[0].children[0].content == "see @u here"
