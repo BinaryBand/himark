@@ -90,7 +90,7 @@ pattern   : factor+ ;
 factor    : (braceGroup | complement | literalRun) count? ;
 
 complement : BANG braceGroup ;
-braceGroup : LBRACE braceBody RBRACE ;
+braceGroup : LBRACE band RBRACE ;
 
 // A top-level bare literal run: default-mode tokens that are neither a delimiter
 // nor an arrow. Insignificant whitespace between constructs is gone before this
@@ -113,15 +113,14 @@ countTerm : INT | countRef ;
 countRef  : HASH INT? ;                      // # (self-bind) or #i (count-ref)
 
 // ── Brace interior — the σ-grammar (`,` unions, `..` ranges, `::` bands) ──────
-// Shared by `{…}` interiors and the prelude's `@name =` RHS. One top-level `::`
-// splits payload from band (divergence 1); everything else is a union of arms,
-// each an atom run with an optional `..` range.
+// A `band` is the whole interior of a `{…}` (and the prelude's `@name =` RHS).
+// One top-level `::` splits payload from band-spec (divergence 1); everything else
+// is a union of arms, each an atom run with an optional `..` range.
 //
 // Subtraction has exactly one spelling: the leading sigil `!{…}` (an `atom`/
 // `factor` `complement`), per HMK.md ("Only a leading sigil changes the reading:
 // `!{…}` subtracts"). There is no `{!…}` whole-body complement — a leading `!`
 // inside a brace is a literal BANG (a `litToken`), so `{!}` is the text "!".
-braceBody : band ;
 band      : universe BAND universe           # valueBand
            | BAND universe                   # ambientBand
            | universe                        # bareAlphabet
@@ -172,7 +171,7 @@ macro     : AT NAME ;
 
 // ── Prelude declarations (`std.hmk`) ─────────────────────────────────────────
 declaration : macroDecl ;
-macroDecl   : AT NAME EQ braceBody ;          // @d = 0..9 , @hex = {@d},{@w::..f}
+macroDecl   : AT NAME EQ band ;               // @d = 0..9 , @hex = {@d},{@w::..f}
 
 // ── Moustache expression (second layer — the inside of one `{{ … }}`) ─────────
 // Applied to each `{{ … }}` interior. An operand, then `|`-piped filters; inside

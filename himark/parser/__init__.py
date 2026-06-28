@@ -254,7 +254,7 @@ def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
 def _brace_singleton(bg: GRAMMARParser.BraceGroupContext) -> str | None:
     """The single value of a `{…}` if it has cardinality 1, else None (no count
     handling beyond a bare singleton — counted singletons are out of slice)."""
-    band = bg.braceBody().band()
+    band = bg.band()
     if isinstance(
         band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)
     ):
@@ -277,13 +277,13 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
     atoms = term.atom()
     if len(atoms) != 1 or atoms[0].complement() is None:
         return None
-    operand_body = atoms[0].complement().braceGroup().braceBody()
+    operand_band = atoms[0].complement().braceGroup().band()
     if isinstance(
-        operand_body.band(),
+        operand_band,
         (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext),
     ):
-        raise NotImplementedError("complex exclusion operand not in braceBody slice")
-    inner = operand_body.getText()
+        raise NotImplementedError("complex exclusion operand not in band slice")
+    inner = operand_band.getText()
     return [m.strip() for m in split_top(",", inner)]
 
 
@@ -360,7 +360,7 @@ def _resolve_leaf(literal_run: GRAMMARParser.LiteralRunContext) -> str:
     return "".join(out)
 
 
-# ── Resolver: braceBody → semantic node, with a variable environment ──────────
+# ── Resolver: band → semantic node, with a variable environment ──────────────
 # Carries the `@name` environment so a `macro` atom resolves structurally. The
 # σ-decisions (congruence folding, ranges, complement, exclusions) are reimplemented
 # here as a tree-walk — this is the phase3 replacement; only leaf-lexical helpers
@@ -371,9 +371,9 @@ class _Resolver:
     def __init__(self, env: dict[str, str]) -> None:
         self._env = env  # @name -> definition body (prelude VARIABLES + script locals)
         self._resolving: set[str] = set()  # names being resolved now (cycle guard)
-        self._parsed_env: dict[str, GRAMMARParser.BraceBodyContext] = {}
+        self._parsed_env: dict[str, GRAMMARParser.BandContext] = {}
 
-    def _get_parsed_body(self, name: str) -> GRAMMARParser.BraceBodyContext:
+    def _get_parsed_body(self, name: str) -> GRAMMARParser.BandContext:
         if name not in self._parsed_env:
             tree = _parse_pattern_tree("{" + self._env[name] + "}")
             brace = tree.pattern().factor()[0].braceGroup()
@@ -381,7 +381,7 @@ class _Resolver:
                 raise CompileError(
                     f"variable @{name} is not a universe: {self._env[name]!r}"
                 )
-            self._parsed_env[name] = brace.braceBody()
+            self._parsed_env[name] = brace.band()
         return self._parsed_env[name]
 
     # — variable references —
@@ -424,13 +424,13 @@ class _Resolver:
             sval = _brace_singleton(atoms[0].braceGroup())
             if sval is not None:
                 return t.LiteralNode(content=sval)
-            return self.resolve_brace_body(atoms[0].braceGroup().braceBody())
+            return self.resolve_brace_body(atoms[0].braceGroup().band())
 
         if all(_atom_is_literal(a) for a in atoms):
             return t.LiteralNode(content=unescape(term.getText()))
 
         # A brace glued to text, several constructs, or a glued macro — a sequence.
-        raise NotImplementedError("grouping/sequence brace not in braceBody slice")
+        raise NotImplementedError("grouping/sequence brace not in band slice")
 
     def resolve_range_arm(
         self, arm: GRAMMARParser.ClosedRangeContext
@@ -442,7 +442,7 @@ class _Resolver:
         av = _term_singleton(terms[0])
         bv = _term_singleton(terms[1])
         if av is None or bv is None:
-            raise CompileError("non-literal `..` endpoint not in braceBody slice")
+            raise CompileError("non-literal `..` endpoint not in band slice")
         return t.ValueRangeNode.from_range_view(_RangeView(lower=av, upper=bv))
 
     def resolve_arm(self, arm: GRAMMARParser.ArmContext) -> t.SemanticNode:
@@ -451,7 +451,7 @@ class _Resolver:
         if isinstance(
             arm, (GRAMMARParser.OpenUpperContext, GRAMMARParser.OpenLowerContext)
         ):
-            raise NotImplementedError("open-ended `..` range not in braceBody slice")
+            raise NotImplementedError("open-ended `..` range not in band slice")
         return self.resolve_term(arm.term())
 
     def classify_arms(
@@ -539,7 +539,7 @@ class _Resolver:
     ) -> t.SemanticNode:
         """Resolve a bare `universe` (a `,`-list of arms) into a semantic node:
         split off subtractive `!{…}` exclusion arms, then classify the rest. Shared
-        by a `braceBody`'s payload and a band's payload alphabet."""
+        by a band's payload alphabet and its band-spec."""
         arms: list[GRAMMARParser.ArmContext] = []
         exclusions: list[str] = []
         for arm in universe.arm():
@@ -578,21 +578,21 @@ class _Resolver:
                         else None
                     )
                     if ctx.braceGroup() is not None:
-                        bbody = ctx.braceGroup().braceBody()
+                        bband = ctx.braceGroup().band()
                         children.append(
                             t.BraceGroupNode(
-                                content=bbody.getText(),
-                                semantic=self.resolve_brace_body(bbody),
+                                content=bband.getText(),
+                                semantic=self.resolve_brace_body(bband),
                                 count=count,
                             )
                         )
                     else:
-                        bbody = ctx.complement().braceGroup().braceBody()
+                        bband = ctx.complement().braceGroup().band()
                         children.append(
                             t.BraceGroupNode(
-                                content="!" + bbody.getText(),
+                                content="!" + bband.getText(),
                                 semantic=t.ComplementNode(
-                                    inner=self.resolve_brace_body(bbody)
+                                    inner=self.resolve_brace_body(bband)
                                 ),
                                 count=count,
                             )
@@ -625,12 +625,12 @@ class _Resolver:
         return children
 
     def resolve_brace_body(
-        self, body: GRAMMARParser.BraceBodyContext
+        self, band: GRAMMARParser.BandContext
     ) -> t.SemanticNode:
-        """Resolve a `braceBody` (`band`) into a semantic node — the slice's core
-        tree-walk, the phase3 replacement for one rule. Subtraction is never here:
-        it is the leading-sigil `!{…}` `complement` atom/factor, resolved separately."""
-        band = body.band()
+        """Resolve a `band` (a `{…}` interior) into a semantic node — the slice's
+        core tree-walk, the phase3 replacement for one rule. Subtraction is never
+        here: it is the leading-sigil `!{…}` `complement` atom/factor, resolved
+        separately."""
         if isinstance(
             band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)
         ):
@@ -643,7 +643,7 @@ class _Resolver:
         # Distinct from a bare `{a,A}` (two primitives).
         if _is_whole_nested_brace(universe):
             inner = universe.arm()[0].term().atom()[0].braceGroup()
-            return t.SequenceNode(children=[self.resolve_brace_body(inner.braceBody())])
+            return t.SequenceNode(children=[self.resolve_brace_body(inner.band())])
         if _cst_is_sequence_brace(universe):
             # Concatenation grouping (`{of {black} {quartz}}`, several glued
             # constructs): one capture-group scope over a sub-pattern.
@@ -658,22 +658,22 @@ class _Resolver:
             count = parse_count(count_ctx.countBody().getText()) if count_ctx else None
 
             if factor.braceGroup() is not None:
-                body = factor.braceGroup().braceBody()
+                band = factor.braceGroup().band()
                 children.append(
                     t.BraceGroupNode(
-                        content=body.getText(),
-                        semantic=self.resolve_brace_body(body),
+                        content=band.getText(),
+                        semantic=self.resolve_brace_body(band),
                         count=count,
                     )
                 )
             elif factor.complement() is not None:
-                # A top-level subtractive `!{…}`: phase2 folds the `!` into content
-                # and phase3 resolves it as a complement.
-                body = factor.complement().braceGroup().braceBody()
+                # A top-level subtractive `!{…}`: the `!` folds into content and the
+                # interior `band` resolves as the complement's inner node.
+                band = factor.complement().braceGroup().band()
                 children.append(
                     t.BraceGroupNode(
-                        content="!" + body.getText(),
-                        semantic=t.ComplementNode(inner=self.resolve_brace_body(body)),
+                        content="!" + band.getText(),
+                        semantic=t.ComplementNode(inner=self.resolve_brace_body(band)),
                         count=count,
                     )
                 )
