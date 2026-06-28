@@ -167,14 +167,14 @@ def _resolve_band_arm(alpha: t.SemanticNode, arm: str) -> t.ValueRangeNode:
         value, ref = _bound_endpoint(strip_unescaped(parts[0]))
         if value is None and ref is None:
             raise CompileError(f"An empty band arm has no value: got {arm!r}")
-        return t.ValueRangeNode.band_arm(alpha, value, value, ref, ref)
+        return t.ValueRangeNode.band_arm(alpha, value, ref, value, ref)
     if len(parts) == 2:
         lower, lower_ref = _bound_endpoint(strip_unescaped(parts[0]))
         upper, upper_ref = _bound_endpoint(strip_unescaped(parts[1]))
         # Open endpoints become explicit Floor/Inf nodes + the floor-or-ceiling
         # invariant — both owned by `ValueRangeNode.band_arm`, shared with the
         # ANTLR front-end so the two produce an identical AST.
-        return t.ValueRangeNode.band_arm(alpha, lower, upper, lower_ref, upper_ref)
+        return t.ValueRangeNode.band_arm(alpha, lower, lower_ref, upper, upper_ref)
     raise CompileError(
         f"Too many '..' in a band arm (a range is 'lo..hi'): got {arm!r}"
     )

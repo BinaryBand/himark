@@ -31,8 +31,6 @@
             },
             "lower": "a",
             "upper": "z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -57,8 +55,6 @@
             },
             "lower": "aa",
             "upper": "zz",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -85,16 +81,12 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
-            "lower": null,
-            "upper": "255",
-            "lower_ref": {
+            "lower": {
               "_t": "FloorNode"
             },
-            "upper_ref": null,
+            "upper": "255",
             "exclusions": []
           },
           "count": null,
@@ -121,14 +113,10 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "lower": "128",
-            "upper": null,
-            "lower_ref": null,
-            "upper_ref": {
+            "upper": {
               "_t": "InfNode"
             },
             "exclusions": []
@@ -157,14 +145,10 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
             "upper": "255",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -191,14 +175,10 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "lower": "5",
             "upper": "5",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -228,14 +208,10 @@
                   },
                   "lower": "0",
                   "upper": "9",
-                  "lower_ref": null,
-                  "upper_ref": null,
                   "exclusions": []
                 },
                 "lower": "1",
                 "upper": "5",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               },
               {
@@ -250,14 +226,10 @@
                   },
                   "lower": "0",
                   "upper": "9",
-                  "lower_ref": null,
-                  "upper_ref": null,
                   "exclusions": []
                 },
                 "lower": "9",
                 "upper": "12",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               }
             ],
@@ -288,8 +260,6 @@
                 },
                 "lower": "0",
                 "upper": "9",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               }
             ]
@@ -320,14 +290,10 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
-            "upper": null,
-            "lower_ref": null,
-            "upper_ref": {
+            "upper": {
               "_t": "BackRefNode",
               "group": 0
             },
@@ -474,8 +440,6 @@
                 },
                 "lower": "0",
                 "upper": "9",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               }
             ]
@@ -709,8 +673,6 @@
             },
             "lower": "a",
             "upper": "z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": [
               "m..p"
             ]
@@ -739,14 +701,10 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
             "upper": "255",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -942,8 +900,6 @@
             },
             "lower": "a",
             "upper": "z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -966,8 +922,6 @@
             },
             "lower": "A",
             "upper": "Z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -1001,8 +955,6 @@
             },
             "lower": "0",
             "upper": "9",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -1027,8 +979,6 @@
             },
             "lower": "a",
             "upper": "z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -1053,8 +1003,6 @@
             },
             "lower": "A",
             "upper": "Z",
-            "lower_ref": null,
-            "upper_ref": null,
             "exclusions": []
           },
           "count": null,

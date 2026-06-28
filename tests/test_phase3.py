@@ -51,7 +51,7 @@ def test_upper_bound():
     # phase3 sees the expanded variable text (@d -> 0..9), not the @ ref.
     node = first_semantic("{{0..9}::..255}")
     assert node.type == "value_range"
-    assert node.lower is None  # open below (floor)
+    assert node.lower.type == "floor"  # open below (FloorNode)
     assert node.upper == "255"
     assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
@@ -60,7 +60,7 @@ def test_lower_bound():
     node = first_semantic("{{0..9}::128..}")
     assert node.type == "value_range"
     assert node.lower == "128"
-    assert node.upper is None  # open above (unbounded)
+    assert node.upper.type == "inf"  # open above (InfNode)
     assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
 
@@ -74,20 +74,18 @@ def test_bounded_range():
 
 def test_bound_reference_endpoint():
     # `{@d::0..$0}` — the ceiling is a back-reference, resolved at match time. The
-    # literal `upper` is None; `upper_ref` carries the reference node.
+    # endpoint *is* the reference node (self-describing), not a separate `_ref` slot.
     node = first_semantic("{@d::0..$0}")
     assert node.type == "value_range"
     assert node.lower == "0"
-    assert node.upper is None
-    assert node.upper_ref.type == "back_ref"
-    assert node.upper_ref.group == 0
+    assert node.upper.type == "back_ref"
+    assert node.upper.group == 0
 
 
 def test_escaped_dollar_endpoint_is_literal_not_reference():
-    # `\$0` is the literal text "$0", not a reference (so `upper_ref` is None).
+    # `\$0` is the literal text "$0", not a reference — so `upper` is the plain string.
     node = first_semantic(r"{@d::0..\$0}")
     assert node.upper == "$0"
-    assert node.upper_ref is None
 
 
 def test_class_to_class_range_unsupported():
@@ -173,7 +171,7 @@ def test_singleton_upper_bound():
     # An open-floor bound whose ceiling is a singleton constructor.
     node = first_semantic("{{0..9}::..{9}[3]}")
     assert node.type == "value_range"
-    assert node.lower is None
+    assert node.lower.type == "floor"
     assert node.upper == "999"
 
 
@@ -181,7 +179,7 @@ def test_singleton_lower_bound():
     node = first_semantic("{{0..9}::{0}[3]..}")
     assert node.type == "value_range"
     assert node.lower == "000"
-    assert node.upper is None
+    assert node.upper.type == "inf"
 
 
 def test_singleton_single_part_is_literal():

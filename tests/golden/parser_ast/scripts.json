@@ -21,8 +21,6 @@
                     },
                     "lower": "0",
                     "upper": "9",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
@@ -35,8 +33,6 @@
                     },
                     "lower": "A",
                     "upper": "Z",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
@@ -49,8 +45,6 @@
                     },
                     "lower": "a",
                     "upper": "z",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -91,8 +85,6 @@
                     },
                     "lower": "0",
                     "upper": "9",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
@@ -105,8 +97,6 @@
                     },
                     "lower": "A",
                     "upper": "Z",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
@@ -119,8 +109,6 @@
                     },
                     "lower": "a",
                     "upper": "z",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -133,8 +121,6 @@
               },
               "lower": "111111111111111111111111",
               "upper": "2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "count": null,
@@ -170,8 +156,6 @@
               },
               "lower": "0",
               "upper": "9",
-              "lower_ref": null,
-              "upper_ref": null,
               "exclusions": []
             },
             "count": {
@@ -221,14 +205,10 @@
                 },
                 "lower": "0",
                 "upper": "9",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               },
               "lower": "0",
-              "upper": null,
-              "lower_ref": null,
-              "upper_ref": {
+              "upper": {
                 "_t": "InfNode"
               },
               "exclusions": []
@@ -254,14 +234,10 @@
                 },
                 "lower": "0",
                 "upper": "9",
-                "lower_ref": null,
-                "upper_ref": null,
                 "exclusions": []
               },
               "lower": "0",
-              "upper": null,
-              "lower_ref": null,
-              "upper_ref": {
+              "upper": {
                 "_t": "BackRefNode",
                 "group": 0
               },
@@ -637,8 +613,6 @@
                   },
                   "lower": "0",
                   "upper": "9",
-                  "lower_ref": null,
-                  "upper_ref": null,
                   "exclusions": []
                 }
               ]
@@ -744,8 +718,6 @@
                   },
                   "lower": "0",
                   "upper": "9",
-                  "lower_ref": null,
-                  "upper_ref": null,
                   "exclusions": []
                 }
               ]
@@ -5328,8 +5300,6 @@
                           },
                           "lower": "0",
                           "upper": "9",
-                          "lower_ref": null,
-                          "upper_ref": null,
                           "exclusions": []
                         }
                       ],
@@ -5447,8 +5417,6 @@
                     },
                     "lower": "0",
                     "upper": "9",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -5545,8 +5513,6 @@
                     },
                     "lower": "0",
                     "upper": "9",
-                    "lower_ref": null,
-                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -7517,8 +7483,6 @@
                         },
                         "lower": "0",
                         "upper": "9",
-                        "lower_ref": null,
-                        "upper_ref": null,
                         "exclusions": []
                       }
                     ]
@@ -7635,8 +7599,6 @@
                   },
                   "lower": "0",
                   "upper": "9",
-                  "lower_ref": null,
-                  "upper_ref": null,
                   "exclusions": []
                 }
               ]

@@ -156,12 +156,21 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
     raise CompileError(f"Cannot use {type(node).__name__} as a value alphabet")
 
 
+def _static_str(end: "str | t.SemanticNode") -> str | None:
+    """A band endpoint's concrete value string, or None when it is *not* a written
+    value — an open marker (`FloorNode`/`InfNode`) or a dynamic reference. These are
+    exactly the cases the value arithmetic treats as an omitted bound (a zero floor /
+    unbounded ceiling; a reference is filled from captures at match time)."""
+    return end if isinstance(end, str) else None
+
+
 def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
     """The sub-alphabet a bounded range stands for: its alphabet's groups
     between the endpoint positions. Endpoints must be single positions."""
     if node.exclusions:
         raise CompileError("A range with exclusions cannot be a sub-alphabet")
-    for end in (node.lower, node.upper):
+    low, high = _static_str(node.lower), _static_str(node.upper)
+    for end in (low, high):
         if end is not None and len(end) != 1:
             raise CompileError(
                 f"Sub-alphabet endpoint must be a single symbol, got {end!r}"
@@ -170,8 +179,8 @@ def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
     # sliced directly to its endpoint code points, never materialised whole (its
     # ordinal is the code point, so position == code point).
     if isinstance(node.alpha, t.CharRangeNode):
-        lo = ord(node.lower) if node.lower is not None else ord(node.alpha.start)
-        hi = ord(node.upper) if node.upper is not None else ord(node.alpha.end)
+        lo = ord(low) if low is not None else ord(node.alpha.start)
+        hi = ord(high) if high is not None else ord(node.alpha.end)
         if hi - lo + 1 > 0x10000:
             raise CompileError(
                 f"Range {chr(lo)!r}..{chr(hi)!r} is too large to use as a value bound"
@@ -179,8 +188,8 @@ def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
         return [[chr(c)] for c in range(lo, hi + 1)]
     groups = _groups(node.alpha)
     alph = Alphabet(groups)
-    lo = alph.value(node.lower) if node.lower is not None else 0
-    hi = alph.value(node.upper) if node.upper is not None else len(groups) - 1
+    lo = alph.value(low) if low is not None else 0
+    hi = alph.value(high) if high is not None else len(groups) - 1
     return groups[lo : hi + 1]
 
 
@@ -211,12 +220,12 @@ def _codepoint_span(node: t.SemanticNode) -> tuple[int, int] | None:
         isinstance(node, t.ValueRangeNode)
         and isinstance(node.alpha, t.CharRangeNode)
         and not node.exclusions
-        and (node.lower is None or len(node.lower) == 1)
-        and (node.upper is None or len(node.upper) == 1)
     ):
-        lo = ord(node.lower) if node.lower is not None else ord(node.alpha.start)
-        hi = ord(node.upper) if node.upper is not None else ord(node.alpha.end)
-        return lo, hi
+        low, high = _static_str(node.lower), _static_str(node.upper)
+        if (low is None or len(low) == 1) and (high is None or len(high) == 1):
+            lo = ord(low) if low is not None else ord(node.alpha.start)
+            hi = ord(high) if high is not None else ord(node.alpha.end)
+            return lo, hi
     return None
 
 
@@ -274,7 +283,10 @@ def _build_value_view(
 def _value_view(node: t.ValueRangeNode) -> _ValueView:
     """The value-arithmetic view of a static `{alphabet::floor..ceiling}` bound."""
     return _build_value_view(
-        _value_alphabet(node.alpha), node.lower, node.upper, node.exclusions
+        _value_alphabet(node.alpha),
+        _static_str(node.lower),
+        _static_str(node.upper),
+        node.exclusions,
     )
 
 
@@ -466,19 +478,16 @@ def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
     # without the value-width machinery, and identically to the pre-merge
     # `CharRangeNode`. (@uni's ordinal is the code point.)
     a = node.alpha
+    low, high = _static_str(node.lower), _static_str(node.upper)
     if (
         isinstance(a, t.CharRangeNode)
-        and node.lower is not None
-        and len(node.lower) == 1
-        and node.upper is not None
-        and len(node.upper) == 1
-        and node.lower_ref is None
-        and node.upper_ref is None
+        and low is not None
+        and len(low) == 1
+        and high is not None
+        and len(high) == 1
     ):
         return _CharRange(
-            t.CharRangeNode(
-                start=node.lower, end=node.upper, exclusions=node.exclusions
-            )
+            t.CharRangeNode(start=low, end=high, exclusions=node.exclusions)
         )
     return _ValueRange(_value_view(node))
 
@@ -634,13 +643,13 @@ class Program:
     elements: tuple[Element, ...]
 
 
-def _dynamic_ref(ref: t.SemanticNode | None) -> t.SemanticNode | None:
+def _dynamic_ref(end: "str | t.SemanticNode | None") -> t.SemanticNode | None:
     """A band endpoint's *dynamic* reference (resolved from captures at match time), or
-    None. The open-end markers `FloorNode`/`InfNode` are static endpoints, not dynamic
-    references — they read as a zero floor / unbounded ceiling via `lower`/`upper` being
-    None, so here they count as 'no dynamic ref'."""
-    if isinstance(ref, (t.BackRefNode, t.CountRefNode, t.StageRefNode)):
-        return ref
+    None for any other endpoint — a concrete value string, or the static open markers
+    `FloorNode`/`InfNode` (which the value arithmetic reads as a zero floor / unbounded
+    ceiling). Lets the caller branch on 'is this endpoint resolved at match time?'."""
+    if isinstance(end, (t.BackRefNode, t.CountRefNode, t.StageRefNode)):
+        return end
     return None
 
 
@@ -658,10 +667,10 @@ def _ref_descriptor(ref: t.SemanticNode) -> tuple:
 def _dyn_value_range_el(node: t.ValueRangeNode, reps: Reps) -> DynValueRangeEl:
     return DynValueRangeEl(
         alphabet=_value_alphabet(node.alpha),
-        lower=node.lower,
-        upper=node.upper,
-        lower_ref=_ref_descriptor(lr) if (lr := _dynamic_ref(node.lower_ref)) else None,
-        upper_ref=_ref_descriptor(ur) if (ur := _dynamic_ref(node.upper_ref)) else None,
+        lower=_static_str(node.lower),
+        upper=_static_str(node.upper),
+        lower_ref=_ref_descriptor(lr) if (lr := _dynamic_ref(node.lower)) else None,
+        upper_ref=_ref_descriptor(ur) if (ur := _dynamic_ref(node.upper)) else None,
         exclusions=node.exclusions,
         reps=reps,
     )
@@ -705,8 +714,8 @@ def _compile_elements(root: t.RootNode) -> list[Element]:
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
             elif isinstance(child.semantic, t.ValueRangeNode) and (
-                _dynamic_ref(child.semantic.lower_ref)
-                or _dynamic_ref(child.semantic.upper_ref)
+                _dynamic_ref(child.semantic.lower)
+                or _dynamic_ref(child.semantic.upper)
             ):
                 # A bound with a *dynamic* reference endpoint (`{0:@d:$0}`) resolves at
                 # match time from captures, so it lowers to a loop-handled element. The

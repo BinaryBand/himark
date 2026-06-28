@@ -111,19 +111,18 @@ class CharRangeNode:
 
 @dataclass(slots=True, kw_only=True)
 class ValueRangeNode:
-    """A value range over `alpha` (a band `{alpha::lower..upper}`). A `None`
-    endpoint is open: no `lower` means a floor of zero (width 1); no `upper` means
-    unbounded. The written forms `{A::..τ}`, `{A::τ..}`, and `{A::τ..τ}` are just
-    which endpoints are given; a single value `{A:τ}` is `lower == upper`."""
+    """A value range over `alpha` (a band `{alpha::lower..upper}`). Each endpoint is
+    **self-describing** — one of: a concrete value string, a `FloorNode` (open floor:
+    zero, width 1), an `InfNode` (unbounded ceiling), or a dynamic reference node
+    (`{@d::0..$0}`, resolved from captures at match time). There is no positional `None`:
+    you read what an endpoint *is* from the node, not from which slot it sits in. The
+    forms `{A::..τ}`/`{A::τ..}`/`{A::τ..τ}` are which bounds are written; a single value
+    `{A::τ}` is `lower == upper`."""
 
     alpha: SemanticNode
+    lower: "str | SemanticNode"
+    upper: "str | SemanticNode"
     type: Literal["value_range"] = "value_range"
-    lower: str | None = None
-    upper: str | None = None
-    # A reference endpoint (`{@d::0..$0}`) resolves to a captured value at match
-    # time; when set, the matching `lower`/`upper` string is None (dynamic).
-    lower_ref: "SemanticNode | None" = None
-    upper_ref: "SemanticNode | None" = None
     exclusions: list[str] = field(default_factory=list)
 
     @classmethod
@@ -138,36 +137,40 @@ class ValueRangeNode:
     def from_band_view(cls, v: BandArmView) -> ValueRangeNode:
         """Build a band arm `{alpha::lo..hi}` from a resolved view — see `band_arm`. A
         parser fills the view's four endpoint slots; the canonicalisation lives below."""
-        return cls.band_arm(v.alpha, v.lower, v.upper, v.lower_ref, v.upper_ref)
+        return cls.band_arm(v.alpha, v.lower, v.lower_ref, v.upper, v.upper_ref)
 
     @classmethod
     def band_arm(
         cls,
         alpha: SemanticNode,
         lower: str | None,
-        upper: str | None,
         lower_ref: SemanticNode | None,
+        upper: str | None,
         upper_ref: SemanticNode | None,
     ) -> ValueRangeNode:
-        """Canonicalise one band arm. An omitted floor/ceiling becomes an explicit
-        `FloorNode`/`InfNode` endpoint node, so 'open' is *self-describing* rather than a
-        positional `None` (you read what an endpoint is from the node, not from which
-        slot it sits in). At least one bound is required — both omitted (`{U::..}`) is an
-        error. The single-value form `{alpha::t}` arrives as `lower == upper`. Shared by
-        every front-end, so the AST is identical no matter which parser built it."""
-        if lower is None and upper is None and lower_ref is None and upper_ref is None:
+        """Canonicalise one band arm into two self-describing endpoints. Each side is
+        the concrete value if written, else its dynamic reference, else the open marker
+        (`FloorNode` for an omitted floor, `InfNode` for an omitted ceiling). At least
+        one bound is required — both omitted (`{U::..}`) is an error. The single-value
+        form `{alpha::t}` arrives as `lower == upper`. Shared by every front-end, so the
+        AST is identical no matter which parser built it."""
+        if lower is None and lower_ref is None and upper is None and upper_ref is None:
             raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
-        if lower is None and lower_ref is None:
-            lower_ref = FloorNode()
-        if upper is None and upper_ref is None:
-            upper_ref = InfNode()
-        return cls(
-            alpha=alpha,
-            lower=lower,
-            upper=upper,
-            lower_ref=lower_ref,
-            upper_ref=upper_ref,
+        lo: str | SemanticNode = (
+            lower
+            if lower is not None
+            else lower_ref
+            if lower_ref is not None
+            else FloorNode()
         )
+        hi: str | SemanticNode = (
+            upper
+            if upper is not None
+            else upper_ref
+            if upper_ref is not None
+            else InfNode()
+        )
+        return cls(alpha=alpha, lower=lo, upper=hi)
 
 
 @dataclass(slots=True)
@@ -300,7 +303,7 @@ def reference_from_view(
 class FloorNode:
     """The alphabet's **floor** (its ordinal-0 symbol, width 1) as an explicit band
     endpoint — the self-describing form of an omitted lower bound (`{@d::..255}`).
-    Sits in a `ValueRangeNode.lower_ref` slot; the engine reads it as a zero floor."""
+    Sits in a `ValueRangeNode.lower` slot; the engine reads it as a zero floor."""
 
     type: Literal["floor"] = "floor"
 
@@ -308,7 +311,7 @@ class FloorNode:
 @pydantic_dataclass(slots=True)
 class InfNode:
     """An **unbounded ceiling** as an explicit band endpoint — the self-describing form
-    of an omitted upper bound (`{@d::128..}`). Sits in a `ValueRangeNode.upper_ref`
+    of an omitted upper bound (`{@d::128..}`). Sits in a `ValueRangeNode.upper`
     slot; the engine reads it as no upper limit."""
 
     type: Literal["inf"] = "inf"
