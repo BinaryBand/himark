@@ -551,13 +551,15 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "HeterogeneousNode",
-              "inner": {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
-                "exclusions": []
-              }
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "CharRangeNode",
+                  "start": "0",
+                  "end": "9",
+                  "exclusions": []
+                }
+              ]
             },
             "count": {
               "_t": "CountRange",
@@ -648,13 +650,15 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "HeterogeneousNode",
-              "inner": {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
-                "exclusions": []
-              }
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "CharRangeNode",
+                  "start": "0",
+                  "end": "9",
+                  "exclusions": []
+                }
+              ]
             },
             "count": {
               "_t": "CountRange",
@@ -7223,13 +7227,15 @@
                 {
                   "_t": "BraceGroupNode",
                   "semantic": {
-                    "_t": "HeterogeneousNode",
-                    "inner": {
-                      "_t": "CharRangeNode",
-                      "start": "0",
-                      "end": "9",
-                      "exclusions": []
-                    }
+                    "_t": "SequenceNode",
+                    "children": [
+                      {
+                        "_t": "CharRangeNode",
+                        "start": "0",
+                        "end": "9",
+                        "exclusions": []
+                      }
+                    ]
                   },
                   "count": {
                     "_t": "CountRange",
@@ -7331,13 +7337,15 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "HeterogeneousNode",
-              "inner": {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
-                "exclusions": []
-              }
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "CharRangeNode",
+                  "start": "0",
+                  "end": "9",
+                  "exclusions": []
+                }
+              ]
             },
             "count": {
               "_t": "CountRange",
@@ -7596,14 +7604,16 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "HeterogeneousNode",
-              "inner": {
-                "_t": "ComplementNode",
-                "inner": {
-                  "_t": "LiteralNode",
-                  "content": "\n"
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "ComplementNode",
+                  "inner": {
+                    "_t": "LiteralNode",
+                    "content": "\n"
+                  }
                 }
-              }
+              ]
             },
             "count": {
               "_t": "CountRange",

@@ -124,12 +124,13 @@ def test_congruence_enumerated_is_ordered_folds():
     assert node.groups == [["a", "A"], ["b", "B"]]
 
 
-def test_single_brace_nesting_is_heterogeneous():
+def test_single_brace_nesting_is_grouping():
     # { {a..z} } — a brace whose whole content is one nested brace is the
     # heterogeneous form {{U}}: it repeats by re-matching afresh, not as identity.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "heterogeneous"
-    assert node.inner.type == "char_range"
+    assert node.type == "sequence"
+    assert len(node.children) == 1
+    assert node.children[0].type == "char_range"
 
 
 # ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
@@ -248,7 +249,7 @@ def test_pure_alphabet_braces_stay_arithmetic():
     assert first_semantic("{a..z}").type == "char_range"
     assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{{a..z}::aa..zz}").type == "value_range"
-    assert first_semantic("{ {a..z} }").type == "heterogeneous"  # {{U}} nesting
+    assert first_semantic("{ {a..z} }").type == "sequence"  # {{U}} grouping
     assert first_semantic("{{a,A},{b,B}}").type == "group_class"
 
 
@@ -387,5 +388,6 @@ def test_single_brace_disambiguation_space_allowed():
     # { {a..z} } — surrounding space is stripped; a single nested brace is the
     # heterogeneous form {{U}}, wrapping the inner char range.
     node = first_semantic("{ {a..z} }")
-    assert node.type == "heterogeneous"
-    assert node.inner.type == "char_range"
+    assert node.type == "sequence"
+    assert len(node.children) == 1
+    assert node.children[0].type == "char_range"

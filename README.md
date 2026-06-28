@@ -8,9 +8,7 @@ A pattern-matching and text-transformation language for people who find regex wr
 {!\ }[1..] => "<p>{{.}}</p>"                           # wrap each word in <p>
 ```
 
-Patterns are readable, composable, and compile to **direct execution** — no regex transpilation. The full language spec is [docs/HMK.md](docs/HMK.md); the implementation map is [docs/.PROJECT.md](docs/.PROJECT.md).
-
-> **Experimental algebra branch.** The `<->` and `>>` (run-until) operators and the old `{{…}}` reference sublanguage are removed here; congruence comes from the brace grouping itself (`..` ordered, `,` congruence). References return as **moustache** template accessors (`{{.}}`, `{{ i$j }}`) and pattern self-references (`{$i}`/`{#i}`/`{N$M}`).
+Patterns are readable, composable, and compile to **direct execution** — no regex transpilation. The full language spec is [docs/HMK.md](docs/HMK.md).
 
 Requires Python 3.11+.
 

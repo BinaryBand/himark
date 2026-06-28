@@ -136,24 +136,9 @@ class AnchorNode:
     ]
     type: Literal["anchor"] = "anchor"
 
-
-@dataclass(slots=True, kw_only=True)
-class HeterogeneousNode:
-    """A nested universe `{{U}}` whose inner is a **lazy** alphabet (a range/value,
-    not an enumerable member list) — one opaque position that repeats
-    **heterogeneously**: a fresh match of `inner` per rep (`{{a..z}}[2]` is any two
-    letters — `ab`, `zq`, …), unlike a bare `{U}[n]` which repeats the same matched
-    string. The position, and its opacity, come from the **nesting**; a nesting with
-    an enumerable inner (`{{a,A}}`) folds to a `GroupClassNode` instead. Both are one
-    position built by `{{…}}`, differing only in whether the faces are listed or lazy."""
-
-    inner: SemanticNode
-    type: Literal["heterogeneous"] = "heterogeneous"
-
-
 @dataclass(slots=True)
 class GroupClassNode:
-    """The single congruence primitive: an ordered list of congruence groups,
+    """A congruence alphabet: an ordered list of congruence groups,
     each a set of interchangeable spellings of one position.
 
     The **outer** list is positions (distinguishable points); the **inner** list is
@@ -163,7 +148,12 @@ class GroupClassNode:
     nesting `{{a,A}}` folds them into one position with two faces (`[[a, A]]`), so
     `[2]` frees the faces (`aa`/`aA`/`Aa`/`AA`). An ordered alphabet of folded
     positions `{{a,A},{b,B},…}` is many two-face groups (`[[a,A],[b,B],…]`). This is
-    `~` in the `(Σ, ≤, ~)` model; `..` builds `≤` (ordered ranges) instead."""
+    `~` in the `(Σ, ≤, ~)` model; `..` builds `≤` (ordered ranges) instead.
+
+    The folded form `{{a,A}}` is now stored as a grouping brace
+    (``SequenceNode``) wrapping this bare alphabet; congruence at
+    value-read time is derived from the grouping's single child,
+    not stored on this node."""
 
     type: Literal["group_class"] = "group_class"
     groups: list[list[str]] = field(default_factory=list)
@@ -223,7 +213,6 @@ SemanticNode: TypeAlias = (
     | ValueRangeNode
     | UnionNode
     | ComplementNode
-    | HeterogeneousNode
     | AnchorNode
     | GroupClassNode
     | SequenceNode

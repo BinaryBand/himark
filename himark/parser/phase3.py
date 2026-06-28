@@ -65,8 +65,8 @@ def _resolved_brace(child: t.BraceGroupNode) -> t.BraceGroupNode:
     split = _split_band(child.content)
     if split is not None:
         semantic: t.SemanticNode = _resolve_band(*split)
-    elif is_sequence_brace(child.content):
-        semantic = _resolve_sequence_brace(child.content)
+    elif is_sequence_brace(child.content) or _is_nested_brace(child.content):
+        semantic = resolve_grouping_brace(child.content)
     else:
         semantic = _resolve_brace(child.content)
     count, count_src = child.count, child.count_src
@@ -91,13 +91,31 @@ def parse(node: t.RootNode) -> t.RootNode:
 # ── Grouping brace (concatenation vs. alphabet) ───────────────────────────────
 
 
-def _resolve_sequence_brace(content: str) -> t.SequenceNode:
-    """Re-tokenize and resolve a grouping brace's interior into one capture group;
-    its nested brace children become the group's sub-captures. (The
-    concatenation-vs-alphabet test itself lives in `parser/_shape.py`.)"""
+def resolve_grouping_brace(content: str) -> t.SequenceNode:
+    """Resolve a grouping brace into one capture group (``SequenceNode``).
+    Two forms:
+    - Single nested brace `{{X}}`: resolve the inner as an alphabet expression,
+      wrap as single-child scope — re-entry per rep frees members afresh.
+    - Concatenation `{of{x}{y}}`: re-tokenize interior as a sub-pattern, whose
+      nested brace children become sub-captures.
+    (The concatenation-vs-alphabet test lives in `parser/_shape.py`.)"""
+    stripped = strip_unescaped(content)
+    if stripped.startswith("{") and brace_end(stripped) == len(stripped):
+        # {{X}} — single-child grouping; re-entry per rep frees members
+        inner = _resolve_brace(inner_of(stripped))
+        return t.SequenceNode(children=[inner])
+    # Concatenation — re-parse interior as sub-pattern
     sub = parse(phase2.parse(content))
     return t.SequenceNode(children=sub.children)
 
+
+def _is_nested_brace(content: str) -> bool:
+    """True when `content` is exactly one nested brace `{{X}}` — a single-child
+    grouping brace (the old "object nesting" form)."""
+    stripped = strip_unescaped(content)
+    if stripped.startswith("{") and brace_end(stripped) == len(stripped):
+        return True
+    return False
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
 
@@ -232,20 +250,17 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if split is not None:
         return _resolve_band(*split)
 
-    # Object nesting `{{X}}`: a brace whose whole content is one nested brace folds
-    # to a single opaque **position** — this nesting *is* the congruence step (the
-    # single-axis operators `[count]`/`..`/band/ref each act on one point, so a
-    # multi-face point must be built by nesting). A materialisable inner (`{{a,A}}`)
-    # lists its faces as one congruence group; a range/value inner (`{{a..z}}`) keeps
-    # that one position lazy as a heterogeneous run. "Faces free per `[count]`" is a
-    # consequence of the opacity the nesting created, not its cause.
+
+    # Object nesting `{{X}}` → grouping brace (scope).
+    # A brace whose whole content is one nested brace is a single-child
+    # grouping — resolved via resolve_grouping_brace so all callers
+    # (including _resolve_universe) produce the uniform representation.
     stripped = strip_unescaped(content)
     if stripped.startswith("{") and brace_end(stripped) == len(stripped):
-        inner = _resolve_brace(inner_of(stripped))
-        grps = _arm_group(inner)
-        if grps is not None:
-            return t.GroupClassNode(groups=grps)
-        return t.HeterogeneousNode(inner=inner)
+        return resolve_grouping_brace(stripped)
+
+
+
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")

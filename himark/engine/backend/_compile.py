@@ -42,11 +42,11 @@ class Matcher(Protocol):
 
 
 class _Base:
-    """Default `accepts` (via match). `equal_unit` is the **heterogeneous**
-    continuation — a fresh match of the next rep — used by the `{{U}}[n]` form
-    (homogeneous `{U}[n]` checks string equality in the loop instead). Concrete
-    matchers override `match`; `_Group` overrides `equal_unit` to stay within the
-    same congruence group."""
+    """Default `accepts` (via match). `equal_unit` is a fresh match of the next
+    rep — the default continuation for a plain alphabet position (each rep
+    re-matches, producing the same member for homogeneous alphabets or a fresh
+    one for ranges/complements). `_Group` overrides `equal_unit` to stay within
+    the same congruence group (faces-free continuation)."""
 
     # The value alphabet a capture of this matcher carries (None unless the
     # matcher is a `{A::x..y}` bound); read by the run loop to type the capture.
@@ -140,6 +140,15 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
         # One position whose single spelling is the whole literal — so a
         # multi-char token (`bc` in `{a,bc}`) folds as one unit, not per char.
         return [[node.content]]
+    if isinstance(node, t.SequenceNode):
+        # A grouping brace used as a value alphabet: its single child (a bare
+        # alphabet) contributes its groups. Multi-child sequences cannot be
+        # folded to a value alphabet.
+        if len(node.children) != 1:
+            raise CompileError(
+                "A grouping brace with multiple children cannot be used as a value alphabet"
+            )
+        return _groups(node.children[0])
     if isinstance(node, t.GroupClassNode):
         return [list(grp) for grp in node.groups]
     if isinstance(node, t.ValueRangeNode):
@@ -417,36 +426,6 @@ class _Group(_Base):
             else:
                 return None
         return cur
-
-
-class _Het(_Base):
-    """The `{{U}}` object: one universe repeated with **every member free each
-    position** (HMK.md §Repetition — `{{a..z}}[3]` is any three letters, each
-    free). It wraps the lowered universe so a run's `equal_unit` is a fresh match
-    of any member — unlike a bare alphabet of objects (`{{a,A},{c,C}}`), whose run
-    stays within one congruence group. `_CharRange`/`_Union` already free their
-    members this way; the wrapper also frees a `_Group` (a folded range union like
-    `{{0..9,a..f}}`), whose own `equal_unit` would otherwise pin each rep to the
-    first member's group."""
-
-    __slots__ = ("inner",)
-
-    def __init__(self, inner: Matcher):
-        self.inner = inner
-
-    @property
-    def value_alphabet(self) -> "Alphabet | RangeAlphabet | None":
-        return self.inner.value_alphabet
-
-    def match(self, text: str, pos: int) -> int | None:
-        return self.inner.match(text, pos)
-
-    def accepts(self, s: str) -> bool:
-        return self.inner.accepts(s)
-
-    # equal_unit inherited from _Base = a fresh match → any member, each position.
-
-
 def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
     return _ValueRange(_value_view(node))
 
@@ -460,9 +439,6 @@ _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,
     t.ComplementNode: _Complement,
-    # Nested fallback (e.g. a `{{U}}` arm); the het flag is set at the element
-    # level in `compile_pattern`, so here it lowers to the inner matcher.
-    t.HeterogeneousNode: lambda n: lower(n.inner),
 }
 
 
@@ -669,11 +645,6 @@ def _compile_elements(root: t.RootNode) -> list[Element]:
                 # A bound with a reference endpoint (`{0:@d:$0}`) resolves at match
                 # time from captures, so it lowers to a loop-handled element.
                 elements.append(_dyn_value_range_el(child.semantic, reps))
-            elif isinstance(child.semantic, t.HeterogeneousNode):
-                # `{{U}}`: one object, repeated with every member free per position
-                # (`_Het` makes each rep a fresh match, even over a folded union).
-                inner = _Het(lower(child.semantic.inner))
-                elements.append(GroupEl(inner, reps, het=True))
             else:
                 # A run repeats one **point**, faces free within it: a congruence
                 # class (`GroupClassNode`) stays in the matched member's group
@@ -681,6 +652,26 @@ def _compile_elements(root: t.RootNode) -> list[Element]:
                 # non-inner char each rep. Both are the group-based continuation.
                 het = isinstance(child.semantic, (t.ComplementNode, t.GroupClassNode))
                 elements.append(GroupEl(lower(child.semantic), reps, het=het))
+        # Bare semantic nodes inside a grouping brace (single-child scope):
+        # each is one position, verbatim or group-continuing per the type.
+        elif isinstance(child, t.LiteralNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=False))
+        elif isinstance(child, t.CharRangeNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=False))
+        elif isinstance(child, t.ComplementNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=True))
+        elif isinstance(child, t.GroupClassNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=True))
+        elif isinstance(child, t.ValueRangeNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=False))
+        elif isinstance(child, t.UnionNode):
+            elements.append(GroupEl(lower(child), Reps(1, 1), het=False))
+        elif isinstance(child, t.BackRefNode):
+            elements.append(BackRefEl(child.group, Reps(1, 1)))
+        elif isinstance(child, t.CountRefNode):
+            elements.append(CountRefEl(child.group, Reps(1, 1)))
+        elif isinstance(child, t.StageRefNode):
+            elements.append(StageRefEl(child.stage, child.path, Reps(1, 1)))
         else:
             raise CompileError(f"Unexpected node in pattern: {type(child).__name__}")
     return elements

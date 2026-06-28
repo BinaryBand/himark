@@ -65,7 +65,9 @@ def test_comma_list_is_ordered_like_range():
     # `{a,b,c}` is the ordered alphabet `{a..c}`, so a bound rejects out-of-range
     # 'c' (value 2 > ceiling 'b'); the fold would be `{{a,b,c}}`.
     assert m("{{a,b,c}::a..b}", "a b c") == ["a", "b"]
-    assert m("{{{a,b,c}}::a..b}", "a b c") == ["a", "b", "c"]
+    # Triple-brace payload: `{{a,b,c}}` is now a grouping-brace wrapping three
+    # separate groups; the band a..b excludes 'c' (value c > ceiling b).
+    assert m("{{{a,b,c}}::a..b}", "a b c") == ["a", "b"]
 
 
 def test_no_cross_group():

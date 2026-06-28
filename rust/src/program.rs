@@ -72,10 +72,6 @@ pub enum Matcher {
     /// longest-first (so multi-char members win), as Python sorts them.
     #[serde(rename = "group")]
     Group { members: Vec<(String, usize)> },
-    /// `_Het`: the `{{U}}` wrapper — repetition frees every member each position
-    /// (its `equal_unit` is a fresh match of the inner matcher).
-    #[serde(rename = "het")]
-    Het { inner: Box<Matcher> },
 }
 
 /// A sequence element — mirrors the supported `_compile` `*El` types.

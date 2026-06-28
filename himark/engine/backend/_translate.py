@@ -3,7 +3,7 @@ consumes — or declare it out of scope with `Unsupported`.
 
 The Rust backend ([rust.py](rust.py)) accelerates the **structural** subset of the
 language: literals, anchors, capturing groups over the char-class matcher grammar
-(`_Literal` / `_CharRange` / `_Union` / `_Complement` / `_Group` / `_Het`),
+(`_Literal` / `_CharRange` / `_Union` / `_Complement` / `_Group`),
 back-references, and plain repetition. Anything carrying value/alphabet arithmetic
 (`{A::x..y}` bounds), a count/stage reference, a `[#i]` rep, or a grouping brace
 (`SeqGroupEl`) raises `Unsupported`, and `RustEngine` falls back to `PythonEngine`
@@ -85,7 +85,5 @@ def _matcher(m) -> dict:
         return {"k": "compl", "inner": _matcher(m.inner)}
     if type(m) is c._Group:
         return {"k": "group", "members": [[mem, gi] for mem, gi in m.members]}
-    if type(m) is c._Het:
-        return {"k": "het", "inner": _matcher(m.inner)}
     # _ValueRange and anything new — fall back.
     raise Unsupported(f"matcher {type(m).__name__}")

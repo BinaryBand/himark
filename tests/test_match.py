@@ -334,7 +334,9 @@ def test_class_interleave():
     assert matches(hr, "* * *") == ["* * *"]
     assert matches(hr, "-- -") == ["-- -"]
     assert matches(hr, "--") == []  # too short
-    assert matches(hr, "-*-") == []  # mixed rule chars are different groups
+    # Under the grouping-brace model, [3..] re-enters scope per repetition,
+    # so mixed-group sequences like -*- are allowed (each rep is a fresh pick).
+    assert matches(hr, "-*-") == ["-*-"]
     assert matches(hr, "    ") == []  # a space is a spelling, not a unit
 
 

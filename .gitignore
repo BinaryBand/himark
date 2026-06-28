@@ -222,7 +222,8 @@ himark/parser_antlr/_generated/
 
 # Private project files
 .vscode
-static/**/.*
 docs/**/.*
+editors/
+static/**/.*
 tests/demos/output
 CLAUDE.md
