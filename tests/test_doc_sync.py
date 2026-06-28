@@ -114,15 +114,15 @@ def test_doc_band_double_colon_is_a_band():
 def test_doc_anchors():
     # The Anchors section: single angle is a line edge, double angle the document
     # edge; `<` a start, `>` an end. All zero-width.
-    assert matches("{@<}{!\n}[1..]{@>}", "hi\nthere") == ["hi", "there"]  # whole line
-    assert matches("{@<<}{!\n}[1..]", "hi\nthere") == ["hi"]  # only the first line
-    assert matches("{!\n}[1..]{@>>}", "hi\nthere") == ["there"]  # only the last line
+    assert matches("{@<}!{\n}[1..]{@>}", "hi\nthere") == ["hi", "there"]  # whole line
+    assert matches("{@<<}!{\n}[1..]", "hi\nthere") == ["hi"]  # only the first line
+    assert matches("!{\n}[1..]{@>>}", "hi\nthere") == ["there"]  # only the last line
 
 
 def test_doc_filters():
     # The Filters section: the closed native set is the string filters trim / indent.
-    assert execute(parser.parse('{!x}[1..] => "{{ . | trim }}"'), "  hi  ") == ["hi"]
-    assert execute(parser.parse('{!x}[1..] => "{{ . | indent }}"'), "a\nb") == [
+    assert execute(parser.parse('!{x}[1..] => "{{ . | trim }}"'), "  hi  ") == ["hi"]
+    assert execute(parser.parse('!{x}[1..] => "{{ . | indent }}"'), "a\nb") == [
         "\ta\n\tb"
     ]
 

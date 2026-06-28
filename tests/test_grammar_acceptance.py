@@ -97,11 +97,11 @@ def test_variable_decl_accepted(name, body):
 
 DEFINITIONS: list[tuple[str, str]] = [
     ("head", r"{@<}{#}[1..6]{ }[1..]"),
-    ("eol", r"{!\n}[1..]"),
+    ("eol", r"!{\n}[1..]"),
     ("n", r"{@d}[1..]"),
     ("digits", r"{{@d}}[1..]"),
     ("pair", r"@digits{\,}@digits"),
-    ("paren", r"{(}{!{(,)}}[..]{)}"),
+    ("paren", r"{(}!{(,)}[..]{)}"),
 ]
 
 

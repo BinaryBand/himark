@@ -254,10 +254,7 @@ def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
 def _brace_singleton(bg: GRAMMARParser.BraceGroupContext) -> str | None:
     """The single value of a `{…}` if it has cardinality 1, else None (no count
     handling beyond a bare singleton — counted singletons are out of slice)."""
-    body = bg.braceBody()
-    if body.BANG() is not None:
-        return None  # complement is a class, never a singleton
-    band = body.band()
+    band = bg.braceBody().band()
     if isinstance(
         band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)
     ):
@@ -281,7 +278,7 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
     if len(atoms) != 1 or atoms[0].complement() is None:
         return None
     operand_body = atoms[0].complement().braceGroup().braceBody()
-    if operand_body.BANG() is not None or isinstance(
+    if isinstance(
         operand_body.band(),
         (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext),
     ):
@@ -630,38 +627,28 @@ class _Resolver:
     def resolve_brace_body(
         self, body: GRAMMARParser.BraceBodyContext
     ) -> t.SemanticNode:
-        """Resolve a `braceBody` (`BANG? band`) into a semantic node — the slice's
-        core tree-walk, the phase3 replacement for one rule."""
+        """Resolve a `braceBody` (`band`) into a semantic node — the slice's core
+        tree-walk, the phase3 replacement for one rule. Subtraction is never here:
+        it is the leading-sigil `!{…}` `complement` atom/factor, resolved separately."""
         band = body.band()
         if isinstance(
             band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)
         ):
-            node = self.resolve_band(band)
-        else:
-            universe = band.universe()
-            # Whole-content single nested brace `{{X}}` (no outer `!`): the nesting
-            # *constructs* one capture-group scope (`SequenceNode`) around the inner
-            # alphabet — a listed fold for an enumerable inner (`{{a,A}}`), a lazy het
-            # run for a range/value inner (`{{a..z}}`) — where re-entry per rep frees
-            # its members afresh. Distinct from a bare `{a,A}` (two primitives). Mirrors
-            # phase3.resolve_grouping_brace's single-nested-brace form. (A complement
-            # `{!{…}}` keeps its BANG, so the guard lets it through to the complement.)
-            if body.BANG() is None and _is_whole_nested_brace(universe):
-                inner = universe.arm()[0].term().atom()[0].braceGroup()
-                node = t.SequenceNode(
-                    children=[self.resolve_brace_body(inner.braceBody())]
-                )
-            elif body.BANG() is None and _cst_is_sequence_brace(universe):
-                # Concatenation grouping (`{of {black} {quartz}}`, several glued
-                # constructs): one capture-group scope over a sub-pattern.
-                children = self._universe_to_sequence_children(universe)
-                node = t.SequenceNode(children=children)
-            else:
-                node = self.resolve_universe(universe)
-
-        if body.BANG() is not None:
-            node = t.ComplementNode(inner=node)
-        return node
+            return self.resolve_band(band)
+        universe = band.universe()
+        # Whole-content single nested brace `{{X}}`: the nesting *constructs* one
+        # capture-group scope (`SequenceNode`) around the inner alphabet — a listed
+        # fold for an enumerable inner (`{{a,A}}`), a lazy het run for a range/value
+        # inner (`{{a..z}}`) — where re-entry per rep frees its members afresh.
+        # Distinct from a bare `{a,A}` (two primitives).
+        if _is_whole_nested_brace(universe):
+            inner = universe.arm()[0].term().atom()[0].braceGroup()
+            return t.SequenceNode(children=[self.resolve_brace_body(inner.braceBody())])
+        if _cst_is_sequence_brace(universe):
+            # Concatenation grouping (`{of {black} {quartz}}`, several glued
+            # constructs): one capture-group scope over a sub-pattern.
+            return t.SequenceNode(children=self._universe_to_sequence_children(universe))
+        return self.resolve_universe(universe)
 
     def resolve_pattern(self, ctx: GRAMMARParser.PatternOnlyContext) -> t.RootNode:
         pattern = ctx.pattern()

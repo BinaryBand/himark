@@ -34,19 +34,19 @@
 // ── MASK INLINE ── inline elements stay on their line (sentinels `‹ ›`) ───────
 // Inline void elements (kept inline, unlike block voids below).
 {<}{br,img,wbr,input}{>} => "‹{{$1}}›"
-{<}{br,img,wbr,input}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "‹{{$1}}{{$2}}{{$3}}›"
+{<}{br,img,wbr,input}{{\ ,\t,\n}}!{<,>}[..]{>} => "‹{{$1}}{{$2}}{{$3}}›"
 // Inline paired elements, innermost-first to a fixed point (handles nesting).
-{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{>}{!<}[..]{</}{$1}{>} <=> "‹{{$1}}›{{$3}}‹/{{$1}}›"
-{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{{\ ,\t,\n}}{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <=> "‹{{$1}}{{$2}}{{$3}}›{{$5}}‹/{{$1}}›"
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{>}!{<}[..]{</}{$1}{>} <=> "‹{{$1}}›{{$3}}‹/{{$1}}›"
+{<}{a,abbr,b,bdi,bdo,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,ruby,s,samp,small,span,strong,sub,sup,time,u,var}{{\ ,\t,\n}}!{<,>}[..]{>}!{<}[..]{</}{$1}{>} <=> "‹{{$1}}{{$2}}{{$3}}›{{$5}}‹/{{$1}}›"
 
 // ── MARK BLOCK LEAVES ── comment, DOCTYPE, then block-level void elements ─────
-{<!--}{!{-->}}[..]{-->} => "\n⟦!--{{$1}}--⟧"
-{<!}{!>}[..]{>} => "\n⟦!{{$1}}⟧"
+{<!--}!{-->}[..]{-->} => "\n⟦!--{{$1}}--⟧"
+{<!}!{>}[..]{>} => "\n⟦!{{$1}}⟧"
 {<}{hr,meta,link,base,col,embed,source,track,area,param}{>} => "\n⟦{{$1}}⟧"
-{<}{hr,meta,link,base,col,embed,source,track,area,param}{{\ ,\t,\n}}{!{<,>}}[..]{>} => "\n⟦{{$1}}{{$2}}{{$3}}⟧"
+{<}{hr,meta,link,base,col,embed,source,track,area,param}{{\ ,\t,\n}}!{<,>}[..]{>} => "\n⟦{{$1}}{{$2}}{{$3}}⟧"
 
 // ── WRAP ── indent each innermost block pair, re-spliced to a fixed point ─────
-{<}{!{<,>,/,\ ,\t,\n}}[1..]{!{<,>}}[..]{>}{!<}[..]{</}{$1}{>} <=> "\n⟦{{$1}}{{$2}}⟧\n{{ $4 | trim | indent }}\n⟦/{{$1}}⟧"
+{<}!{<,>,/,\ ,\t,\n}[1..]!{<,>}[..]{>}!{<}[..]{</}{$1}{>} <=> "\n⟦{{$1}}{{$2}}⟧\n{{ $4 | trim | indent }}\n⟦/{{$1}}⟧"
 
 // ── RESTORE ── sentinels back to angle brackets, then tidy stray blank lines ──
 {‹} => "<"

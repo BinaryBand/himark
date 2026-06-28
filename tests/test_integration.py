@@ -70,8 +70,8 @@ def test_same_digit_twice():
 
 def test_constant_template():
     # A `=>` step emits a constant for each match. A word is a non-space run
-    # {!\ }[1..] — a bare class is one position.
-    result = execute(parser.parse(r"{!\ }[1..] => <x>"), "ab cd")
+    # !{\ }[1..] — a bare class is one position.
+    result = execute(parser.parse(r"!{\ }[1..] => <x>"), "ab cd")
     assert result == ["<x>", "<x>"]
 
 

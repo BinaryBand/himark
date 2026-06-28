@@ -26,5 +26,5 @@
 //  at the very first byte of the file is missed (keep a space/newline ahead).
 // ============================================================================
 
-{!{@d},{@u},{@l},!{0,l,I,O}}{1}{{@d},{@u},{@l},!{0,l,I,O}::111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
+!{{@d},{@u},{@l},!{0,l,I,O}}{1}{{@d},{@u},{@l},!{0,l,I,O}::111111111111111111111111..2n1XR4oJkmBdJMxhBGQGb96gQ88xUzxLFyG}
     => "{{$0}}<btc>{{$1}}{{$2}}</btc>"

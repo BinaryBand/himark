@@ -29,8 +29,8 @@ def test_greedy_backs_off():
 
 def test_multi_char_break_replaces_lazy_to_nearest():
     # There is no lazy operator; a multi-char break scans up to the nearest
-    # delimiter the run cannot cross (the old `{!|}[..<99]{|}` lazy idiom).
-    assert m("{!|}[1..]{|}", "ab|cd|ef") == ["ab|", "cd|"]
+    # delimiter the run cannot cross (the old `!{|}[..<99]{|}` lazy idiom).
+    assert m("!{|}[1..]{|}", "ab|cd|ef") == ["ab|", "cd|"]
 
 
 # ── Points: primitives vs objects (comma lists vs nesting) ────────────────────
@@ -85,7 +85,7 @@ def test_nested_range_is_heterogeneous():
 
 def test_complement_run_is_heterogeneous():
     # A bare complement run stays a heterogeneous run of non-X characters.
-    assert m(r"{!\ }[1..]", "hi there") == ["hi", "there"]
+    assert m(r"!{\ }[1..]", "hi there") == ["hi", "there"]
 
 
 # ── Transformers: eager-commit, filters, payload, anchors ─────────────────────
@@ -102,13 +102,13 @@ def test_guard_before_template_filters():
 
 
 def test_filter_pipe():
-    assert ex('{!x}[1..] => "{{ . | trim }}"', " hi ") == ["hi"]
+    assert ex('!{x}[1..] => "{{ . | trim }}"', " hi ") == ["hi"]
 
 
 def test_filter_indent_prefixes_each_line():
     # `indent` is a line filter: a tab on every line, so it accumulates under an
     # inside-out wrap (see scripts/html_format.hmk).
-    assert ex(r'{!x}[1..] => "{{ . | indent }}"', "a\nb\nc") == ["\ta\n\tb\n\tc"]
+    assert ex(r'!{x}[1..] => "{{ . | indent }}"', "a\nb\nc") == ["\ta\n\tb\n\tc"]
 
 
 def test_unknown_filter_raises():
@@ -135,7 +135,7 @@ def test_decoration_lands_but_does_not_flow():
 def test_each_moustache_branches_independently():
     # Two moustaches are two branches: each flows and is transformed on its own,
     # with the decoration between them (the `<sep>`) kept in place.
-    assert ex('{x} => "{{.}}<sep>{{.}}" => {!q}[1..] => "[{{.}}]"', "x") == [
+    assert ex('{x} => "{{.}}<sep>{{.}}" => !{q}[1..] => "[{{.}}]"', "x") == [
         "[x]<sep>[x]"
     ]
 
@@ -154,7 +154,7 @@ def test_leading_template_is_the_whole_document_branch():
     assert ex('"<doc>{{.}}</doc>"', "hi") == ["<doc>hi</doc>"]
     # The chain then continues on that render (the inline-input idiom).
     assert ex(
-        '"# Hi" => {#}[1..]{ }{!\\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"', "x"
+        '"# Hi" => {#}[1..]{ }!{\\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"', "x"
     ) == ["<h1>Hi</h1>"]
 
 

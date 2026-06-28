@@ -28,8 +28,8 @@
 // Wrap each fenced block's interior in ⟦ ⟧ (the multi-char break !``` stops the
 // run at the closing fence), then mask every interior newline so the line-local
 // rules below skip the code verbatim.
-{```}{!```}[..]{```} => "⟦{{$1}}⟧"
-{⟦}{!{⟧,\n}}[..]{\n} <=> "{{$0}}{{$1}}␤"
+{```}!{```}[..]{```} => "⟦{{$1}}⟧"
+{⟦}!{⟧,\n}[..]{\n} <=> "{{$0}}{{$1}}␤"
 
 // ── FORMAT ── safe line-local tidies (fenced code is masked) ─────────────────
 // Trim leading, then trailing, blank lines (and stray indent) of the whole file.
@@ -40,17 +40,17 @@
 // ATX heading: exactly one space between the `#` run (1–6) and the title. First
 // collapse extra spaces, then insert a missing one (`##Title` → `## Title`).
 {@<}{#}[1..6]{ }[2..] => "{{$0}} "
-{@<}{#}[1..6]{!{ ,#,\n}} => "{{$0}} {{$1}}"
+{@<}{#}[1..6]!{ ,#,\n} => "{{$0}} {{$1}}"
 // Normalize a `*` or `+` list bullet (then its space run, at line start) to `-`.
 {@<}{{ ,\t}}[0..]{*,+}{ }[1..] => "{{$0}}- "
 // Join list-item continuation lines: a line indented 2–3 spaces whose first real
 // character is prose (not a nested bullet/quote/heading/number) is a soft-wrap of
 // the item above it — drop the newline+indent for a single space. The leading
-// `{!\n}` anchors to a non-blank line (so a blank-separated paragraph or loose
+// `!{\n}` anchors to a non-blank line (so a blank-separated paragraph or loose
 // list item is left alone), and re-splicing to a fixed point chains successive
 // continuation lines. The 2–3 bound (and the non-space first char) keeps a 4-space
 // indented code block out.
-{!\n}{\n}{ }[2..3]{{!{\n, ,\t,#,-,=,*,+,>,|,⟦,0..9}}{!\n}[..]} <=> "{{$0}} {{$3}}"
+!{\n}{\n}{ }[2..3]{!{\n, ,\t,#,-,=,*,+,>,|,⟦,0..9}!{\n}[..]} <=> "{{$0}} {{$3}}"
 // Unwrap soft-wrapped paragraphs: join a prose line to the next prose line (a
 // space replaces the newline), re-spliced to a fixed point so a whole paragraph
 // collapses to one line. A "prose" line starts with a non-marker character — not
@@ -60,7 +60,7 @@
 // can't tell them apart, so (like a digit-led line) such a line is conservatively
 // left on its own rather than risk merging a thematic break into a paragraph. A
 // `*`/`+` bullet is already `-` by the normalization pass above.
-{@<}{!{\n,#,-,=,*,_,>,|,⟦, ,\t,0..9}}{!\n}[..]{\n}{!{\n,#,-,=,*,_,>,|,⟦, ,\t,0..9}} <=> "{{$0}}{{$1}} {{$3}}"
+{@<}!{\n,#,-,=,*,_,>,|,⟦, ,\t,0..9}!{\n}[..]{\n}!{\n,#,-,=,*,_,>,|,⟦, ,\t,0..9} <=> "{{$0}}{{$1}} {{$3}}"
 // Collapse runs of blank lines down to a single blank line.
 {\n}[3..] => "\n\n"
 

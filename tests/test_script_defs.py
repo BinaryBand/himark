@@ -19,7 +19,7 @@ def test_definition_expands_and_runs():
     # heading statement; anchors are unnumbered, so #0 is the level and $2 the text.
     src = (
         "@head = {@<}{#}[1..6]{ }[1..]\n"
-        "@eol  = {!\\n}[1..]\n"
+        "@eol  = !{\\n}[1..]\n"
         '@head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"\n'
     )
     assert _run(src, "## Hello\n# World") == "<h2>Hello</h2>\n<h1>World</h1>"
@@ -58,7 +58,7 @@ def test_definition_redefinition_errors():
 
 def test_fixed_point_arrow_still_flagged_with_defs():
     # A `<=>` statement keeps its fixed-point flag when its head comes from a def.
-    src = '@paren = {(}{!{(,)}}[..]{)}\n@paren <=> "{{$1}}"'
+    src = '@paren = {(}!{(,)}[..]{)}\n@paren <=> "{{$1}}"'
     pipeline = P.compile_script(src)
     assert pipeline[0][0].fixed_point is True
     assert _run(src, "a(b(c)d)e") == "abcde"

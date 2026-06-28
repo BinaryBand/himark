@@ -349,14 +349,14 @@ def test_congruence_with_whitespace_member():
 
 
 def test_complement_newline():
-    # {!\n} is one non-newline char; a run is [1..], repeated heterogeneously.
-    result = matches("{!\n}[1..]", "line one\nline two")
+    # !{\n} is one non-newline char; a run is [1..], repeated heterogeneously.
+    result = matches("!{\n}[1..]", "line one\nline two")
     assert result == ["line one", "line two"]
 
 
 def test_complement_char_range():
-    # {!a..z}[1..] matches entire runs of non-lowercase chars (heterogeneous).
-    result = matches("{!a..z}[1..]", "a1B2c3")
+    # !{a..z}[1..] matches entire runs of non-lowercase chars (heterogeneous).
+    result = matches("!{a..z}[1..]", "a1B2c3")
     assert "1B2" in result
     assert "3" in result
     assert "a" not in result
@@ -364,10 +364,11 @@ def test_complement_char_range():
 
 
 def test_subtractive_universe_outside_brace():
-    # HMK.md §Subtraction: `!{X}` (bang outside the brace) is the canonical
-    # subtractive universe and resolves identically to the inner `{!X}` spelling.
+    # HMK.md §Subtraction: `!{X}` (the leading sigil before the brace) is the one
+    # and only subtractive spelling. A `!` *inside* a brace is a literal BANG, so
+    # `{!a}` is the text "!a", not a complement.
     assert matches("!{a}", "abc") == ["b", "c"]
-    assert matches("!{a}", "abc") == matches("{!a}", "abc")
+    assert matches("{!a}", "x!ay") == ["!a"]  # {!a} is literal text, not a complement
     # A multi-member operand subtracts each member.
     assert matches("!{|,\n}", "a|b") == ["a", "b"]
     # Composes with a run and with adjacency like any universe.
@@ -378,17 +379,17 @@ def test_subtractive_universe_outside_brace():
 def test_multi_char_subtraction_is_a_break():
     # HMK.md §Subtraction: a multi-character subtracted member makes `!{X}` a
     # break — one char that does not *begin* X — so a run stops at the nearest X.
-    assert matches("{!{xy}}[1..]", "aabxycc") == ["aab", "ycc"]  # run halts before xy
+    assert matches("!{xy}[1..]", "aabxycc") == ["aab", "ycc"]  # run halts before xy
     assert matches("!{xy}", "axyb") == ["a", "y", "b"]  # only the 'x' of xy is skipped
     # The fenced-code use: a body run halts at the nearest closing fence, so
     # adjacent blocks stay separate (no lazy operator needed).
-    body = "{```}{\\n}{!{\\n```}}[0..]{\\n}{```}"
+    body = "{```}{\\n}!{\\n```}[0..]{\\n}{```}"
     assert matches(body, "```\nA\n```\n```\nB\n```") == ["```\nA\n```", "```\nB\n```"]
 
 
 def test_multi_char_subtraction_union_breaks_on_either():
     # A union of multi-char members breaks on whichever delimiter comes first.
-    assert matches("{!{```,~~~}}[1..]", "aa```bb~~~cc") == ["aa", "``bb", "~~cc"]
+    assert matches("!{```,~~~}[1..]", "aa```bb~~~cc") == ["aa", "``bb", "~~cc"]
 
 
 # ── Repetition equality ───────────────────────────────────────────────────────
@@ -492,14 +493,14 @@ def test_grouping_brace_repetition_is_structural():
 
 def test_constant_template_per_match():
     # A `=>` step emits a constant for every match. A word is a non-space run
-    # {!\ }[1..] (heterogeneous), since a bare class is one position.
-    assert execute(parser.parse(r"{!\ }[1..] => X"), "ab cd") == ["X", "X"]
+    # !{\ }[1..] (heterogeneous), since a bare class is one position.
+    assert execute(parser.parse(r"!{\ }[1..] => X"), "ab cd") == ["X", "X"]
 
 
 def test_splice_constant_in_place():
     # `splice` lays the rendered branches back over the source, keeping the text
     # between matches verbatim.
-    assert splice(parser.parse(r"{!-}[1..] => X"), "ab-cd") == "X-X"
+    assert splice(parser.parse(r"!{-}[1..] => X"), "ab-cd") == "X-X"
 
 
 def test_chained_patterns_narrow():

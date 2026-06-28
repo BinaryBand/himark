@@ -13,7 +13,7 @@
 //  - triple-backtick fenced block that contains HMK-like tokens
 //  - escaped quotes and backslashes inside templates
 
-{!\ }[1..] => "<w>{{.}}</w>"
+!{\ }[1..] => "<w>{{.}}</w>"
 // continuation that has inconsistent indent
     => {next}
 

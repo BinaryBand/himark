@@ -116,7 +116,12 @@ countRef  : HASH INT? ;                      // # (self-bind) or #i (count-ref)
 // Shared by `{…}` interiors and the prelude's `@name =` RHS. One top-level `::`
 // splits payload from band (divergence 1); everything else is a union of arms,
 // each an atom run with an optional `..` range.
-braceBody : BANG? band ;
+//
+// Subtraction has exactly one spelling: the leading sigil `!{…}` (an `atom`/
+// `factor` `complement`), per HMK.md ("Only a leading sigil changes the reading:
+// `!{…}` subtracts"). There is no `{!…}` whole-body complement — a leading `!`
+// inside a brace is a literal BANG (a `litToken`), so `{!}` is the text "!".
+braceBody : band ;
 band      : universe BAND universe           # valueBand
            | BAND universe                   # ambientBand
            | universe                        # bareAlphabet

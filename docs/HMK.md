@@ -80,7 +80,7 @@ Zero-width, capture the empty string. A single angle is a **line** edge, a doubl
 | `@<` / `@>`   | start / end of **line** (pos 0 or by `\n`) |
 | `@<<` / `@>>` | start / end of the **document**            |
 
-A whole line is `{@<}{!\n}[1..]{@>}`.
+A whole line is `{@<}!{\n}[1..]{@>}`.
 
 ---
 
@@ -330,7 +330,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 
 ```proto
 @head = {@<}{#}[1..6]{ }[1..]      // an ATX head marker at line start
-@eol  = {!\n}[1..]                 // the rest of a line
+@eol  = !{\n}[1..]                 // the rest of a line
 
 @head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"   // expands to the full heading rule
 ```

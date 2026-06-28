@@ -30,7 +30,7 @@ def test_trims_whitespace_around_arrows():
 
 
 def test_internal_whitespace_preserved():
-    assert steps("{#}[1..6] { } {!\\n} => out") == ["{#}[1..6] { } {!\\n}", "out"]
+    assert steps("{#}[1..6] { } !{\\n} => out") == ["{#}[1..6] { } !{\\n}", "out"]
 
 
 # ── Arrow protection inside delimiters ────────────────────────────────────────
@@ -43,7 +43,7 @@ def test_arrow_inside_braces_not_split():
 
 def test_real_arrow_after_balanced_delimiters():
     # {**} braces are balanced; only the top-level => splits.
-    assert steps("{**}{!**}{**} => <strong>{{0$}}</strong>") == [
-        "{**}{!**}{**}",
+    assert steps("{**}!{**}{**} => <strong>{{0$}}</strong>") == [
+        "{**}!{**}{**}",
         "<strong>{{0$}}</strong>",
     ]

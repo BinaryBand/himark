@@ -173,8 +173,8 @@ PATTERNS: list[tuple[str, str]] = [
     ("union_strings", r"{cat,dog}"),
     ("group_class_one", r"{a,A}"),
     ("group_class_alphabet", r"{{a,A},{b,B}}"),
-    ("complement", r"{!{x,y}}"),
-    ("complement_multichar", r"{!{-->}}"),
+    ("complement", r"!{x,y}"),
+    ("complement_multichar", r"!{-->}"),
     ("heterogeneous", r"{{@d}}"),
     ("anchor_line_start", r"{@<}"),
     ("anchor_line_end", r"{@>}"),
@@ -201,7 +201,7 @@ PATTERNS: list[tuple[str, str]] = [
     ("var_lower", r"{@l}"),
     ("var_upper", r"{@u}"),
     ("var_word", r"{@w}"),
-    ("var_complement_ws", r"{!@s}"),
+    ("var_complement_ws", r"!{@s}"),
 ]
 
 # Script tier: every shipped `.hmk` pipeline, parsed end-to-end (macro expansion,

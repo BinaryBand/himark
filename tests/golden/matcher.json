@@ -684,7 +684,7 @@
     ]
   },
   "complement_break": {
-    "pattern": "{!{x,y}}[1..]",
+    "pattern": "!{x,y}[1..]",
     "text": "abxcdyef",
     "matches": [
       {
@@ -756,7 +756,7 @@
     ]
   },
   "multichar_break": {
-    "pattern": "{<!--}{!{-->}}[1..]{-->}",
+    "pattern": "{<!--}!{-->}[1..]{-->}",
     "text": "<!--note-->tail",
     "matches": [
       {
@@ -810,7 +810,7 @@
     ]
   },
   "anchored_line": {
-    "pattern": "{@<}{!\\n}[1..]{\\n}",
+    "pattern": "{@<}!{\\n}[1..]{\\n}",
     "text": "one\ntwo\nthree\n",
     "matches": [
       {

@@ -41,23 +41,23 @@
 {\\}{\[} => "Ⓛ"
 
 // --- Phase 2: code (fenced, then inline), with content masked ---------------
-// Fenced blocks first: the body is a multi-char break {!{\n```}} (any char that
+// Fenced blocks first: the body is a multi-char break !{\n```} (any char that
 // does not begin the closing fence), so the run stops at the *nearest* `\n``` and
 // adjacent blocks stay separate. The body is wrapped in `⟪…⟫`.
-{```}{!\n}[1..]{\n}{!{\n```}}[0..]{\n}{```}
+{```}!{\n}[1..]{\n}!{\n```}[0..]{\n}{```}
     => "<pre><code class=\"language-{{$1}}\">⟪{{$3}}⟫</code></pre>"
-{```}{\n}{!{\n```}}[0..]{\n}{```}
+{```}{\n}!{\n```}[0..]{\n}{```}
     => "<pre><code>⟪{{$2}}⟫</code></pre>"
 // Mask backticks inside `⟪…⟫` first, so an inline-code span cannot match a fenced
 // backtick; then wrap inline code spans; then mask the remaining significant
 // characters in every `⟪…⟫`. The block/inline rules below skip masked content.
-{⟪}{!{⟫,`}}[..]{`} <=> "{{$0}}{{$1}}Ⓑ"
-{`}{!`}[1..]{`} => "<code>⟪{{$1}}⟫</code>"
-{⟪}{!{⟫,\n}}[..]{\n} <=> "{{$0}}{{$1}}Ⓝ"
-{⟪}{!{⟫,*}}[..]{*} <=> "{{$0}}{{$1}}Ⓐ"
-{⟪}{!{⟫,_}}[..]{_} <=> "{{$0}}{{$1}}Ⓤ"
-{⟪}{!{⟫,~}}[..]{~} <=> "{{$0}}{{$1}}Ⓣ"
-{⟪}{!{⟫,\[}}[..]{\[} <=> "{{$0}}{{$1}}Ⓛ"
+{⟪}!{⟫,`}[..]{`} <=> "{{$0}}{{$1}}Ⓑ"
+{`}!{`}[1..]{`} => "<code>⟪{{$1}}⟫</code>"
+{⟪}!{⟫,\n}[..]{\n} <=> "{{$0}}{{$1}}Ⓝ"
+{⟪}!{⟫,*}[..]{*} <=> "{{$0}}{{$1}}Ⓐ"
+{⟪}!{⟫,_}[..]{_} <=> "{{$0}}{{$1}}Ⓤ"
+{⟪}!{⟫,~}[..]{~} <=> "{{$0}}{{$1}}Ⓣ"
+{⟪}!{⟫,\[}[..]{\[} <=> "{{$0}}{{$1}}Ⓛ"
 
 // --- Phase 3: block structure (line-anchored) -------------------------------
 // Normalize a no-leading-pipe table to the leading-pipe form *first*, so its rows
@@ -66,40 +66,40 @@
 // that tells a table from prose with a stray '|'), then 0+ body lines -- each with
 // a '|'. Every such line not already starting with '|' gets a leading + trailing
 // one; Phase 4 then handles both forms with the same machinery.
-{@<}{!{\n,|}}[..]{|}{!\n}[..]{\n}{@<}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@>}{\n}{{@<}{!{\n,|}}[..]{|}{!\n}[..]{\n}[0,1]}[0..]
+{@<}!{\n,|}[..]{|}!{\n}[..]{\n}{@<}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@>}{\n}{{@<}!{\n,|}[..]{|}!{\n}[..]{\n}[0,1]}[0..]
     => "{{.}}"
-    => {@<}{!{|,\n}}{!\n}[..]
+    => {@<}!{|,\n}!{\n}[..]
     => "|{{.}}|"
 
 // Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@<}` is a line
 // start, so a mid-line or in-word '#' (e.g. `a # b`, `[x](#y)`) is never a head.
-{@<}{#}[1..6]{ }[1..]{!\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
+{@<}{#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
 
 // Setext headings: a text line underlined by a whole line of `=` (h1) or 2+ `-`
 // (h2). Placed before the rule below so a `text\n---` underline becomes a heading
 // rather than an `<hr/>`; a standalone rule line (no text above) still falls to it.
-{@<}{!{<,#,>,\n}}{!\n}[..]{\n}{=}[1..]{@>} => "<h1>{{$0}}{{$1}}</h1>"
-{@<}{!{<,#,>,-,\n}}{!\n}[..]{\n}{-}[2..]{@>} => "<h2>{{$0}}{{$1}}</h2>"
+{@<}!{<,#,>,\n}!{\n}[..]{\n}{=}[1..]{@>} => "<h1>{{$0}}{{$1}}</h1>"
+{@<}!{<,#,>,-,\n}!{\n}[..]{\n}{-}[2..]{@>} => "<h2>{{$0}}{{$1}}</h2>"
 
 // Horizontal rule: a whole line of 3+ of the same -, *, or _.
 {@<}{-,*,_}[3..]{@>} => "<hr/>"
 
 // Blockquote: a run of '>' lines, joined inside one <blockquote>.
-{{@<}{>}{ }[0,1]{!\n}[1..]{\n}[0,1]}[1..]
+{{@<}{>}{ }[0,1]!{\n}[1..]{\n}[0,1]}[1..]
     => "<blockquote>{{.}}</blockquote>"
-    => {@<}{>}{ }[0,1]{!\n}[1..]
+    => {@<}{>}{ }[0,1]!{\n}[1..]
     => "{{$2}} "
 
 // Unordered list: a run of -, *, or + bullet lines, wrapped in <ul>.
-{{@<}{-,*,+}{ }[1..]{!\n}[1..]{\n}[0,1]}[1..]
+{{@<}{-,*,+}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
     => "<ul>{{.}}</ul>"
-    => {@<}{-,*,+}{ }[1..]{!\n}[1..]
+    => {@<}{-,*,+}{ }[1..]!{\n}[1..]
     => "<li>{{$2}}</li>"
 
 // Ordered list: a run of `N.` lines, wrapped in <ol> (renumbered by the browser).
-{{@<}{{@d}}[1..]{.}{ }[1..]{!\n}[1..]{\n}[0,1]}[1..]
+{{@<}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
     => "<ol>{{.}}</ol>"
-    => {@<}{{@d}}[1..]{.}{ }[1..]{!\n}[1..]
+    => {@<}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]
     => "<li>{{$3}}</li>"
 
 // --- Phase 4: tables --------------------------------------------------------
@@ -107,35 +107,35 @@
 // wrap a block of 2+ rows that each start with '|'. Each row's cells are split on
 // '|', trimmed, and the outer pipes dropped. The trim is structural, not a filter:
 // the leading and trailing `{ }[0..]` consume surrounding spaces, while the inner
-// grouping brace `{{!|,\n}[0..]{!|,\n, ,\t}}` captures a core ending on a non-space.
+// grouping brace `{!{|,\n}[0..]!{|,\n, ,\t}}` captures a core ending on a non-space.
 {@<}{ }[0..]{|}{{ ,:,-,|}}[3..]{@>}{\n} => ""
-{{@<}{ }[0..]{|}{!\n}[0..]{\n}[0,1]}[2..]
+{{@<}{ }[0..]{|}!{\n}[0..]{\n}[0,1]}[2..]
     => "<table>{{.}}</table>"
-    => {@<}{{!\n}}[1..]{|}{ }[0..]{@>}
+    => {@<}!{\n}[1..]{|}{ }[0..]{@>}
     => "<tr>{{ $0 }}</tr>"
-    => {|}{ }[0..]{{!|,\n}[0..]{!|,\n, ,\t}}{ }[0..]
+    => {|}{ }[0..]{!{|,\n}[0..]!{|,\n, ,\t}}{ }[0..]
     => "<td>{{$2}}</td>"
 
 // --- Phase 5: inline spans (after block, so they format inside block tags) ---
 // Images before links, since `![alt](src)` contains the link shape `[..](..)`.
-{\!}{[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<img alt=\"{{$2}}\" src=\"{{$5}}\"/>"
-{[}{!]}[1..]{]}{(}{!)}[1..]{)} => "<a href=\"{{$4}}\">{{$1}}</a>"
+{\!}{[}!{]}[1..]{]}{(}!{)}[1..]{)} => "<img alt=\"{{$2}}\" src=\"{{$5}}\"/>"
+{[}!{]}[1..]{]}{(}!{)}[1..]{)} => "<a href=\"{{$4}}\">{{$1}}</a>"
 
 // Autolink: a bare `<http(s)://…>` URL. Phase 1 already turned the `<` into `&lt;`,
 // so match that form; the `>` is untouched. The URL runs to the closing `>`.
-{&lt;}{http}{!{>, ,\n}}[1..]{>} => "<a href=\"http{{$2}}\">http{{$2}}</a>"
+{&lt;}{http}!{>, ,\n}[1..]{>} => "<a href=\"http{{$2}}\">http{{$2}}</a>"
 
 // Emphasis: longest delimiter first so `***` beats `**` beats `*`. The double and
 // triple delimiters use a multi-char break, so they span a lone inner delimiter
 // (`**a*b**` -> `<strong>a*b</strong>`); the singles stop at their own character.
-{***}{!{***}}[1..]{***} => "<strong><em>{{$1}}</em></strong>"
-{**}{!{**}}[1..]{**} => "<strong>{{$1}}</strong>"
-{__}{!{__}}[1..]{__} => "<strong>{{$1}}</strong>"
-{*}{!*}[1..]{*} => "<em>{{$1}}</em>"
-{_}{!_}[1..]{_} => "<em>{{$1}}</em>"
+{***}!{***}[1..]{***} => "<strong><em>{{$1}}</em></strong>"
+{**}!{**}[1..]{**} => "<strong>{{$1}}</strong>"
+{__}!{__}[1..]{__} => "<strong>{{$1}}</strong>"
+{*}!{*}[1..]{*} => "<em>{{$1}}</em>"
+{_}!{_}[1..]{_} => "<em>{{$1}}</em>"
 
 // Strikethrough (GFM); a multi-char break lets it span a lone inner '~'.
-{~~}{!{~~}}[1..]{~~} => "<del>{{$1}}</del>"
+{~~}!{~~}[1..]{~~} => "<del>{{$1}}</del>"
 
 // Hard line break: two or more trailing spaces before a newline become a `<br/>`.
 { }[2..]{\n} => "<br/>\n"

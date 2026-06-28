@@ -7871,16 +7871,11 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "SequenceNode",
-              "children": [
-                {
-                  "_t": "ComplementNode",
-                  "inner": {
-                    "_t": "LiteralNode",
-                    "content": "\n"
-                  }
-                }
-              ]
+              "_t": "ComplementNode",
+              "inner": {
+                "_t": "LiteralNode",
+                "content": "\n"
+              }
             },
             "count": {
               "_t": "CountRange",

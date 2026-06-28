@@ -392,7 +392,7 @@ def _lower_union(node: t.UnionNode) -> Matcher:
 class _Complement(_Base):
     """A single character the inner node does NOT match (one position). A run is
     `[count]`, and it repeats heterogeneously -- each rep is any such character --
-    so `{!a}[1..]` is a run of non-`a` characters."""
+    so `!{a}[1..]` is a run of non-`a` characters."""
 
     __slots__ = ("inner",)
 
