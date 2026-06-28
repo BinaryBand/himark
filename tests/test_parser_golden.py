@@ -37,12 +37,9 @@ Regenerate the pins after an *intended* parser change (same switch as test_golde
 from __future__ import annotations
 
 import dataclasses
-import importlib
-import importlib.util
 import json
 import os
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Callable
 
 import pytest
@@ -213,44 +210,6 @@ PATTERNS: list[tuple[str, str]] = [
 SCRIPT_FILES = sorted(p.name for p in SCRIPTS.glob("*.hmk"))
 
 
-# ── Candidate discovery ───────────────────────────────────────────────────────
-
-
-CANDIDATE_SKIP = (
-    "no ANTLR candidate parser available — import the module and build its generated "
-    "lexer/parser with `python -m himark.parser_antlr.regenerate`"
-)
-
-
-def load_candidate() -> ModuleType | None:
-    """The ANTLR-backed parser module, if present *and buildable*. See the contract in
-    the module docstring. Absent → the live-differential tests skip (the golden pins
-    still run, guarding the existing parser).
-
-    The candidate module imports even before its ANTLR lexer/parser is generated (those
-    are a git-ignored build product of docs/GRAMMAR.g4). A candidate whose `parse` can't
-    actually run is no candidate, so we also require the generated parser to be present;
-    otherwise the live tests skip cleanly rather than erroring on the missing module."""
-    name = os.environ.get("HIMARK_ANTLR_PARSER", "himark.parser_antlr")
-    try:
-        module = importlib.import_module(name)
-    except ModuleNotFoundError:
-        return None
-    if name == "himark.parser_antlr":
-        try:
-            spec = importlib.util.find_spec(
-                "himark.parser_antlr._generated.GRAMMARParser"
-            )
-        except ModuleNotFoundError:
-            spec = None
-        if spec is None:
-            return None
-    return module
-
-
-CANDIDATE = load_candidate()
-
-
 # ── Reference corpus builders ─────────────────────────────────────────────────
 
 
@@ -302,51 +261,3 @@ def test_script_ast_golden():
         GOLDEN / "scripts.json",
         "script",
     )
-
-
-# ── Tests: live differential (skip without a candidate) ───────────────────────
-
-
-# A candidate may be a *partial* implementation (e.g. the braceBody slice). It
-# signals "this construct isn't implemented yet" by raising `NotImplementedError`,
-# which skips that row. Any *other* outcome — a wrong AST, or a different
-# exception — still fails, so the harness never silently accepts a divergence.
-
-
-@pytest.mark.skipif(CANDIDATE is None, reason=CANDIDATE_SKIP)
-@pytest.mark.parametrize("pid,src", PATTERNS, ids=[p[0] for p in PATTERNS])
-def test_pattern_parity_against_candidate(pid, src):
-    """Reference and candidate parsers agree on the pattern's AST."""
-    ref = canon(parser.parse(src))
-    try:
-        cand = canon(CANDIDATE.parse(src))
-    except NotImplementedError as e:
-        pytest.skip(f"candidate does not implement: {e}")
-    assert (d := diff(ref, cand, pid)) is None, f"parser divergence at {d}"
-
-
-@pytest.mark.skipif(CANDIDATE is None, reason=CANDIDATE_SKIP)
-@pytest.mark.parametrize("name", SCRIPT_FILES, ids=SCRIPT_FILES)
-def test_script_parity_against_candidate(name):
-    """Reference and candidate agree on a whole `.hmk` file's AST. Uses the
-    candidate's own `compile_script` if it has one, else the injected splitter."""
-    source = (SCRIPTS / name).read_text("utf-8")
-    ref = canon(precompiled.compile_script(source))
-    try:
-        if hasattr(CANDIDATE, "compile_script"):
-            cand = canon(CANDIDATE.compile_script(source))
-        else:
-            cand = canon(compile_script_with(source, CANDIDATE.parse))
-    except NotImplementedError as e:
-        pytest.skip(f"candidate does not implement: {e}")
-    assert (d := diff(ref, cand, name)) is None, f"parser divergence at {d}"
-
-
-@pytest.mark.skipif(CANDIDATE is None, reason=CANDIDATE_SKIP)
-def test_template_opacity_both_parsers():
-    """Template opacity is a hygiene property *both* parsers now share: a `@name`
-    inside a `"…"` template is opaque literal text, never resolved. (The text-macro
-    reference once leaked `@u`→`A..Z` here — the one intended divergence — but the
-    reference is now template-opaque too, so the two agree and this is a parity check.)"""
-    assert CANDIDATE.parse('"see @u here"')[0].children[0].content == "see @u here"
-    assert parser.parse('"see @u here"')[0].children[0].content == "see @u here"

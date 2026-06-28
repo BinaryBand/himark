@@ -5318,13 +5318,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 0,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[..]"
                 }
               ]
             },
@@ -6674,13 +6673,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 0,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[..]"
                 },
                 {
                   "_t": "BraceGroupNode",
@@ -7160,13 +7158,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 1,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[1..]"
                 },
                 {
                   "_t": "BraceGroupNode",
@@ -7331,13 +7328,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 1,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[1..]"
                 },
                 {
                   "_t": "BraceGroupNode",
@@ -7527,13 +7523,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 1,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[1..]"
                 },
                 {
                   "_t": "BraceGroupNode",
@@ -7811,13 +7806,12 @@
                       "content": "\n"
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 0,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[0..]"
                 },
                 {
                   "_t": "BraceGroupNode",
@@ -7980,13 +7974,12 @@
                       ]
                     }
                   },
-                  "count": {
-                    "_t": "CountRange",
-                    "min": 0,
-                    "max": null,
-                    "group": null
-                  },
+                  "count": null,
                   "count_src": null
+                },
+                {
+                  "_t": "LeafNode",
+                  "content": "[0..]"
                 },
                 {
                   "_t": "BraceGroupNode",

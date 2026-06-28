@@ -28,7 +28,9 @@ def test_doc_variable_table_matches_prelude():
     # Scope to the Variables section's table — `@ed` also appears as an operand in
     # the Carriers/operators table, but it is a library alphabet, not a text variable.
     # The variable table is the doc face of the `std.hmk` prelude's `@name` lines.
-    doc_names = set(re.findall(r"^\| `@(\w+)`", _doc_section("Variables"), re.MULTILINE))
+    doc_names = set(
+        re.findall(r"^\| `@(\w+)`", _doc_section("Variables"), re.MULTILINE)
+    )
     assert doc_names == set(VARIABLES)
 
 

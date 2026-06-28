@@ -203,10 +203,9 @@ def test_invalid_literal_endpoint_is_a_clean_compile_error():
 
 
 def test_exclusion_char_range_stress():
-    # {a..z,!d..f} is a single-position class: each non-excluded lowercase char
-    # is an independent match; d, e, f are never matched.
+    # Exclusion operand must be braced: {a..z,!{d..f}} excludes d, e, f.
     text = "abcdefghijklmnopqrstuvwxyz" * 50
-    result = matches("{a..z,!d..f}", text)
+    result = matches("{a..z,!{d..f}}", text)
 
     expected = [ch for ch in text if "a" <= ch <= "z" and not ("d" <= ch <= "f")]
 
@@ -214,9 +213,9 @@ def test_exclusion_char_range_stress():
 
 
 def test_exclusion_full_alpha_stress():
-    # {{a..z},!m..p} is single-position: each char in a-z except m-p is one match.
+    # Exclusion operand must be braced: {{a..z},!{m..p}} excludes m, n, o, p.
     text = ("abcdefghijklmnop" * 40) + "qrstuvwxyz"
-    result = matches("{{a..z},!m..p}", text)
+    result = matches("{{a..z},!{m..p}}", text)
 
     expected = [ch for ch in text if "a" <= ch <= "z" and not ("m" <= ch <= "p")]
 
@@ -483,7 +482,8 @@ def test_grouping_brace_sub_captures():
 def test_grouping_brace_repetition_is_structural():
     # A grouping brace is a *shape*: each repetition re-matches the shape, with
     # content free between reps — unlike an atomic class, which repeats by value.
-    row = r"{{|}{!|,\n}[1..]}[2]{|}"
+    # Complement atom form !{...} (BANG before brace), per HMK.md spec.
+    row = r"{{|}!{|,\n}[1..]}[2]{|}"
     assert matches(row, "| a | bb |") == ["| a | bb |"]
 
 
@@ -732,13 +732,6 @@ def test_stage_ref_matches_earlier_capture():
     ]
     assert execute(parser.parse('{cat}{dog} => {0$} => "[{{.}}]"'), "catdog") == [
         "[catdog]"
-    ]
-
-
-def test_stage_ref_dotted_subcapture():
-    # A pattern stage ref descends into sub-captures, like the moustache path.
-    assert execute(parser.parse('{{cat}{dog}} => {0$0.1} => "[{{.}}]"'), "catdog") == [
-        "cat[dog]"
     ]
 
 

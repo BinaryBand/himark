@@ -117,13 +117,21 @@ countRef  : HASH INT? ;                      // # (self-bind) or #i (count-ref)
 // splits payload from band (divergence 1); everything else is a union of arms,
 // each an atom run with an optional `..` range.
 braceBody : BANG? band ;
-band      : universe (BAND universe)?        // payload, optional band
-          | BAND universe                    // ambient band: empty payload, e.g. {::0..255}
-          ;
+band      : universe BAND universe           # valueBand
+           | BAND universe                   # ambientBand
+           | universe                        # bareAlphabet
+           ;
 universe  : arm (COMMA arm)* ;
-arm       : term (RANGE term?)?              // term, term.., term..term
-          | RANGE term                       // ..term
-          ;
+// `single` is first so a counted atom whose count carries `..` (`{x}[1..]`,
+// `!{…}[0..]`) inside a grouping brace binds the `[..]` as a count, not as an
+// arm-level `RANGE`. ANTLR's ALL(*) picks the lowest-numbered *viable*
+// alternative: for a real range (`a..z`) `single` leaves an unconsumable `..`
+// and is non-viable, so `closedRange`/`openUpper`/`openLower` still win there.
+arm       : term                             # single
+           | term RANGE term                 # closedRange
+           | term RANGE                       # openUpper
+           | RANGE term                       # openLower
+           ;
 term      : atom+ ;                          // a non-empty atom run
 
 // An atom is a nested brace, an inner subtractive arm, a reference, an anchor, a
@@ -144,7 +152,7 @@ atom      : braceGroup count?
 litToken  : NAME | INT | TEXT | DOT | LT | GT | EQ
           | LPAREN | RPAREN | PIPE | BANG
           | AT | DOLLAR | HASH | LBRACK | RBRACK
-          | ARROW | FIXARROW ;
+          | ARROW | FIXARROW | NL ;
 
 // `$i` text-ref, `#i` count-ref, and the stage forms `N$ N$i N# N#i`. A bare
 // `$`/`#` with no stage and no index is literal (a `litToken` via the lexer), so a

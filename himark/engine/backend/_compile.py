@@ -714,8 +714,7 @@ def _compile_elements(root: t.RootNode) -> list[Element]:
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
             elif isinstance(child.semantic, t.ValueRangeNode) and (
-                _dynamic_ref(child.semantic.lower)
-                or _dynamic_ref(child.semantic.upper)
+                _dynamic_ref(child.semantic.lower) or _dynamic_ref(child.semantic.upper)
             ):
                 # A bound with a *dynamic* reference endpoint (`{0:@d:$0}`) resolves at
                 # match time from captures, so it lowers to a loop-handled element. The

@@ -4,7 +4,7 @@ The generated lexer/parser/visitor under `_generated/` are a *build product* of 
 grammar and are git-ignored; this script reproduces them. Run after editing
 docs/GRAMMAR.g4 (or on a fresh checkout):
 
-    python -m himark.parser_antlr.regenerate
+    python -m himark.parser.regenerate
 
 Requirements:
   • Java (any JRE/JDK 11+ on PATH).
