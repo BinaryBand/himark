@@ -12,8 +12,8 @@ One declaration form (see `std.hmk`):
     ranges and congruence classes the source expands to.
 
 (Filters are a closed, native set in `engine/_render`; there is no declared filter
-form.) This module parses the prelude once and exposes `MACROS`. It lives at the
-package root (not under `parser`) because the parser expands `MACROS` before
+form.) This module parses the prelude once and exposes `VARIABLES`. It lives at the
+package root (not under `parser`) because the parser expands `VARIABLES` before
 tokenizing. The structural `[[rewrites]]` that also lived in `macros.toml` are not
 data-declarable (they inspect braces); they now live as code defaults in
 `parser/rewrites.py`.
@@ -26,7 +26,7 @@ from himark.models.exceptions import CompileError
 
 PRELUDE_PATH = Path(__file__).parent / "std.hmk"
 
-_MACRO_RE = re.compile(r"@(\w+)\s*=\s*(.*)")
+_VARIABLE_RE = re.compile(r"@(\w+)\s*=\s*(.*)")
 
 
 def _strip_comment(line: str) -> str:
@@ -51,20 +51,20 @@ def _strip_comment(line: str) -> str:
 
 
 def _load() -> dict[str, str]:
-    """Parse `std.hmk` into a `name -> source` macro table. A line that is not a
+    """Parse `std.hmk` into a `name -> source` variable table. A line that is not a
     `@name` alphabet declaration is a `CompileError` — the prelude is declarations
     only, so a stray statement is a typo, not silent input."""
-    macros: dict[str, str] = {}
+    variables: dict[str, str] = {}
     for raw in PRELUDE_PATH.read_text("utf-8").splitlines():
         line = _strip_comment(raw).strip()
         if not line:
             continue
-        if (m := _MACRO_RE.fullmatch(line)) is not None:
-            macros[m.group(1)] = m.group(2).strip()
+        if (m := _VARIABLE_RE.fullmatch(line)) is not None:
+            variables[m.group(1)] = m.group(2).strip()
         else:
             raise CompileError(f"{PRELUDE_PATH.name}: not a declaration: {line!r}")
-    return macros
+    return variables
 
 
 # name -> Himark source, expanded into the pattern before tokenizing (phase 1).
-MACROS = _load()
+VARIABLES = _load()

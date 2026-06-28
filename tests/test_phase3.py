@@ -48,7 +48,7 @@ def test_char_range_single_position():
 
 
 def test_upper_bound():
-    # phase3 sees the expanded macro text (@d -> 0..9), not the @ ref.
+    # phase3 sees the expanded variable text (@d -> 0..9), not the @ ref.
     node = first_semantic("{{0..9}::..255}")
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)

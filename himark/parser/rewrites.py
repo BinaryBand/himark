@@ -1,8 +1,8 @@
 """Advanced pattern rewrites — a configurable preprocessing seam.
 
-Rewrites run in phase 1, *after* macro expansion and *before* tokenizing, so they
+Rewrites run in phase 1, *after* variable expansion and *before* tokenizing, so they
 are pure notation: the engine never sees them, only the Himark source they expand
-to. Unlike a text macro (`@name` → text), a rewrite is **structural** — it
+to. Unlike a text variable (`@name` → text), a rewrite is **structural** — it
 inspects braces and renumbers groups.
 
 Two layers keep the specifics in data, not code:

@@ -3,12 +3,12 @@
 //
 // This file holds DECLARATIONS, not match statements. One form:
 //
-//   @name = <himark source>   a named alphabet — `@name` expands to the source on
-//                             the right before tokenizing. Macros may reference
-//                             other macros; expansion repeats until stable. The
-//                             engine has no built-in alphabet knowledge; it only
-//                             sees the ranges (`..`) and congruence classes (`,`)
-//                             these expand to.
+//   @name = <himark source>   a named alphabet — `@name` resolves to the source on
+//                             the right before tokenizing. A variable may reference
+//                             others; resolution repeats until stable. The engine
+//                             has no built-in alphabet knowledge; it only sees the
+//                             ranges (`..`) and congruence classes (`,`) these
+//                             resolve to.
 //
 // (Filters are a closed, native set in `engine/_render`: `b256`/`uint`/`pad` plus
 // the `trim`/`indent` string conveniences. There is no declared filter form.)

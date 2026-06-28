@@ -8,7 +8,7 @@ import pytest
 from himark import parser
 from himark.engine import execute, find_matches
 from himark.models.exceptions import CompileError
-from himark.prelude import MACROS
+from himark.prelude import VARIABLES
 
 DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
 
@@ -24,12 +24,12 @@ def _doc_section(title):
     return re.split(r"\n## |\n---", body, maxsplit=1)[0]
 
 
-def test_doc_macro_table_matches_prelude():
-    # Scope to the Macros section's table — `@ed` also appears as an operand in
-    # the Carriers/operators table, but it is a library alphabet, not a text macro.
-    # The macro table is the doc face of the `std.hmk` prelude's `@name` lines.
-    doc_names = set(re.findall(r"^\| `@(\w+)`", _doc_section("Macros"), re.MULTILINE))
-    assert doc_names == set(MACROS)
+def test_doc_variable_table_matches_prelude():
+    # Scope to the Variables section's table — `@ed` also appears as an operand in
+    # the Carriers/operators table, but it is a library alphabet, not a text variable.
+    # The variable table is the doc face of the `std.hmk` prelude's `@name` lines.
+    doc_names = set(re.findall(r"^\| `@(\w+)`", _doc_section("Variables"), re.MULTILINE))
+    assert doc_names == set(VARIABLES)
 
 
 def test_doc_congruence_pair_repetition():

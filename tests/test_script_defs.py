@@ -41,13 +41,13 @@ def test_definition_is_lexically_scoped():
 
 def test_definition_can_reference_earlier_definition_and_prelude():
     # Local defs share one fixed-point expansion with the prelude, so a def may
-    # reference an earlier def or a prelude macro (@d).
+    # reference an earlier def or a prelude variable (@d).
     src = '@digits = {{@d}}[1..]\n@pair = @digits{\\,}@digits\n@pair => "ok"'
     assert _run(src, "12,34 x") == "ok x"
 
 
-def test_definition_shadowing_prelude_macro_errors():
-    with pytest.raises(CompileError, match="shadows a prelude macro"):
+def test_definition_shadowing_prelude_variable_errors():
+    with pytest.raises(CompileError, match="shadows a prelude variable"):
         P.compile_script("@d = {x}")
 
 

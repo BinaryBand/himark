@@ -1,6 +1,6 @@
 """Tests for the `std.hmk` prelude loader (`himark/prelude.py`).
 
-The prelude replaces the former `macros.toml`/`macros.py`: alphabets are declared
+The prelude replaces the former `variables.toml`/`variables.py`: alphabets are declared
 in Himark's own file, parsed once at import.
 """
 
@@ -11,8 +11,8 @@ from himark.models.exceptions import CompileError
 
 
 def test_shipped_prelude_loads():
-    # The shipped prelude populates the macro registry.
-    assert prelude.MACROS["d"] == "0..9"
+    # The shipped prelude populates the variable registry.
+    assert prelude.VARIABLES["d"] == "0..9"
 
 
 def _load(text, tmp_path, monkeypatch):
@@ -24,7 +24,7 @@ def _load(text, tmp_path, monkeypatch):
 
 
 def test_parses_alphabet_declarations(tmp_path, monkeypatch):
-    macros = _load(
+    variables = _load(
         "@d = 0..9\n"
         "@hex = {@d},{@w::..f}   // a comment rides along\n"
         "\n"
@@ -32,13 +32,13 @@ def test_parses_alphabet_declarations(tmp_path, monkeypatch):
         tmp_path,
         monkeypatch,
     )
-    assert macros == {"d": "0..9", "hex": "{@d},{@w::..f}"}
+    assert variables == {"d": "0..9", "hex": "{@d},{@w::..f}"}
 
 
 def test_comment_inside_value_survives(tmp_path, monkeypatch):
     # A `//` inside a brace is content, not a comment (depth-aware strip).
-    macros = _load("@u = {http://x}\n", tmp_path, monkeypatch)
-    assert macros == {"u": "{http://x}"}
+    variables = _load("@u = {http://x}\n", tmp_path, monkeypatch)
+    assert variables == {"u": "{http://x}"}
 
 
 def test_non_declaration_line_is_an_error(tmp_path, monkeypatch):

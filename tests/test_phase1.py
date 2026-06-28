@@ -9,10 +9,10 @@ def matches(pattern, text):
     return [m.text for m in find_matches(parser.parse(pattern)[0], text)]
 
 
-# ── Macro expansion (text level) ──────────────────────────────────────────────
+# ── Variable expansion (text level) ──────────────────────────────────────────────
 
 
-def test_macro_simple_range():
+def test_variable_simple_range():
     assert phase1.preprocess("{@d}") == "{0..9}"
     assert phase1.preprocess("{@l}") == "{a..z}"
     assert phase1.preprocess("{@u}") == "{A..Z}"
@@ -24,33 +24,33 @@ _W = (
 )
 
 
-def test_macro_w_case_fold_pairs():
+def test_variable_w_case_fold_pairs():
     # @w folds case by enumerating each letter and its capital as a congruence
     # class ({a,A}, …), plus '_'.
     assert phase1.preprocess("{@w}") == "{" + _W + "}"
 
 
-def test_macro_nested_expansion():
+def test_variable_nested_expansion():
     # @hex references @d and @w; expansion repeats until stable. @w slices into a
     # `::` value band ({@w::..f}), so the expansion is {{0..9},{…@w…::..f}}.
     assert phase1.preprocess("{@hex}") == "{{0..9},{" + _W + "::..f}}"
 
 
-def test_macro_whitespace_set():
+def test_variable_whitespace_set():
     # @s expands to a comma-union of whitespace, spelled with the prelude's C-style
     # escapes (`\n`/`\r`/`\t`); the escapes resolve to control chars later, in
     # phase 3's `unescape`.
     assert phase1.preprocess("{@s}") == r"{\n,\r, ,\t}"
 
 
-def test_macro_word_boundary():
-    # @ before a non-macro word is left untouched.
+def test_variable_word_boundary():
+    # @ before a non-variable word is left untouched.
     assert phase1.preprocess("{x@bar}") == "{x@bar}"
 
 
 def test_variable_opaque_in_template():
     # A `@name` inside a `"…"` template is literal text, never resolved — a template
-    # is opaque (HMK.md §Macros, "Templates are opaque"). It still resolves outside.
+    # is opaque (HMK.md §Variables, "Templates are opaque"). It still resolves outside.
     assert phase1.preprocess('"see @u here"') == '"see @u here"'
     assert phase1.preprocess('"a @d b"') == '"a @d b"'
     assert phase1.preprocess("{@u}") == "{A..Z}"  # still resolved in a query step
@@ -65,8 +65,8 @@ def test_no_implicit_wrap_bare_expression():
     assert phase1.preprocess("a..z") == "a..z"
 
 
-def test_no_implicit_wrap_after_macro_expansion():
-    # A macro still expands, but the result is not wrapped.
+def test_no_implicit_wrap_after_variable_resolution():
+    # A variable still expands, but the result is not wrapped.
     assert phase1.preprocess("@d") == "0..9"
 
 
@@ -81,17 +81,17 @@ def test_no_wrap_template_step():
 # ── End-to-end through the full pipeline ──────────────────────────────────────
 
 
-def test_macro_dec_matches_digits():
+def test_variable_dec_matches_digits():
     assert matches("{@d}", "a1b2c3") == ["1", "2", "3"]
 
 
-def test_macro_dec_value_bound():
+def test_variable_dec_value_bound():
     result = matches("{@d::..255}", "192 300 10")
     assert "192" in result and "10" in result
     assert "300" not in result
 
 
-def test_macro_w_case_insensitive_word():
+def test_variable_w_case_insensitive_word():
     # @w is an ordered folded alphabet (case-fold letters plus '_'), so a word is
     # a value bounded over it: {@w::a..zzzzz}. Digits are not word symbols.
     assert matches("{@w::a..zzzzz}", "Ab9") == ["Ab"]
@@ -105,7 +105,7 @@ def test_complement_of_whitespace_matches_non_whitespace():
     assert matches("{!@s}[1..]", "ab cd\tef") == ["ab", "cd", "ef"]
 
 
-def test_macro_s_matches_whitespace():
+def test_variable_s_matches_whitespace():
     result = matches("{@s}[1..]", "a   b\tc")
     assert "   " in result
     assert "\t" in result

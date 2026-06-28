@@ -1,4 +1,4 @@
-"""Grammar-acceptance guard for phase1 declarations (the macro/definition layer).
+"""Grammar-acceptance guard for phase1 declarations (the variable/definition layer).
 
 Sibling to tests/test_parser_parity.py. That file checks the *output* of parsing
 (AST parity); this one checks that docs/GRAMMAR.g4 **accepts the real declaration
@@ -6,14 +6,14 @@ syntax** — the prelude's named alphabets and a script's `@name = …` definiti
 
 Why this is a distinct, necessary guard: the grammar models declarations with the
 rules `prelude`, `declaration`/`macroDecl`, `definition`, `scriptItem`, and (inside
-braces) `macro : AT NAME`. Today those rules are **dead** — phase1 expands `@name`
+braces) `variable : AT NAME`. Today those rules are **dead** — phase1 expands `@name`
 to text *before* anything structural runs, so nothing exercises them. If GRAMMAR.g4
-drifts from the actual macro/definition syntax, no existing test notices. This pins
+drifts from the actual variable/definition syntax, no existing test notices. This pins
 that the grammar can parse:
 
   • every named alphabet in himark/std.hmk (via `prelude` / `macroDecl` / `braceBody`,
     including unexpanded cross-references like `@hex = {@d},{@w::..f}` through the
-    live `macro` atom rule), and
+    live `variable` atom rule), and
   • the canonical `@name = <pattern>` definition forms from the spec (via `definition`).
 
 These are exactly the rules the planned macro→defined-variable change (Option B)
@@ -29,7 +29,7 @@ from __future__ import annotations
 import pytest
 
 from himark.models.exceptions import CompileError
-from himark.prelude import MACROS
+from himark.prelude import VARIABLES
 
 antlr4 = pytest.importorskip("antlr4", reason="antlr4 runtime not installed")
 
@@ -69,12 +69,12 @@ def accepts(rule: str, text: str) -> None:
 
 # ── Prelude: every std.hmk named alphabet ─────────────────────────────────────
 # The canonical comment-/space-stripped declaration form is `@name=body`, which is
-# what the loader already normalized MACROS to. Reconstructing it and feeding the
-# `prelude` rule checks the file as a whole; the per-macro rows name the culprit on
+# what the loader already normalized VARIABLES to. Reconstructing it and feeding the
+# `prelude` rule checks the file as a whole; the per-variable rows name the culprit on
 # a failure.
 
-PRELUDE_TEXT = "\n".join(f"@{name}={body}" for name, body in MACROS.items())
-MACRO_ROWS = list(MACROS.items())
+PRELUDE_TEXT = "\n".join(f"@{name}={body}" for name, body in VARIABLES.items())
+MACRO_ROWS = list(VARIABLES.items())
 
 
 def test_prelude_accepted_whole():
@@ -83,16 +83,16 @@ def test_prelude_accepted_whole():
 
 
 @pytest.mark.parametrize("name,body", MACRO_ROWS, ids=[n for n, _ in MACRO_ROWS])
-def test_macro_decl_accepted(name, body):
+def test_variable_decl_accepted(name, body):
     """Each `@name = body` is a valid `macroDecl` (and its body a valid `braceBody`,
-    cross-references like `@d`/`@w` included, via the live `macro` atom rule)."""
+    cross-references like `@d`/`@w` included, via the live `variable` atom rule)."""
     accepts("macroDecl", f"@{name}={body}")
     accepts("braceBody", body)
 
 
 # ── Definitions: canonical `@name = <pattern>` script-local forms ─────────────
 # Drawn from the spec examples pinned in tests/test_script_defs.py — real definition
-# right-hand sides (counts, complements, anchors, macro references, fixed-point use).
+# right-hand sides (counts, complements, anchors, variable references, fixed-point use).
 # These exercise `definition : AT NAME EQ pattern`.
 
 DEFINITIONS: list[tuple[str, str]] = [

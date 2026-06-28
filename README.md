@@ -70,9 +70,9 @@ Two constructs: `{...}` matches, `[...]` repeats. They compose as `{expr}[count]
 
 **Every `{…}` matches one position** — one symbol or one value. A _run_ comes only from `[count]`: `{!\ }[1..]` (a run of non-spaces) or `{a,b,c}[1..]` (a run drawn from a class). Repetition is heterogeneous for a complement or congruence class (`{a,A}[2]` → `aa`/`aA`/`Aa`/`AA`) but homogeneous for an ordered range (`{a..z}[3]` → `aaa`/`bbb`). A multi-symbol **value** is a `:`-bound — `{x:U:y}`, where the floor/ceiling widths set the field width (`{0:@d:255}`, `{0:@hex:fff}`). Operators: `..` ordered range · `,` congruence class · `!` subtract · `:` value bound.
 
-### Macros
+### Variables
 
-`@d` `@l` `@u` digits/lower/upper, `@s` whitespace, `@w` word, `@hex` `@b32` `@b58` `@b64` encodings, `@ascii` `@uni` codepoint ranges. A macro expands to HMK source before matching — see the [Macros table](docs/HMK.md#macros).
+`@d` `@l` `@u` digits/lower/upper, `@s` whitespace, `@w` word, `@hex` `@b32` `@b58` `@b64` encodings, `@ascii` `@uni` codepoint ranges. A variable resolves to HMK source before matching — see the [Variables table](docs/HMK.md#variables).
 
 ### Repetition
 

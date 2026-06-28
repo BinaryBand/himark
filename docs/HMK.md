@@ -53,7 +53,7 @@ A position holds one **point** -- a **primitive** (one char/string) or an **obje
 
 ---
 
-## Macros
+## Variables
 
 Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a **named alphabet**: `@name` is a variable that resolves to that Himark source wherever it is used, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source resolves to. The shipped set:
 
@@ -326,7 +326,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 { }[2..]{\n} => "<br/>\n"            // the next statement
 ```
 
-**Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude alphabet](#macros), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
+**Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude alphabet](#variables), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
 
 ```proto
 @head = {@<}{#}[1..6]{ }[1..]      // an ATX head marker at line start
@@ -344,6 +344,6 @@ A definition resolves to its body wherever `@name` is used -- **as if inlined** 
 
 **The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
 
-- `@name = <source>` binds a [named alphabet](#macros): `@name` resolves to that Himark source wherever used (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
+- `@name = <source>` binds a [named alphabet](#variables): `@name` resolves to that Himark source wherever used (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
 
 A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).

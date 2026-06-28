@@ -3,7 +3,7 @@
 import pytest
 
 from himark.engine.backend import Alphabet
-from himark.prelude import MACROS
+from himark.prelude import VARIABLES
 from himark.models.exceptions import CompileError
 
 try:
@@ -15,10 +15,10 @@ except ImportError:
     HAS_HYPOTHESIS = False
 
 
-# ── Macro definitions ─────────────────────────────────────────────────────────
+# ── Variable definitions ─────────────────────────────────────────────────────────
 
 
-def test_macros_present():
+def test_variables_present():
     for name in (
         "d",
         "l",
@@ -29,11 +29,11 @@ def test_macros_present():
         "ascii",
         "uni",
     ):
-        assert name in MACROS
+        assert name in VARIABLES
 
 
 def test_dec_expands_to_range():
-    assert MACROS["d"] == "0..9"
+    assert VARIABLES["d"] == "0..9"
 
 
 # ── Positional value arithmetic ───────────────────────────────────────────────

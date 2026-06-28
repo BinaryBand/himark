@@ -7,7 +7,7 @@ Runs before tokenization (phase 2) on each `=>` step. Two transforms:
                 named Himark fragment, as if inlined; resolution repeats until
                 stable (a variable may reference another). A `@name` inside a
                 `"…"` template is literal text — a template is opaque (HMK.md
-                §Macros, "Templates are opaque"), so resolution skips a template.
+                §Variables, "Templates are opaque"), so resolution skips a template.
 
   Rewrites      structural sugar (`himark/parser/rewrites.py`) that runs before
                 tokenizing, so the engine only ever sees plain Himark source.
@@ -22,24 +22,24 @@ import re
 
 from himark.models.exceptions import CompileError
 from himark.parser import rewrites
-from himark.prelude import MACROS
+from himark.prelude import VARIABLES
 
 
 @functools.lru_cache(maxsize=None)
-def _macro_re(names: frozenset[str]) -> "re.Pattern[str] | None":
-    """The expansion regex for a macro name set, cached per set. Longest names
+def _variable_re(names: frozenset[str]) -> "re.Pattern[str] | None":
+    """The expansion regex for a variable name set, cached per set. Longest names
     first so e.g. @hexi wins over @hex, and `\\b` prevents partial-name hits."""
     if not names:
         return None
     return re.compile(r"@(" + "|".join(sorted(names, key=len, reverse=True)) + r")\b")
 
 
-def _expand_macros(text: str, extra: dict[str, str] | None = None) -> str:
-    """Expand `@name` text macros to a fixed point. `extra` overlays the prelude
-    `MACROS` with script-local definitions (see `tools/precompiled.compile_script`),
+def _resolve_variables(text: str, extra: dict[str, str] | None = None) -> str:
+    """Expand `@name` text variables to a fixed point. `extra` overlays the prelude
+    `VARIABLES` with script-local definitions (see `tools/precompiled.compile_script`),
     which may reference each other or the prelude — the loop resolves transitively."""
-    table = MACROS if not extra else {**MACROS, **extra}
-    regex = _macro_re(frozenset(table))
+    table = VARIABLES if not extra else {**VARIABLES, **extra}
+    regex = _variable_re(frozenset(table))
     if regex is None:
         return text
     out = text
@@ -50,17 +50,17 @@ def _expand_macros(text: str, extra: dict[str, str] | None = None) -> str:
         out = new
     if regex.search(out):
         unresolved = re.findall(r"@\w+", out)
-        raise CompileError(f"Unresolved macros (circular or undefined): {unresolved}")
+        raise CompileError(f"Unresolved variables (circular or undefined): {unresolved}")
     return out
 
 
-def preprocess(step: str, *, macros: dict[str, str] | None = None) -> str:
+def preprocess(step: str, *, variables: dict[str, str] | None = None) -> str:
     """Resolve `@name` variables and apply structural rewrites.
 
-    `macros` overlays the prelude `MACROS` with script-local `@name` definitions.
+    `variables` overlays the prelude `VARIABLES` with script-local `@name` definitions.
     A `@name` resolves to its named fragment as if inlined; a `@name` inside a
     `"…"` template is **literal text**, never resolved — a template is opaque
-    (HMK.md §Macros). The rewrites (`himark/parser/rewrites.py`) are structural
+    (HMK.md §Variables). The rewrites (`himark/parser/rewrites.py`) are structural
     sugar (code rules, not prelude declarations) that run before tokenizing, so the
     engine sees plain Himark source. There is no implicit wrap: a first step must be
     an explicit universe (`{a..z}`, not `a..z`).
@@ -71,4 +71,4 @@ def preprocess(step: str, *, macros: dict[str, str] | None = None) -> str:
         # resolved. Only the structural rewrites apply (they do not touch a
         # template's interior); variable resolution is skipped for the whole step.
         return rewrites.apply(step)
-    return rewrites.apply(_expand_macros(step, macros))
+    return rewrites.apply(_resolve_variables(step, variables))
