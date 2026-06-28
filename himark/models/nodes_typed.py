@@ -5,7 +5,8 @@ from typing import Literal, TypeAlias
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from himark.models.cst_view import AnchorView, RangeView, ReferenceView
+from himark.models.cst_view import AnchorView, BandArmView, RangeView, ReferenceView
+from himark.models.exceptions import CompileError
 
 # -----------------------------
 # Shared value objects
@@ -132,6 +133,28 @@ class ValueRangeNode:
         node; the engine fast-paths a single-code-point `@uni` band to a direct
         matcher. The CST→AST decision a parser used to make inline, now on the model."""
         return cls(alpha=CharRangeNode.uni(), lower=v.lower, upper=v.upper)
+
+    @classmethod
+    def from_band_view(cls, v: BandArmView) -> ValueRangeNode:
+        """Build one band arm `{alpha::lo..hi}` from a resolved view. A None endpoint
+        with no ref is open — the alphabet floor (zero, width 1) on the left, an
+        unbounded ceiling on the right; at least one bound is required. The single-value
+        form `{alpha::t}` arrives as `lower == upper`. A parser fills the view's four
+        endpoint slots; this owns the construction and the floor-or-ceiling invariant."""
+        if (
+            v.lower is None
+            and v.upper is None
+            and v.lower_ref is None
+            and v.upper_ref is None
+        ):
+            raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
+        return cls(
+            alpha=v.alpha,
+            lower=v.lower,
+            upper=v.upper,
+            lower_ref=v.lower_ref,
+            upper_ref=v.upper_ref,
+        )
 
 
 @dataclass(slots=True)

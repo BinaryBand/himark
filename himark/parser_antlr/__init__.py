@@ -180,6 +180,15 @@ class _RangeView:
     upper: str
 
 
+@dataclass(frozen=True, slots=True)
+class _BandArmView:
+    alpha: t.SemanticNode
+    lower: str | None
+    upper: str | None
+    lower_ref: t.SemanticNode | None
+    upper_ref: t.SemanticNode | None
+
+
 def _resolve_reference_atom(
     ref: GRAMMARParser.ReferenceContext,
 ) -> t.SemanticNode:
@@ -448,14 +457,15 @@ class _Resolver:
     def resolve_band_arm(
         self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext
     ) -> t.ValueRangeNode:
-        """One band-spec arm: a `lo..hi` range (either end omittable) or a single
-        value (`{@d::5}` is `5..5`). Mirrors phase3._resolve_band_arm; reference
-        endpoints (`$0`) are out of slice."""
+        """Fill a `_BandArmView` for one band-spec arm; `ValueRangeNode.from_band_view`
+        owns the construction and the floor-or-ceiling invariant. A `lo..hi` range
+        (either end omittable) or a single value (`{@d::5}` is `5..5`); reference
+        endpoints (`$0`) resolve to a node, glued runs are out of slice."""
         terms = arm.term()
         if arm.RANGE() is None:  # single value: lower == upper (one endpoint, reused)
             value, ref = self._band_endpoint(terms[0])
-            return t.ValueRangeNode(
-                alpha=alpha, lower=value, upper=value, lower_ref=ref, upper_ref=ref
+            return t.ValueRangeNode.from_band_view(
+                _BandArmView(alpha, value, value, ref, ref)
             )
         lower = upper = None
         lower_ref = upper_ref = None
@@ -467,14 +477,8 @@ class _Resolver:
                 upper, upper_ref = self._band_endpoint(terms[0])
             else:
                 lower, lower_ref = self._band_endpoint(terms[0])
-        if lower is None and upper is None and lower_ref is None and upper_ref is None:
-            raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
-        return t.ValueRangeNode(
-            alpha=alpha,
-            lower=lower,
-            upper=upper,
-            lower_ref=lower_ref,
-            upper_ref=upper_ref,
+        return t.ValueRangeNode.from_band_view(
+            _BandArmView(alpha, lower, upper, lower_ref, upper_ref)
         )
 
     def _band_endpoint(
