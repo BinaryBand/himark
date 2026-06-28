@@ -136,24 +136,37 @@ class ValueRangeNode:
 
     @classmethod
     def from_band_view(cls, v: BandArmView) -> ValueRangeNode:
-        """Build one band arm `{alpha::lo..hi}` from a resolved view. A None endpoint
-        with no ref is open — the alphabet floor (zero, width 1) on the left, an
-        unbounded ceiling on the right; at least one bound is required. The single-value
-        form `{alpha::t}` arrives as `lower == upper`. A parser fills the view's four
-        endpoint slots; this owns the construction and the floor-or-ceiling invariant."""
-        if (
-            v.lower is None
-            and v.upper is None
-            and v.lower_ref is None
-            and v.upper_ref is None
-        ):
+        """Build a band arm `{alpha::lo..hi}` from a resolved view — see `band_arm`. A
+        parser fills the view's four endpoint slots; the canonicalisation lives below."""
+        return cls.band_arm(v.alpha, v.lower, v.upper, v.lower_ref, v.upper_ref)
+
+    @classmethod
+    def band_arm(
+        cls,
+        alpha: SemanticNode,
+        lower: str | None,
+        upper: str | None,
+        lower_ref: SemanticNode | None,
+        upper_ref: SemanticNode | None,
+    ) -> ValueRangeNode:
+        """Canonicalise one band arm. An omitted floor/ceiling becomes an explicit
+        `FloorNode`/`InfNode` endpoint node, so 'open' is *self-describing* rather than a
+        positional `None` (you read what an endpoint is from the node, not from which
+        slot it sits in). At least one bound is required — both omitted (`{U::..}`) is an
+        error. The single-value form `{alpha::t}` arrives as `lower == upper`. Shared by
+        every front-end, so the AST is identical no matter which parser built it."""
+        if lower is None and upper is None and lower_ref is None and upper_ref is None:
             raise CompileError("A band needs a floor or a ceiling: got '{U:..}'")
+        if lower is None and lower_ref is None:
+            lower_ref = FloorNode()
+        if upper is None and upper_ref is None:
+            upper_ref = InfNode()
         return cls(
-            alpha=v.alpha,
-            lower=v.lower,
-            upper=v.upper,
-            lower_ref=v.lower_ref,
-            upper_ref=v.upper_ref,
+            alpha=alpha,
+            lower=lower,
+            upper=upper,
+            lower_ref=lower_ref,
+            upper_ref=upper_ref,
         )
 
 
@@ -283,6 +296,24 @@ def reference_from_view(
     return StageRefNode(stage=v.stage, path=path)
 
 
+@pydantic_dataclass(slots=True)
+class FloorNode:
+    """The alphabet's **floor** (its ordinal-0 symbol, width 1) as an explicit band
+    endpoint — the self-describing form of an omitted lower bound (`{@d::..255}`).
+    Sits in a `ValueRangeNode.lower_ref` slot; the engine reads it as a zero floor."""
+
+    type: Literal["floor"] = "floor"
+
+
+@pydantic_dataclass(slots=True)
+class InfNode:
+    """An **unbounded ceiling** as an explicit band endpoint — the self-describing form
+    of an omitted upper bound (`{@d::128..}`). Sits in a `ValueRangeNode.upper_ref`
+    slot; the engine reads it as no upper limit."""
+
+    type: Literal["inf"] = "inf"
+
+
 SemanticNode: TypeAlias = (
     LiteralNode
     | CharRangeNode
@@ -295,6 +326,8 @@ SemanticNode: TypeAlias = (
     | BackRefNode
     | CountRefNode
     | StageRefNode
+    | FloorNode
+    | InfNode
 )
 
 Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode

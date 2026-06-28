@@ -91,7 +91,9 @@
             },
             "lower": null,
             "upper": "255",
-            "lower_ref": null,
+            "lower_ref": {
+              "_t": "FloorNode"
+            },
             "upper_ref": null,
             "exclusions": []
           },
@@ -126,7 +128,9 @@
             "lower": "128",
             "upper": null,
             "lower_ref": null,
-            "upper_ref": null,
+            "upper_ref": {
+              "_t": "InfNode"
+            },
             "exclusions": []
           },
           "count": null,

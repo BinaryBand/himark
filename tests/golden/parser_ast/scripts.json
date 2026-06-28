@@ -228,7 +228,9 @@
               "lower": "0",
               "upper": null,
               "lower_ref": null,
-              "upper_ref": null,
+              "upper_ref": {
+                "_t": "InfNode"
+              },
               "exclusions": []
             },
             "count": null,

@@ -634,8 +634,18 @@ class Program:
     elements: tuple[Element, ...]
 
 
+def _dynamic_ref(ref: t.SemanticNode | None) -> t.SemanticNode | None:
+    """A band endpoint's *dynamic* reference (resolved from captures at match time), or
+    None. The open-end markers `FloorNode`/`InfNode` are static endpoints, not dynamic
+    references — they read as a zero floor / unbounded ceiling via `lower`/`upper` being
+    None, so here they count as 'no dynamic ref'."""
+    if isinstance(ref, (t.BackRefNode, t.CountRefNode, t.StageRefNode)):
+        return ref
+    return None
+
+
 def _ref_descriptor(ref: t.SemanticNode) -> tuple:
-    """A loop-resolvable descriptor for a reference-endpoint node."""
+    """A loop-resolvable descriptor for a dynamic reference-endpoint node."""
     if isinstance(ref, t.BackRefNode):
         return ("back", ref.group)
     if isinstance(ref, t.CountRefNode):
@@ -650,8 +660,8 @@ def _dyn_value_range_el(node: t.ValueRangeNode, reps: Reps) -> DynValueRangeEl:
         alphabet=_value_alphabet(node.alpha),
         lower=node.lower,
         upper=node.upper,
-        lower_ref=_ref_descriptor(node.lower_ref) if node.lower_ref else None,
-        upper_ref=_ref_descriptor(node.upper_ref) if node.upper_ref else None,
+        lower_ref=_ref_descriptor(lr) if (lr := _dynamic_ref(node.lower_ref)) else None,
+        upper_ref=_ref_descriptor(ur) if (ur := _dynamic_ref(node.upper_ref)) else None,
         exclusions=node.exclusions,
         reps=reps,
     )
@@ -695,10 +705,12 @@ def _compile_elements(root: t.RootNode) -> list[Element]:
                     StageRefEl(child.semantic.stage, child.semantic.path, reps)
                 )
             elif isinstance(child.semantic, t.ValueRangeNode) and (
-                child.semantic.lower_ref or child.semantic.upper_ref
+                _dynamic_ref(child.semantic.lower_ref)
+                or _dynamic_ref(child.semantic.upper_ref)
             ):
-                # A bound with a reference endpoint (`{0:@d:$0}`) resolves at match
-                # time from captures, so it lowers to a loop-handled element.
+                # A bound with a *dynamic* reference endpoint (`{0:@d:$0}`) resolves at
+                # match time from captures, so it lowers to a loop-handled element. The
+                # static Floor/Inf markers are not dynamic, so an open band stays here.
                 elements.append(_dyn_value_range_el(child.semantic, reps))
             else:
                 # A run repeats one **point**, faces free within it: a congruence
