@@ -1,4 +1,4 @@
-"""Tests for parser/phase1.py — macro expansion and implicit root wrapping."""
+"""Tests for parser/phase1.py — variable resolution and implicit root wrapping."""
 
 from himark import parser
 from himark.engine import find_matches
@@ -46,6 +46,14 @@ def test_macro_whitespace_set():
 def test_macro_word_boundary():
     # @ before a non-macro word is left untouched.
     assert phase1.preprocess("{x@bar}") == "{x@bar}"
+
+
+def test_variable_opaque_in_template():
+    # A `@name` inside a `"…"` template is literal text, never resolved — a template
+    # is opaque (HMK.md §Macros, "Templates are opaque"). It still resolves outside.
+    assert phase1.preprocess('"see @u here"') == '"see @u here"'
+    assert phase1.preprocess('"a @d b"') == '"a @d b"'
+    assert phase1.preprocess("{@u}") == "{A..Z}"  # still resolved in a query step
 
 
 # ── No implicit wrapping (ANTLR branch) ───────────────────────────────────────

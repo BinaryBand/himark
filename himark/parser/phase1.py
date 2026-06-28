@@ -1,10 +1,13 @@
-"""Phase 1: source preprocessing — macro expansion and structural rewrites.
+"""Phase 1: source preprocessing — variable resolution and structural rewrites.
 
 Runs before tokenization (phase 2) on each `=>` step. Two transforms:
 
-  Macros        a text macro (`@w`, `@s`, `@hex` — declared in `himark/std.hmk`,
-                loaded by `himark/prelude.py`) expands to its HMK source. Macros
-                may reference other macros; expansion repeats until stable.
+  Variables     a `@name` variable (`@w`, `@s`, `@hex` — declared in
+                `himark/std.hmk`, loaded by `himark/prelude.py`) resolves to its
+                named Himark fragment, as if inlined; resolution repeats until
+                stable (a variable may reference another). A `@name` inside a
+                `"…"` template is literal text — a template is opaque (HMK.md
+                §Macros, "Templates are opaque"), so resolution skips a template.
 
   Rewrites      structural sugar (`himark/parser/rewrites.py`) that runs before
                 tokenizing, so the engine only ever sees plain Himark source.
@@ -52,12 +55,20 @@ def _expand_macros(text: str, extra: dict[str, str] | None = None) -> str:
 
 
 def preprocess(step: str, *, macros: dict[str, str] | None = None) -> str:
-    """Expand text macros and apply structural rewrites.
+    """Resolve `@name` variables and apply structural rewrites.
 
     `macros` overlays the prelude `MACROS` with script-local `@name` definitions.
-    The rewrites (`himark/parser/rewrites.py`) are structural sugar (code rules,
-    not prelude declarations) that run before tokenizing, so the engine sees plain
-    Himark source. There is no implicit wrap: a first step must be an explicit
-    universe (`{a..z}`, not `a..z`).
+    A `@name` resolves to its named fragment as if inlined; a `@name` inside a
+    `"…"` template is **literal text**, never resolved — a template is opaque
+    (HMK.md §Macros). The rewrites (`himark/parser/rewrites.py`) are structural
+    sugar (code rules, not prelude declarations) that run before tokenizing, so the
+    engine sees plain Himark source. There is no implicit wrap: a first step must be
+    an explicit universe (`{a..z}`, not `a..z`).
     """
+    stripped = step.strip()
+    if len(stripped) >= 2 and stripped.startswith('"') and stripped.endswith('"'):
+        # A `"…"` template is opaque — `@name` inside it is literal text, never
+        # resolved. Only the structural rewrites apply (they do not touch a
+        # template's interior); variable resolution is skipped for the whole step.
+        return rewrites.apply(step)
     return rewrites.apply(_expand_macros(step, macros))

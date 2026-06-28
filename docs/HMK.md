@@ -12,7 +12,7 @@ A statement has two first-class sides, joined by the **arrow** `=>`: a **query**
 
 A pattern is **universes** plus operators. A universe `{...}` is a set of strings; as a pattern it matches **exactly one** element and fills **one position** -- that is all a brace is. Patterns compose by **adjacency**: universes side by side concatenate (Cartesian product), each adding one position. Everything else writes, narrows, or operates on a universe.
 
-A bare `{...}` is **always an alphabet**; its punctuation picks which set: **literal** `{cat}`, **union** `{a,b}`, **range** `{a..z}`, **band** `{@d::0..9}`. Only a **leading sigil** changes the reading: `!{...}` subtracts, `@name` is a macro/anchor, `$`/`#`+index is a reference.
+A bare `{...}` is **always an alphabet**; its punctuation picks which set: **literal** `{cat}`, **union** `{a,b}`, **range** `{a..z}`, **band** `{@d::0..9}`. Only a **leading sigil** changes the reading: `!{...}` subtracts, `@name` is a variable/anchor, `$`/`#`+index is a reference.
 
 **Nesting** is the one structural device, split by whether a nested brace is a _member_ or an _adjacent factor_:
 
@@ -55,7 +55,7 @@ A position holds one **point** -- a **primitive** (one char/string) or an **obje
 
 ## Macros
 
-Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a macro: `@name` expands to that Himark source before tokenizing, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source expands to. The shipped set:
+Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single centralized declaration file loaded before every run. Each `@name = <source>` line binds a **named alphabet**: `@name` is a variable that resolves to that Himark source wherever it is used, so the engine holds no built-in alphabet knowledge -- it only ever sees the ranges and congruence classes the source resolves to. The shipped set:
 
 | Name     | Expands to                     |
 | -------- | ------------------------------ |
@@ -326,7 +326,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 { }[2..]{\n} => "<br/>\n"            // the next statement
 ```
 
-**Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude macro](#macros), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
+**Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude alphabet](#macros), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
 
 ```proto
 @head = {@<}{#}[1..6]{ }[1..]      // an ATX head marker at line start
@@ -335,14 +335,15 @@ himark transpile in.md --script pipeline.hmk --out out.md
 @head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"   // expands to the full heading rule
 ```
 
-Definitions expand **textually before tokenizing** and leave no trace downstream (the compiled pipeline is identical to the hand-inlined one). Three rules keep them honest:
+A definition resolves to its body wherever `@name` is used -- **as if inlined** -- and leaves no trace downstream (the compiled pipeline is identical to the hand-inlined one). Four rules keep them honest:
 
-- **Lexical order.** A definition must precede the statements that use it; an unexpanded `@name` is left as literal text, not flagged (as for any macro).
-- **No shadowing, no redefinition.** A local name that collides with a prelude macro or an earlier local is a compile error -- these are definitions, not mutable variables.
-- **Captures number over the expansion.** `$i`/`#i` count groups in the _expanded_ statement, so a fragment is only safely composable when it carries no internal self-references. Above, the author must know `@head` exports groups 0--1 (`#0` is the heading level) and `@eol` adds group 2 (`$2`).
+- **Lexical order.** A definition must precede the statements that use it; an unresolved `@name` is left as literal text, not flagged.
+- **No shadowing, no redefinition.** A local name that collides with a prelude alphabet or an earlier local is a compile error -- a name is bound **once** (single-assignment), not reassigned.
+- **Captures number over the inlined fragment.** `$i`/`#i` count groups by document order at the **use site** -- a resolved fragment's braces number where they land -- so a fragment is only safely composable when it carries no internal self-references. Above, the author must know `@head` exports groups 0--1 (`#0` is the heading level) and `@eol` adds group 2 (`$2`).
+- **Templates are opaque.** A `@name` inside a `"…"` template is literal text, never resolved -- a template never reads alphabet syntax, just as a query never reads moustache syntax.
 
 **The prelude.** `himark/std.hmk` is the same file shape, but its lines are **declarations**, not statements, and it loads **before every run**:
 
-- `@name = <source>` binds a [named alphabet](#macros): `@name` expands to that Himark source before tokenizing (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
+- `@name = <source>` binds a [named alphabet](#macros): `@name` resolves to that Himark source wherever used (`@d = 0..9`, `@hex = {@w::0..f}`). A script-local definition is the same form, scoped to one file.
 
 A formal grammar for both file shapes (script and prelude) is in [`docs/GRAMMAR.g4`](./GRAMMAR.g4).
