@@ -22,9 +22,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "a",
-            "end": "z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "a",
+            "upper": "z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -68,9 +76,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": null,
@@ -94,9 +110,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": "128",
@@ -120,9 +144,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
@@ -146,9 +178,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": "5",
@@ -175,9 +215,17 @@
               {
                 "_t": "ValueRangeNode",
                 "alpha": {
-                  "_t": "CharRangeNode",
-                  "start": "0",
-                  "end": "9",
+                  "_t": "ValueRangeNode",
+                  "alpha": {
+                    "_t": "CharRangeNode",
+                    "start": "\u0000",
+                    "end": "􏿿",
+                    "exclusions": []
+                  },
+                  "lower": "0",
+                  "upper": "9",
+                  "lower_ref": null,
+                  "upper_ref": null,
                   "exclusions": []
                 },
                 "lower": "1",
@@ -189,9 +237,17 @@
               {
                 "_t": "ValueRangeNode",
                 "alpha": {
-                  "_t": "CharRangeNode",
-                  "start": "0",
-                  "end": "9",
+                  "_t": "ValueRangeNode",
+                  "alpha": {
+                    "_t": "CharRangeNode",
+                    "start": "\u0000",
+                    "end": "􏿿",
+                    "exclusions": []
+                  },
+                  "lower": "0",
+                  "upper": "9",
+                  "lower_ref": null,
+                  "upper_ref": null,
                   "exclusions": []
                 },
                 "lower": "9",
@@ -219,9 +275,17 @@
             "_t": "SequenceNode",
             "children": [
               {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "\u0000",
+                  "end": "􏿿",
+                  "exclusions": []
+                },
+                "lower": "0",
+                "upper": "9",
+                "lower_ref": null,
+                "upper_ref": null,
                 "exclusions": []
               }
             ]
@@ -243,9 +307,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
@@ -389,9 +461,17 @@
             "_t": "SequenceNode",
             "children": [
               {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "\u0000",
+                  "end": "􏿿",
+                  "exclusions": []
+                },
+                "lower": "0",
+                "upper": "9",
+                "lower_ref": null,
+                "upper_ref": null,
                 "exclusions": []
               }
             ]
@@ -616,9 +696,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "a",
-            "end": "z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "a",
+            "upper": "z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": [
               "m..p"
             ]
@@ -638,9 +726,17 @@
           "semantic": {
             "_t": "ValueRangeNode",
             "alpha": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "lower": "0",
@@ -833,9 +929,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "a",
-            "end": "z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "a",
+            "upper": "z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -849,9 +953,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "A",
-            "end": "Z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "A",
+            "upper": "Z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -876,9 +988,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "0",
-            "end": "9",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "0",
+            "upper": "9",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -894,9 +1014,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "a",
-            "end": "z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "a",
+            "upper": "z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,
@@ -912,9 +1040,17 @@
         {
           "_t": "BraceGroupNode",
           "semantic": {
-            "_t": "CharRangeNode",
-            "start": "A",
-            "end": "Z",
+            "_t": "ValueRangeNode",
+            "alpha": {
+              "_t": "CharRangeNode",
+              "start": "\u0000",
+              "end": "􏿿",
+              "exclusions": []
+            },
+            "lower": "A",
+            "upper": "Z",
+            "lower_ref": null,
+            "upper_ref": null,
             "exclusions": []
           },
           "count": null,

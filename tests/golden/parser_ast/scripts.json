@@ -12,21 +12,45 @@
                 "_t": "UnionNode",
                 "options": [
                   {
-                    "_t": "CharRangeNode",
-                    "start": "0",
-                    "end": "9",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "0",
+                    "upper": "9",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "A",
-                    "end": "Z",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "A",
+                    "upper": "Z",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "a",
-                    "end": "z",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "a",
+                    "upper": "z",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -58,21 +82,45 @@
                 "_t": "UnionNode",
                 "options": [
                   {
-                    "_t": "CharRangeNode",
-                    "start": "0",
-                    "end": "9",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "0",
+                    "upper": "9",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "A",
-                    "end": "Z",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "A",
+                    "upper": "Z",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "a",
-                    "end": "z",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "a",
+                    "upper": "z",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -113,9 +161,17 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "CharRangeNode",
-              "start": "0",
-              "end": "9",
+              "_t": "ValueRangeNode",
+              "alpha": {
+                "_t": "CharRangeNode",
+                "start": "\u0000",
+                "end": "􏿿",
+                "exclusions": []
+              },
+              "lower": "0",
+              "upper": "9",
+              "lower_ref": null,
+              "upper_ref": null,
               "exclusions": []
             },
             "count": {
@@ -156,9 +212,17 @@
             "semantic": {
               "_t": "ValueRangeNode",
               "alpha": {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "\u0000",
+                  "end": "􏿿",
+                  "exclusions": []
+                },
+                "lower": "0",
+                "upper": "9",
+                "lower_ref": null,
+                "upper_ref": null,
                 "exclusions": []
               },
               "lower": "0",
@@ -179,9 +243,17 @@
             "semantic": {
               "_t": "ValueRangeNode",
               "alpha": {
-                "_t": "CharRangeNode",
-                "start": "0",
-                "end": "9",
+                "_t": "ValueRangeNode",
+                "alpha": {
+                  "_t": "CharRangeNode",
+                  "start": "\u0000",
+                  "end": "􏿿",
+                  "exclusions": []
+                },
+                "lower": "0",
+                "upper": "9",
+                "lower_ref": null,
+                "upper_ref": null,
                 "exclusions": []
               },
               "lower": "0",
@@ -554,9 +626,17 @@
               "_t": "SequenceNode",
               "children": [
                 {
-                  "_t": "CharRangeNode",
-                  "start": "0",
-                  "end": "9",
+                  "_t": "ValueRangeNode",
+                  "alpha": {
+                    "_t": "CharRangeNode",
+                    "start": "\u0000",
+                    "end": "􏿿",
+                    "exclusions": []
+                  },
+                  "lower": "0",
+                  "upper": "9",
+                  "lower_ref": null,
+                  "upper_ref": null,
                   "exclusions": []
                 }
               ]
@@ -653,9 +733,17 @@
               "_t": "SequenceNode",
               "children": [
                 {
-                  "_t": "CharRangeNode",
-                  "start": "0",
-                  "end": "9",
+                  "_t": "ValueRangeNode",
+                  "alpha": {
+                    "_t": "CharRangeNode",
+                    "start": "\u0000",
+                    "end": "􏿿",
+                    "exclusions": []
+                  },
+                  "lower": "0",
+                  "upper": "9",
+                  "lower_ref": null,
+                  "upper_ref": null,
                   "exclusions": []
                 }
               ]
@@ -2852,13 +2940,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -2888,13 +2985,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -2933,12 +3039,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -2986,12 +3099,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3030,13 +3150,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  "}",
-                  "»",
-                  "]"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      "}"
+                    ],
+                    [
+                      "»"
+                    ],
+                    [
+                      "]"
+                    ]
+                  ]
+                }
               ]
             },
             "count": null,
@@ -3045,12 +3174,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3073,12 +3209,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3117,12 +3260,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3145,12 +3295,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3371,13 +3528,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -3503,13 +3669,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": null,
@@ -3836,13 +4011,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": null,
@@ -4169,13 +4353,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": null,
@@ -4519,12 +4712,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -4683,13 +4883,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -4719,13 +4928,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t",
-                  "\n"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ],
+                    [
+                      "\n"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -4764,12 +4982,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -4931,12 +5156,19 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  "\t"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      "\t"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -5085,9 +5317,17 @@
                           "content": "⟦"
                         },
                         {
-                          "_t": "CharRangeNode",
-                          "start": "0",
-                          "end": "9",
+                          "_t": "ValueRangeNode",
+                          "alpha": {
+                            "_t": "CharRangeNode",
+                            "start": "\u0000",
+                            "end": "􏿿",
+                            "exclusions": []
+                          },
+                          "lower": "0",
+                          "upper": "9",
+                          "lower_ref": null,
+                          "upper_ref": null,
                           "exclusions": []
                         }
                       ],
@@ -5196,9 +5436,17 @@
                     "content": "\t"
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "0",
-                    "end": "9",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "0",
+                    "upper": "9",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -5286,9 +5534,17 @@
                     "content": "\t"
                   },
                   {
-                    "_t": "CharRangeNode",
-                    "start": "0",
-                    "end": "9",
+                    "_t": "ValueRangeNode",
+                    "alpha": {
+                      "_t": "CharRangeNode",
+                      "start": "\u0000",
+                      "end": "􏿿",
+                      "exclusions": []
+                    },
+                    "lower": "0",
+                    "upper": "9",
+                    "lower_ref": null,
+                    "upper_ref": null,
                     "exclusions": []
                   }
                 ],
@@ -6309,13 +6565,22 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  ":",
-                  "-"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      ":"
+                    ],
+                    [
+                      "-"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -6338,14 +6603,25 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  ":",
-                  "-",
-                  "|"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      ":"
+                    ],
+                    [
+                      "-"
+                    ],
+                    [
+                      "|"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
@@ -7230,9 +7506,17 @@
                     "_t": "SequenceNode",
                     "children": [
                       {
-                        "_t": "CharRangeNode",
-                        "start": "0",
-                        "end": "9",
+                        "_t": "ValueRangeNode",
+                        "alpha": {
+                          "_t": "CharRangeNode",
+                          "start": "\u0000",
+                          "end": "􏿿",
+                          "exclusions": []
+                        },
+                        "lower": "0",
+                        "upper": "9",
+                        "lower_ref": null,
+                        "upper_ref": null,
                         "exclusions": []
                       }
                     ]
@@ -7340,9 +7624,17 @@
               "_t": "SequenceNode",
               "children": [
                 {
-                  "_t": "CharRangeNode",
-                  "start": "0",
-                  "end": "9",
+                  "_t": "ValueRangeNode",
+                  "alpha": {
+                    "_t": "CharRangeNode",
+                    "start": "\u0000",
+                    "end": "􏿿",
+                    "exclusions": []
+                  },
+                  "lower": "0",
+                  "upper": "9",
+                  "lower_ref": null,
+                  "upper_ref": null,
                   "exclusions": []
                 }
               ]
@@ -7446,14 +7738,25 @@
           {
             "_t": "BraceGroupNode",
             "semantic": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  " ",
-                  ":",
-                  "-",
-                  "|"
-                ]
+              "_t": "SequenceNode",
+              "children": [
+                {
+                  "_t": "GroupClassNode",
+                  "groups": [
+                    [
+                      " "
+                    ],
+                    [
+                      ":"
+                    ],
+                    [
+                      "-"
+                    ],
+                    [
+                      "|"
+                    ]
+                  ]
+                }
               ]
             },
             "count": {
