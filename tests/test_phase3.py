@@ -33,11 +33,15 @@ def test_literal():
 
 
 def test_char_range_single_position():
-    # {a..z} occupies exactly one position — it matches a single char a-z.
+    # {a..z} is a band over ambient @uni (a..z by code point), occupying exactly one
+    # position — it matches a single char a-z. Single- and multi-char ranges are one
+    # node (a value range over @uni); the engine fast-paths the single-char case.
     node = first_semantic("{a..z}")
-    assert node.type == "char_range"
-    assert node.start == "a"
-    assert node.end == "z"
+    assert node.type == "value_range"
+    assert node.lower == "a"
+    assert node.upper == "z"
+    assert node.alpha.type == "char_range"  # the ambient @uni payload itself
+    assert node.alpha.start == "\x00" and node.alpha.end == "\U0010ffff"
 
 
 # ── α forms ──────────────────────────────────────────────────────────────────
@@ -49,7 +53,7 @@ def test_upper_bound():
     assert node.type == "value_range"
     assert node.lower is None  # open below (floor)
     assert node.upper == "255"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
 
 def test_lower_bound():
@@ -57,7 +61,7 @@ def test_lower_bound():
     assert node.type == "value_range"
     assert node.lower == "128"
     assert node.upper is None  # open above (unbounded)
-    assert node.alpha.type == "char_range"
+    assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
 
 def test_bounded_range():
@@ -65,7 +69,7 @@ def test_bounded_range():
     assert node.type == "value_range"
     assert node.lower == "aa"
     assert node.upper == "zz"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
 
 def test_bound_reference_endpoint():
@@ -125,12 +129,12 @@ def test_congruence_enumerated_is_ordered_folds():
 
 
 def test_single_brace_nesting_is_grouping():
-    # { {a..z} } — a brace whose whole content is one nested brace is the
-    # heterogeneous form {{U}}: it repeats by re-matching afresh, not as identity.
+    # { {a..z} } — a brace whose whole content is one nested brace is a grouping
+    # brace {{U}}: a re-entrant scope that re-matches afresh per rep, not identity.
     node = first_semantic("{ {a..z} }")
     assert node.type == "sequence"
     assert len(node.children) == 1
-    assert node.children[0].type == "char_range"
+    assert node.children[0].type == "value_range"  # {a..z} = a @uni range
 
 
 # ── Singleton constructors (cardinality-1 {…} as τ) ──────────────────────────
@@ -162,7 +166,7 @@ def test_singleton_bounded_range_synonym():
     assert node.type == "value_range"
     assert node.lower == "111"
     assert node.upper == "zzz"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.type == "value_range"  # the {…} payload is itself a @uni range
 
 
 def test_singleton_upper_bound():
@@ -246,7 +250,7 @@ def types(pattern):
 
 def test_pure_alphabet_braces_stay_arithmetic():
     # Genuine σ expressions must NOT be mistaken for sequences.
-    assert first_semantic("{a..z}").type == "char_range"
+    assert first_semantic("{a..z}").type == "value_range"  # a @uni range
     assert first_semantic("{cat,dog}").type == "group_class"
     assert first_semantic("{{a..z}::aa..zz}").type == "value_range"
     assert first_semantic("{ {a..z} }").type == "sequence"  # {{U}} grouping
@@ -331,7 +335,7 @@ def test_multi_char_range_is_value_bound_over_uni():
     assert node.type == "value_range"
     assert node.lower == "cat"
     assert node.upper == "dog"
-    assert node.alpha.type == "char_range"
+    assert node.alpha.type == "char_range"  # the ambient @uni payload itself
     assert (node.alpha.start, node.alpha.end) == ("\x00", "\U0010ffff")
 
 
@@ -385,9 +389,9 @@ def test_braced_class_arms_form_a_union():
 
 
 def test_single_brace_disambiguation_space_allowed():
-    # { {a..z} } — surrounding space is stripped; a single nested brace is the
-    # heterogeneous form {{U}}, wrapping the inner char range.
+    # { {a..z} } — surrounding space is stripped; a single nested brace is a
+    # grouping brace {{U}}, wrapping the inner @uni range.
     node = first_semantic("{ {a..z} }")
     assert node.type == "sequence"
     assert len(node.children) == 1
-    assert node.children[0].type == "char_range"
+    assert node.children[0].type == "value_range"

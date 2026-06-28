@@ -161,13 +161,24 @@ def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
     between the endpoint positions. Endpoints must be single positions."""
     if node.exclusions:
         raise CompileError("A range with exclusions cannot be a sub-alphabet")
-    groups = _groups(node.alpha)
-    alph = Alphabet(groups)
     for end in (node.lower, node.upper):
         if end is not None and len(end) != 1:
             raise CompileError(
                 f"Sub-alphabet endpoint must be a single symbol, got {end!r}"
             )
+    # A code-point alphabet (`@uni` — the normalised bare `{a..z}` payload) is
+    # sliced directly to its endpoint code points, never materialised whole (its
+    # ordinal is the code point, so position == code point).
+    if isinstance(node.alpha, t.CharRangeNode):
+        lo = ord(node.lower) if node.lower is not None else ord(node.alpha.start)
+        hi = ord(node.upper) if node.upper is not None else ord(node.alpha.end)
+        if hi - lo + 1 > 0x10000:
+            raise CompileError(
+                f"Range {chr(lo)!r}..{chr(hi)!r} is too large to use as a value bound"
+            )
+        return [[chr(c)] for c in range(lo, hi + 1)]
+    groups = _groups(node.alpha)
+    alph = Alphabet(groups)
     lo = alph.value(node.lower) if node.lower is not None else 0
     hi = alph.value(node.upper) if node.upper is not None else len(groups) - 1
     return groups[lo : hi + 1]
@@ -179,13 +190,34 @@ def _alphabet_of(node: t.SemanticNode, *, distinct: bool) -> Alphabet:
 
 def _value_alphabet(node: t.SemanticNode) -> Alphabet | RangeAlphabet:
     """The alphabet a bound's values are read in. A code-point range too large to
-    materialize (`@uni`, the normalised `{x..y}` payload) becomes a virtual
+    materialize (`@uni`, or a wide `{x..y}` payload over it) becomes a virtual
     `RangeAlphabet`; everything else is the ordinary materialized `Alphabet`."""
-    if isinstance(node, t.CharRangeNode):
-        lo, hi = ord(node.start), ord(node.end)
+    cp = _codepoint_span(node)
+    if cp is not None:
+        lo, hi = cp
         if hi - lo + 1 > MAX_SYMBOLS:
             return RangeAlphabet(lo, hi)
     return _alphabet_of(node, distinct=True)
+
+
+def _codepoint_span(node: t.SemanticNode) -> tuple[int, int] | None:
+    """The `(lo, hi)` code-point span of a code-point alphabet — a bare `@uni`
+    `CharRangeNode`, or a `{x..y}` range over it (single-char endpoints) — else
+    None. Lets a wide `@uni` band stay a virtual `RangeAlphabet` instead of
+    materialising 1.1M symbols (the bare `{a..z}` is now such a range over @uni)."""
+    if isinstance(node, t.CharRangeNode):
+        return ord(node.start), ord(node.end)
+    if (
+        isinstance(node, t.ValueRangeNode)
+        and isinstance(node.alpha, t.CharRangeNode)
+        and not node.exclusions
+        and (node.lower is None or len(node.lower) == 1)
+        and (node.upper is None or len(node.upper) == 1)
+    ):
+        lo = ord(node.lower) if node.lower is not None else ord(node.alpha.start)
+        hi = ord(node.upper) if node.upper is not None else ord(node.alpha.end)
+        return lo, hi
+    return None
 
 
 # ── Value-bound view ──────────────────────────────────────────────────────────
@@ -426,7 +458,28 @@ class _Group(_Base):
             else:
                 return None
         return cur
+
+
 def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
+    # Fast path: a single-code-point band over ambient `@uni` (the normalised bare
+    # `{a..z}`) is exactly a code-point range — match one char in [lower, upper]
+    # without the value-width machinery, and identically to the pre-merge
+    # `CharRangeNode`. (@uni's ordinal is the code point.)
+    a = node.alpha
+    if (
+        isinstance(a, t.CharRangeNode)
+        and node.lower is not None
+        and len(node.lower) == 1
+        and node.upper is not None
+        and len(node.upper) == 1
+        and node.lower_ref is None
+        and node.upper_ref is None
+    ):
+        return _CharRange(
+            t.CharRangeNode(
+                start=node.lower, end=node.upper, exclusions=node.exclusions
+            )
+        )
     return _ValueRange(_value_view(node))
 
 
@@ -434,7 +487,9 @@ def _lower_value_range(node: t.ValueRangeNode) -> Matcher:
 
 _LOWERINGS: dict[type, Callable[..., Matcher]] = {
     t.LiteralNode: lambda n: _Literal(n.content),
-    t.CharRangeNode: _CharRange,
+    # `CharRangeNode` is only ever a @uni `alpha` now (never a lowered brace
+    # semantic); a single-code-point @uni band fast-paths to `_CharRange` directly
+    # in `_lower_value_range`, so there is no `CharRangeNode` lowering entry.
     t.ValueRangeNode: _lower_value_range,
     t.GroupClassNode: lambda n: _Group(n.groups),
     t.UnionNode: _lower_union,

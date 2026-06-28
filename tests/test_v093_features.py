@@ -153,9 +153,9 @@ def test_leading_template_is_the_whole_document_branch():
     assert ex('"replaced"', "anything") == ["replaced"]
     assert ex('"<doc>{{.}}</doc>"', "hi") == ["<doc>hi</doc>"]
     # The chain then continues on that render (the inline-input idiom).
-    assert ex('"# Hi" => {#}[1..]{ }{!\\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"', "x") == [
-        "<h1>Hi</h1>"
-    ]
+    assert ex(
+        '"# Hi" => {#}[1..]{ }{!\\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"', "x"
+    ) == ["<h1>Hi</h1>"]
 
 
 def test_line_anchor_start():

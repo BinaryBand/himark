@@ -41,8 +41,9 @@ _COUNTREF_RE = re.compile(r"#(\d+)")
 _STAGEREF_RE = re.compile(r"(\d+)\$(\d+(?:\.\d+)*)?")
 
 
+# A written `{a..z,!…}` range now resolves to a `ValueRangeNode` (over @uni), so
+# `CharRangeNode` — the bare @uni alpha primitive — never reaches exclusion attach.
 _EXCLUDABLE = (
-    t.CharRangeNode,
     t.ValueRangeNode,
     t.UnionNode,
 )
@@ -107,6 +108,7 @@ def resolve_grouping_brace(content: str) -> t.SequenceNode:
     # Concatenation — re-parse interior as sub-pattern
     sub = parse(phase2.parse(content))
     return t.SequenceNode(children=sub.children)
+
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
 
@@ -241,7 +243,6 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     if split is not None:
         return _resolve_band(*split)
 
-
     # Object nesting `{{X}}` → grouping brace (scope).
     # A brace whose whole content is one nested brace is a single-child
     # grouping — resolved via resolve_grouping_brace so all callers
@@ -249,9 +250,6 @@ def _resolve_brace(content: str) -> t.SemanticNode:
     stripped = strip_unescaped(content)
     if stripped.startswith("{") and brace_end(stripped) == len(stripped):
         return resolve_grouping_brace(stripped)
-
-
-
 
     # Complement prefix: {!expr}
     is_complement = content.startswith("!")
@@ -422,13 +420,13 @@ def _resolve_arm(arm: str) -> t.SemanticNode:
     if len(parts) == 2:
         av, bv = svals
         if av is not None and bv is not None:
-            # τ..τ — a range between two concrete endpoints. Single chars occupy
-            # one position (`{a..z}`); a multi-char range is a value bound over
-            # ambient Unicode (HMK.md §Universes): `{aa..zz}` == `{@uni::aa..zz}`,
-            # the whole value band between the two words, the written widths
-            # setting the field-width window.
-            if len(av) == 1 and len(bv) == 1:
-                return t.CharRangeNode(start=av, end=bv)
+            # τ..τ — a range between two concrete endpoints is a band over ambient
+            # Unicode (HMK.md §Universes): `{a..z}` == `{@uni::a..z}` and
+            # `{aa..zz}` == `{@uni::aa..zz}`, the value band between the endpoints.
+            # @uni's ordinal *is* the code point, so this matches the written range
+            # by value; the endpoint widths set the field-width window. Single- and
+            # multi-char ranges are one node — the engine fast-paths a single-code-
+            # point @uni band back to a direct code-point matcher.
             return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
         # An alphabet endpoint means this is a band, now spelled with `:`.
         raise CompileError(

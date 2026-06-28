@@ -85,6 +85,13 @@ class LiteralNode:
 
 @dataclass(slots=True)
 class CharRangeNode:
+    """A contiguous run of code points `start..end` — the **ambient `@uni`
+    alphabet primitive**. Since the range merge, a written `{a..z}` is a
+    `ValueRangeNode` over this `@uni` primitive (a band whose ordinal is the code
+    point), not a `CharRangeNode` directly; this node now appears only as that
+    `alpha`. The engine fast-paths a single-code-point `@uni` band back to a direct
+    code-point matcher, so `{a..z}` stays a one-char match."""
+
     type: Literal["char_range"] = "char_range"
     start: str = ""
     end: str = ""
@@ -135,6 +142,7 @@ class AnchorNode:
         "doc_end",
     ]
     type: Literal["anchor"] = "anchor"
+
 
 @dataclass(slots=True)
 class GroupClassNode:
