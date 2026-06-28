@@ -65,7 +65,7 @@ def _resolved_brace(child: t.BraceGroupNode) -> t.BraceGroupNode:
     split = _split_band(child.content)
     if split is not None:
         semantic: t.SemanticNode = _resolve_band(*split)
-    elif is_sequence_brace(child.content) or _is_nested_brace(child.content):
+    elif is_sequence_brace(child.content):
         semantic = resolve_grouping_brace(child.content)
     else:
         semantic = _resolve_brace(child.content)
@@ -107,15 +107,6 @@ def resolve_grouping_brace(content: str) -> t.SequenceNode:
     # Concatenation — re-parse interior as sub-pattern
     sub = parse(phase2.parse(content))
     return t.SequenceNode(children=sub.children)
-
-
-def _is_nested_brace(content: str) -> bool:
-    """True when `content` is exactly one nested brace `{{X}}` — a single-child
-    grouping brace (the old "object nesting" form)."""
-    stripped = strip_unescaped(content)
-    if stripped.startswith("{") and brace_end(stripped) == len(stripped):
-        return True
-    return False
 
 # ── Brace resolution ─────────────────────────────────────────────────────────
 
