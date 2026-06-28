@@ -388,9 +388,9 @@ def _cst_is_sequence_brace(universe: GRAMMARParser.UniverseContext) -> bool:
 
 def _resolve_leaf(literal_run: GRAMMARParser.LiteralRunContext) -> str:
     """A bare top-level literal run. Recognised escapes resolve; an unknown escape
-    keeps its backslash (mirrors phase2's leaf scanner, not `unescape`). A top-level
-    `@name` rides through as literal text — the grammar models `macro` only inside a
-    brace, so structural resolution of un-braced references is out of slice."""
+    keeps its backslash (unlike `unescape`, which drops it). A top-level `@name`
+    rides through as literal text — the grammar models `macro` only inside a brace,
+    so structural resolution of un-braced references is out of slice."""
     raw = literal_run.getText()
     out: list[str] = []
     i = 0
@@ -455,9 +455,8 @@ def _resolve_count(count: GRAMMARParser.CountContext) -> t.CountSpec:
 
 # ── Resolver: band → semantic node, with a variable environment ──────────────
 # Carries the `@name` environment so a `macro` atom resolves structurally. The
-# σ-decisions (congruence folding, ranges, complement, exclusions) are reimplemented
-# here as a tree-walk — this is the phase3 replacement; only leaf-lexical helpers
-# above are shared.
+# σ-decisions (congruence folding, ranges, complement, exclusions) are a tree-walk
+# over the CST; the free helpers above (counts, escapes, leaf scanning) feed it.
 
 
 class _Resolver:
