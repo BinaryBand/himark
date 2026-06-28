@@ -1,48 +1,38 @@
-"""ANTLR-backed front-end — a *slice* of the parser migration (see docs/GRAMMAR.g4).
+"""ANTLR-backed front-end for the parser (see docs/GRAMMAR.g4).
 
-This is the candidate parser the differential harness (tests/test_parser_parity.py)
-diffs against the reference `himark.parser`. It demonstrates the target architecture
-for one rule — `braceBody` — end to end, and (unlike the reference) resolves `@name`
-as a **scoped variable** rather than a text macro:
+The candidate the differential harness (tests/test_parser_parity.py) diffs against the
+reference `himark.parser`: both emit the same typed `nodes_typed` AST over the corpus,
+so they are interchangeable for everything downstream (engine, renderer, transpiler).
+Unlike the reference, it resolves `@name` as a **scoped variable**, not a text macro.
 
-  • The pre-pass is `phase0.split_statement` (top-level `=>` split) + `rewrites.apply`
-    (structural sugar). It does **not** text-expand macros — that is the brittle step
-    this branch removes (see below).
-
+Pipeline:
+  • Pre-pass: `phase0.split_statement` (top-level `=>` split) + `rewrites.apply`
+    (structural sugar). No macro text-expansion — the brittle step this removes.
   • ANTLR replaces phase2: the generated lexer+parser (`_generated/GRAMMAR*`) turns a
-    pattern string into a validated parse tree, with `@name` left intact as a `macro`
-    atom (`AT NAME`) inside braces.
+    pattern string into a validated parse tree, `@name` left intact as a `macro` atom.
+  • A tree-walking `_Resolver` replaces phase3: it walks `band → universe → arm → term
+    → atom`, resolving `@name` against a variable environment (prelude `VARIABLES` plus
+    script-local defs) — parsing the definition's body once and splicing the node.
 
-  • A tree-walking `_Resolver` replaces phase3 *for the slice*: it builds the typed
-    `nodes_typed` AST by walking `band → universe → arm → term → atom`, and resolves a
-    `macro` atom by looking `@name` up in a **variable environment** (the prelude
-    `VARIABLES` overlaid with script-local defs), parsing that definition's body once and
-    splicing the resulting *node*. Cycles are detected; an unknown `@name` falls back
-    to literal `@name` text, matching the reference's no-op expansion.
+The CST→AST *decisions* live on the model, not here: each leaf/value node builds itself
+from a parser-agnostic view (`himark.models.cst_view`) — `AnchorNode.from_view`,
+`reference_from_view`, `ValueRangeNode.from_range_view`. This module only reads the parse
+tree and hands across a tech-neutral view, so the same `from_view` code serves any
+front-end. Composite nodes (union, complement, sequence, brace) are plain composition of
+already-resolved children.
 
 Why variables, not text macros: textual `@name` substitution is context-blind — it
-expands inside `"…"` templates, depends on a fixed-point cap, and renumbers captures
-by splice position. Structural resolution is referentially transparent: `@name`
-denotes a fixed node wherever it appears, and a template is an opaque STRING the
-`macro` rule never sees, so the template leak is gone. The reference parser keeps text
-macros (it is the parity oracle); the harness proves the two agree on every capture-
-free alphabet, which is the whole prelude.
+expands inside `"…"` templates, depends on a fixed-point cap, and renumbers captures by
+splice position. Structural resolution is referentially transparent: `@name` denotes a
+fixed node wherever it appears, and a template is an opaque string the `macro` rule never
+sees. The reference keeps text macros (it is the parity oracle); the harness proves they
+agree.
 
-Scope (the `braceBody` σ-core): literal, char-range, multi-char value-range, the
-congruence forms (`{a,A}`, `{cat,dog}`, `{{a,A},{b,B}}`), complement (`{!{x,y}}`),
-member exclusions (`{a..z,!{m..p}}`), `::` value bands over a literal spec
-(`{@d::0..255}`, `{@d::5}`, `{@d::1..5,9..12}`, the open-ended `{@d::..255}` /
-`{@d::128..}`, and the ambient `{::lo..hi}`), the references `{$i}` (back-ref),
-`{#i}` (count-ref) and `{N$}`/`{N$i}` (stage-ref) — including as a band endpoint
-(`{@d::0..$0}`) — the anchors `{@<}`/`{@>}`/`{@<<}`/`{@>>}`, and `@name` variable
-references that resolve to any of those (`{@d}`, `{@w}`, `{!@s}`). Counts on braces
-are parsed. Everything else — the `N#` stage count-ref (no phase3 oracle), grouping
-`SequenceNode`s, heterogeneous `{{…}}`, top-level (un-braced) `@name`, templates with
-moustaches — raises `NotImplementedError`, which the harness records as "not in this
-slice yet" (skipped); an *unhandled* divergence still fails loudly.
+A few non-corpus edge forms still raise `NotImplementedError` (e.g. the `N#` stage
+count-ref, which has no reference node; open-ended bare `..` ranges).
 
-Entry point: `parse(text, variables=None) -> list[RootNode]`, matching the reference
-`himark.parser.parse` signature so the candidate plugs into the harness unchanged.
+Entry point: `parse(text, variables=None) -> list[RootNode]`, matching
+`himark.parser.parse` so the candidate plugs into the harness unchanged.
 """
 
 from __future__ import annotations
@@ -102,9 +92,9 @@ def _parse_pattern_tree(src: str) -> "GRAMMARParser.PatternOnlyContext":
 
 
 def _ambient_alpha() -> t.SemanticNode:
-    """The ambient Unicode universe `@uni` — the alphabet for an unnamed multi-char
-    `..` range (`{aa..zz}` == `{@uni::aa..zz}`)."""
-    return t.CharRangeNode(start="\x00", end="\U0010ffff")
+    """The ambient Unicode universe `@uni`, owned by the model (single source of
+    truth, shared with any front-end and the engine)."""
+    return t.CharRangeNode.uni()
 
 
 # A written `{a..z,!…}` range now resolves to a `ValueRangeNode` (over @uni), so
@@ -182,6 +172,12 @@ class _ReferenceView:
     is_count: bool
     stage: int | None
     index: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RangeView:
+    lower: str
+    upper: str
 
 
 def _resolve_reference_atom(
@@ -389,8 +385,9 @@ class _Resolver:
         raise NotImplementedError("grouping/sequence brace not in braceBody slice")
 
     def resolve_range_arm(self, arm: GRAMMARParser.ArmContext) -> t.SemanticNode:
-        """Resolve a `term .. term` arm. Slice supports concrete singleton endpoints
-        only (`{a..z}`, `{aa..zz}`); open-ended/alphabet endpoints are out of slice."""
+        """Adapt a `term .. term` arm to a `RangeView`; `ValueRangeNode.from_range_view`
+        owns the τ..τ→band-over-@uni decision. Slice supports concrete singleton
+        endpoints only (`{a..z}`, `{aa..zz}`); open-ended/alphabet endpoints are bands."""
         terms = arm.term()
         if len(terms) != 2:
             raise NotImplementedError("open-ended `..` range not in braceBody slice")
@@ -400,11 +397,7 @@ class _Resolver:
             raise NotImplementedError(
                 "non-literal `..` endpoint not in braceBody slice"
             )
-        # τ..τ — a range between two concrete endpoints is a band over ambient @uni
-        # (HMK.md §Universes): `{a..z}` == `{@uni::a..z}`. Single- and multi-char
-        # ranges are one node, mirroring phase3 (`_resolve_universe`'s τ..τ arm);
-        # the engine fast-paths a single-code-point @uni band back to a direct matcher.
-        return t.ValueRangeNode(alpha=_ambient_alpha(), lower=av, upper=bv)
+        return t.ValueRangeNode.from_range_view(_RangeView(lower=av, upper=bv))
 
     def resolve_arm(self, arm: GRAMMARParser.ArmContext) -> t.SemanticNode:
         if arm.RANGE() is not None:

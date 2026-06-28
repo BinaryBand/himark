@@ -38,3 +38,14 @@ class ReferenceView(Protocol):
     is_count: bool
     stage: int | None
     index: int | None
+
+
+@runtime_checkable
+class RangeView(Protocol):
+    """A written `τ..τ` range with two concrete endpoints (`{a..z}`, `{aa..zz}`).
+
+    Both ends are given as literal strings; an open-ended or alphabet endpoint is a
+    band (`::`), not this view."""
+
+    lower: str
+    upper: str

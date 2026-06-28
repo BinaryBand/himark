@@ -5,7 +5,7 @@ from typing import Literal, TypeAlias
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from himark.models.cst_view import AnchorView, ReferenceView
+from himark.models.cst_view import AnchorView, RangeView, ReferenceView
 
 # -----------------------------
 # Shared value objects
@@ -55,7 +55,7 @@ class RootNode:
     type: Literal["root"] = "root"
     children: list[Node] = field(default_factory=list)
     # Set by the pipeline compiler on a statement's first step when the statement
-    # uses the `<=` fixed-point arrow: the runner re-splices it until the document
+    # uses the `<=>` fixed-point arrow: the runner re-splices it until the document
     # settles. A plain `=>` statement leaves it False. Excluded from equality (it
     # is a runner directive, not part of the matched shape).
     fixed_point: bool = field(default=False, compare=False)
@@ -101,6 +101,12 @@ class CharRangeNode:
     end: str = ""
     exclusions: list[str] = field(default_factory=list)
 
+    @classmethod
+    def uni(cls) -> CharRangeNode:
+        """The ambient `@uni` alphabet primitive — every code point. The default
+        alphabet for an unnamed `..` range and an empty-payload band (`{::lo..hi}`)."""
+        return cls(start="\x00", end="\U0010ffff")
+
 
 @dataclass(slots=True, kw_only=True)
 class ValueRangeNode:
@@ -118,6 +124,14 @@ class ValueRangeNode:
     lower_ref: "SemanticNode | None" = None
     upper_ref: "SemanticNode | None" = None
     exclusions: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_range_view(cls, v: RangeView) -> ValueRangeNode:
+        """A written `τ..τ` range is a value band over ambient `@uni` (HMK.md
+        §Universes): `{a..z}` == `{@uni::a..z}`. Single- and multi-char ranges are one
+        node; the engine fast-paths a single-code-point `@uni` band to a direct
+        matcher. The CST→AST decision a parser used to make inline, now on the model."""
+        return cls(alpha=CharRangeNode.uni(), lower=v.lower, upper=v.upper)
 
 
 @dataclass(slots=True)
