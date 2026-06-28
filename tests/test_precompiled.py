@@ -92,7 +92,8 @@ def test_load_rejects_foreign_file(tmp_path):
 
 
 def test_split_groups_leading_arrow_continuations():
-    # Continuation lines keep their cosmetic indentation; phase0 strips each step.
+    # Continuation lines keep their cosmetic indentation here; the parser's
+    # depth-aware whitespace pre-pass drops it before the grammar runs.
     src = '{a}\n  => "x"\n  => {b}\n{c} => "y"\n'
     assert precompiled.split_statements(src) == [
         '{a}\n  => "x"\n  => {b}',

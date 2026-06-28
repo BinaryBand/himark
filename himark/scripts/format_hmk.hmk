@@ -79,7 +79,7 @@
 
 // ── RESTORE ── put the masked tokens back ───────────────────────────────────
 {␤} => "\n"           // masked newline (template or brace interior) → real `\n`
-{⟶} => "\=>"          // sentinel arrow → `=>`  (\= keeps phase0 from splitting)
+{⟶} => "\=>"          // sentinel arrow → `=>`  (\= keeps it from splitting)
 {«} => "\""
 {»} => "\""
 {¤} => "\\\""         // ¤ → `\"`

@@ -6,10 +6,11 @@ so they are interchangeable for everything downstream (engine, renderer, transpi
 Unlike the reference, it resolves `@name` as a **scoped variable**, not a text macro.
 
 Pipeline:
-  • Pre-pass: `phase0.split_statement` (top-level `=>` split) + script-local
-    variable text expansion (see below).
-  • ANTLR replaces phase2: the generated lexer+parser (`_generated/GRAMMAR*`) turns a
-    pattern string into a validated parse tree, `@name` left intact as a `macro` atom.
+  • ANTLR is the whole front-end: the generated lexer+parser (`_generated/GRAMMAR*`)
+    turns a statement into a validated parse tree, splitting the `=>`/`<=>` chain in
+    the grammar itself (a `"…"` template is one STRING token, so an arrow inside it is
+    literal) — no hand-rolled pre-pass. `@name` is left intact as a `macro` atom, with
+    script-local top-level `@name` text-expanded per step (see below).
   • A tree-walking `_Resolver` replaces phase3: it walks `band → universe → arm → term
     → atom`, resolving `@name` against a variable environment (prelude `VARIABLES`) —
     parsing the definition's body once and splicing the node.
@@ -45,7 +46,6 @@ from antlr4.error.ErrorListener import ErrorListener
 
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
-from himark.parser import phase0
 from himark.prelude import VARIABLES
 
 # The generated lexer/parser (`_generated/GRAMMAR*`) are a git-ignored build product
@@ -144,7 +144,7 @@ class _RaiseOnError(ErrorListener):
         raise CompileError(f"ANTLR syntax error at {line}:{column}: {msg}")
 
 
-def _parse_pattern_tree(src: str) -> "GRAMMARParser.PatternOnlyContext":
+def _make_parser(src: str) -> "GRAMMARParser":
     from himark.parser._generated.GRAMMARLexer import GRAMMARLexer
     from himark.parser._generated.GRAMMARParser import GRAMMARParser
 
@@ -154,7 +154,56 @@ def _parse_pattern_tree(src: str) -> "GRAMMARParser.PatternOnlyContext":
     parser = GRAMMARParser(CommonTokenStream(lexer))
     parser.removeErrorListeners()
     parser.addErrorListener(_RaiseOnError())
-    return parser.patternOnly()
+    return parser
+
+
+def _parse_pattern_tree(src: str) -> "GRAMMARParser.PatternOnlyContext":
+    return _make_parser(src).patternOnly()
+
+
+def _parse_snippet_tree(src: str) -> "GRAMMARParser.SnippetContext":
+    """Parse a whole `=>`/`<=>` statement chain. The grammar itself splits the
+    chain (a `"…"` template is one STRING token, so a `=>` inside it is literal;
+    braces/counts nest), so there is no hand-rolled top-level arrow scan."""
+    return _make_parser(src).snippet()
+
+
+def _strip_insignificant_ws(text: str) -> str:
+    """Drop spaces/tabs the grammar treats as insignificant — the depth-aware
+    whitespace pre-pass HMK.md mandates. Spaces and tabs are literal only inside a
+    `{…}` brace body or a `"…"` template; everywhere else (around steps and arrows,
+    between top-level constructs, inside a `[count]`) they are dropped, so
+    `{a} {b}` == `{a}{b}` and `[1 .. 6]` == `[1..6]`. Newlines are kept — the
+    grammar's `sp` consumes them as the `.hmk` continuation form — and a
+    backslash-escaped space (`\\ `) is preserved verbatim."""
+    out: list[str] = []
+    depth = 0
+    inq = False
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\" and i + 1 < n:  # an escape — both chars are literal
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if c == '"':
+            inq = not inq
+            out.append(c)
+        elif inq:  # inside a template — every char (incl. braces, spaces) is literal
+            out.append(c)
+        elif c == "{":
+            depth += 1
+            out.append(c)
+        elif c == "}":
+            depth = max(0, depth - 1)
+            out.append(c)
+        elif depth == 0 and c in (" ", "\t"):
+            pass  # insignificant whitespace at top level / in a count — drop it
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
 
 
 # ── Pure helpers (no environment) ─────────────────────────────────────────────
@@ -738,8 +787,7 @@ class _Resolver:
             )
         return self.resolve_universe(universe)
 
-    def resolve_pattern(self, ctx: GRAMMARParser.PatternOnlyContext) -> t.RootNode:
-        pattern = ctx.pattern()
+    def resolve_pattern(self, pattern: GRAMMARParser.PatternContext) -> t.RootNode:
         children: list[t.Node] = []
         for factor in pattern.factor():
             count_ctx = factor.count()
@@ -779,11 +827,12 @@ class _Resolver:
 def parse(text: str, variables: dict[str, str] | None = None) -> list[t.RootNode]:
     """ANTLR-backed `parse`, signature-compatible with `himark.parser.parse`.
 
-    Shared pre-pass (`phase0` split), then ANTLR + the slice tree-walk per step,
-    with `@name` resolved as a scoped variable from `VARIABLES`
-    overlaid with `variables`. A whole-step `"…"` template is one verbatim leaf (no
-    variable expansion → no template leak); its moustaches are a separate layer.
-    Out-of-slice constructs raise `NotImplementedError`.
+    The depth-aware whitespace pre-pass, then ANTLR parses the whole `=>`/`<=>`
+    statement chain (the grammar splits it — no hand-rolled arrow scan), and the
+    tree-walk resolves each step, with `@name` resolved as a scoped variable from
+    `VARIABLES` overlaid with `variables`. A whole-step `"…"` template is one
+    verbatim leaf (no variable expansion → no template leak); its moustaches are a
+    separate layer. Out-of-slice constructs raise `NotImplementedError`.
 
     Script-local `variables` are text-expanded into each non-template pattern step
     before ANTLR tokenises it.  ANTLR tokenises top-level `@name` as a `literalRun`
@@ -791,14 +840,24 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[t.RootNode
     Prelude variables stay structural — they only appear inside braces."""
     resolver = _Resolver({**VARIABLES, **(variables or {})})
     roots: list[t.RootNode] = []
-    for pre in phase0.split_statement(text):
-        stripped = pre.strip()
-        if len(stripped) >= 2 and stripped.startswith('"') and stripped.endswith('"'):
+    text = _strip_insignificant_ws(text)
+    for step in _parse_snippet_tree(text).statement().step():
+        template = step.template()
+        if template is not None:
+            # A whole-step `"…"` template is one verbatim leaf — no variable
+            # expansion (no template leak); its moustaches are a separate layer.
+            quoted = template.getText()
             roots.append(
-                t.RootNode(children=[t.LeafNode(content=unescape(stripped[1:-1]))])
+                t.RootNode(children=[t.LeafNode(content=unescape(quoted[1:-1]))])
             )
             continue
+        pattern = step.pattern()
         if variables:
-            pre = _text_expand_variables(pre, variables)
-        roots.append(resolver.resolve_pattern(_parse_pattern_tree(pre)))
+            # Script-local `@name` lexes as a top-level `literalRun`, not a `macro`
+            # atom, so structural resolution alone would miss it. Text-expand this
+            # step's own source slice and re-parse it (templates are untouched —
+            # they took the branch above).
+            src = text[step.start.start : step.stop.stop + 1]
+            pattern = _parse_pattern_tree(_text_expand_variables(src, variables)).pattern()
+        roots.append(resolver.resolve_pattern(pattern))
     return roots
