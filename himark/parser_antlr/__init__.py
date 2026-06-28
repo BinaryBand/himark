@@ -47,6 +47,8 @@ Entry point: `parse(text, variables=None) -> list[RootNode]`, matching the refer
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
@@ -162,40 +164,57 @@ def _guard_in_slice_atom(atom: GRAMMARParser.AtomContext) -> None:
         raise NotImplementedError("anchor (@</@>) not in braceBody slice")
 
 
+# ── CST views: parser-specific adapters to the models' `…View` Protocols ──────
+# These thin ANTLR-shaped carriers satisfy himark.models.cst_view; the CST→AST
+# *mapping* lives on the model (`AnchorNode.from_view`, `reference_from_view`), so
+# this module only reads the parse tree and hands across a tech-neutral view. A
+# different front-end implements the same Protocols and reuses that mapping verbatim.
+
+
+@dataclass(frozen=True, slots=True)
+class _AnchorView:
+    is_start: bool
+    is_document: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _ReferenceView:
+    is_count: bool
+    stage: int | None
+    index: int | None
+
+
 def _resolve_reference_atom(
     ref: GRAMMARParser.ReferenceContext,
 ) -> t.SemanticNode:
-    """Resolve a `reference` atom to its typed node, mirroring phase3._resolve_reference.
-
-    The grammar's `reference` covers `$i  #i  N$  N$i  N#  N#i`, but the parity oracle
-    (phase3) only recognises four: `{$i}` → BackRef, `{#i}` → CountRef, `{N$}`/`{N$i}`
-    → StageRef (flat path). `N#`/`N#i` have no phase3 regex (it would treat them as a
-    literal), so they stay out of slice rather than diverge. The leading-INT alternative
-    is distinguished from the no-stage one by token order (sigil before vs. after INT)."""
+    """Adapt a `reference` atom (`$i  #i  N$  N$i  N#  N#i`) to a `ReferenceView`; the
+    node choice (BackRef / CountRef / StageRef, and the out-of-slice `N#`) lives on
+    `reference_from_view`. The leading-INT stage form is told from the no-stage form by
+    token order — sigil before vs. after the INT."""
     sigil = ref.DOLLAR() or ref.HASH()
-    is_dollar = ref.DOLLAR() is not None
     ints = ref.INT()
     leading_int = (
         bool(ints) and ints[0].getSymbol().tokenIndex < sigil.getSymbol().tokenIndex
     )
-    if not leading_int:  # `$i` / `#i` — the no-stage form (index required by grammar)
-        group = int(ints[0].getText())
-        return t.BackRefNode(group=group) if is_dollar else t.CountRefNode(group=group)
-    if not is_dollar:  # `N#` / `N#i` — no phase3 oracle, keep out of slice
-        raise NotImplementedError("stage count-ref `N#` not in references slice")
-    stage = int(ints[0].getText())
-    path = (int(ints[1].getText()),) if len(ints) == 2 else ()  # `{N$}` whole match
-    return t.StageRefNode(stage=stage, path=path)
+    if leading_int:  # `N$` / `N$i` — first INT is the stage, optional second the index
+        stage: int | None = int(ints[0].getText())
+        index = int(ints[1].getText()) if len(ints) == 2 else None
+    else:  # `$i` / `#i` — no stage; the (grammar-required) INT is the group index
+        stage = None
+        index = int(ints[0].getText())
+    return t.reference_from_view(
+        _ReferenceView(is_count=ref.HASH() is not None, stage=stage, index=index)
+    )
 
 
 def _resolve_anchor_atom(anchor: GRAMMARParser.AnchorContext) -> t.AnchorNode:
-    """Resolve an `anchor` atom (`AT (LT LT? | GT GT?)`) to its zero-width position,
-    mirroring phase3's `@<`/`@>`/`@<<`/`@>>` map. One bracket is a line anchor, two a
-    document anchor; `<` is a start, `>` an end."""
+    """Adapt an `anchor` atom (`AT (LT LT? | GT GT?)`) to an `AnchorView` and let the
+    model build itself via `AnchorNode.from_view`. `<`/`>` is the side, one/two brackets
+    the line/document scope; this half only reads the brackets off the ANTLR tree."""
     lts = anchor.LT()
-    if lts:
-        return t.AnchorNode(at="doc_start" if len(lts) == 2 else "line_start")
-    return t.AnchorNode(at="doc_end" if len(anchor.GT()) == 2 else "line_end")
+    return t.AnchorNode.from_view(
+        _AnchorView(is_start=bool(lts), is_document=len(lts or anchor.GT()) == 2)
+    )
 
 
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:

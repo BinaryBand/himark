@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+
+from himark.models.cst_view import AnchorView, ReferenceView
+
 # -----------------------------
 # Shared value objects
 # -----------------------------
@@ -129,7 +133,7 @@ class ComplementNode:
     type: Literal["complement"] = "complement"
 
 
-@dataclass(slots=True, kw_only=True)
+@pydantic_dataclass(slots=True, kw_only=True)
 class AnchorNode:
     """A zero-width anchor: `@<`/`@>` match a **line** start/end; `@<<`/`@>>` the
     whole **document** start/end. Matches a position without consuming or
@@ -142,6 +146,14 @@ class AnchorNode:
         "doc_end",
     ]
     type: Literal["anchor"] = "anchor"
+
+    @classmethod
+    def from_view(cls, v: AnchorView) -> AnchorNode:
+        """Build from a front-end's `AnchorView` — the mechanical CST→AST map a
+        parser used to do by hand: `<`/`>` choose the side, single/double the scope."""
+        if v.is_document:
+            return cls(at="doc_start" if v.is_start else "doc_end")
+        return cls(at="line_start" if v.is_start else "line_end")
 
 
 @dataclass(slots=True)
@@ -178,7 +190,7 @@ class SequenceNode:
     children: list[Node] = field(default_factory=list)
 
 
-@dataclass(slots=True)
+@pydantic_dataclass(slots=True)
 class BackRefNode:
     """A self-reference `{$i}`: matches the literal text that capture group `i`
     captured earlier in the same match. Groups are numbered in document order,
@@ -190,7 +202,7 @@ class BackRefNode:
     group: int = 0
 
 
-@dataclass(slots=True)
+@pydantic_dataclass(slots=True)
 class CountRefNode:
     """A count-reference `{#i}`: matches the decimal *repetition count* of
     capture group `i` (`{…}[2..9]` then `{ repeated {#0} times}`). Like a
@@ -201,7 +213,7 @@ class CountRefNode:
     group: int = 0
 
 
-@dataclass(slots=True)
+@pydantic_dataclass(slots=True)
 class StageRefNode:
     """A cross-stage reference `{N$M}`: matches the literal text of pipeline
     stage `N`'s capture `M`. The capture part is a dotted path (`{N$M.K}`) into
@@ -213,6 +225,25 @@ class StageRefNode:
     type: Literal["stage_ref"] = "stage_ref"
     stage: int = 0
     path: tuple[int, ...] = ()
+
+
+def reference_from_view(
+    v: ReferenceView,
+) -> BackRefNode | CountRefNode | StageRefNode:
+    """Build the right reference node from a front-end's `ReferenceView`.
+
+    The three reference node types are one structural choice over the view: a
+    no-stage form (`$i`/`#i`) is a back- or count-reference by sigil; a stage form
+    (`N$`/`N$i`) is a cross-stage reference. The stage count-ref (`N#`/`N#i`) has no
+    node type — it is not a representable reference — so it is rejected here, the one
+    place that decision lives (a parser used to special-case it inline)."""
+    if v.stage is None:  # `$i` / `#i` — index is the group, sigil picks the kind
+        group = v.index or 0
+        return CountRefNode(group=group) if v.is_count else BackRefNode(group=group)
+    if v.is_count:  # `N#` / `N#i` — no node type for a stage count-ref
+        raise NotImplementedError("stage count-ref `N#` has no reference node")
+    path = (v.index,) if v.index is not None else ()
+    return StageRefNode(stage=v.stage, path=path)
 
 
 SemanticNode: TypeAlias = (
