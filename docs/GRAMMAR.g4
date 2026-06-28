@@ -104,13 +104,20 @@ literalRun : (TEXT | ESC | HEX_ESC | DOT | RANGE | BAND | COMMA
              | PIPE | LPAREN | RPAREN)+ ;
 
 // ── Count `[…]` ──────────────────────────────────────────────────────────────
+// Labeled alternatives so the resolver dispatches on shape, never on token
+// position (mirrors `arm`). The open forms come before `exactCount` so a bare
+// `..` reads as the full-open range, and an `x..`/`..y` binds the `..` as a
+// range rather than leaving it unconsumed.
 count     : LBRACK countBody RBRACK ;
 countBody : countArm (COMMA countArm)* ;
-countArm  : countTerm? RANGE countTerm?     // x.. / ..y / x..y / ..
-          | countTerm                       // n  or  #  or  #i
+countArm  : countTerm RANGE countTerm        # closedCount     // x..y
+          | countTerm RANGE                  # openUpperCount   // x..
+          | RANGE countTerm                  # openLowerCount   // ..y
+          | RANGE                            # fullOpenCount    // ..
+          | countTerm                        # exactCount       // n  or  #i
           ;
 countTerm : INT | countRef ;
-countRef  : HASH INT? ;                      // # (self-bind) or #i (count-ref)
+countRef  : HASH INT ;                       // #i count-reference (index required)
 
 // ── Brace interior — the σ-grammar (`,` unions, `..` ranges, `::` bands) ──────
 // A `band` is the whole interior of a `{…}` (and the prelude's `@name =` RHS).

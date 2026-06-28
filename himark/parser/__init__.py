@@ -46,8 +46,6 @@ from antlr4.error.ErrorListener import ErrorListener
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 from himark.parser import phase0
-from himark.parser._count import parse_count
-from himark.parser._text import ESCAPES, split_top, unescape
 from himark.prelude import VARIABLES
 
 # The generated lexer/parser (`_generated/GRAMMAR*`) are a git-ignored build product
@@ -60,6 +58,56 @@ try:  # pragma: no cover - typing-only convenience when generated code is presen
     from himark.parser._generated.GRAMMARParser import GRAMMARParser
 except ModuleNotFoundError:  # pragma: no cover - parser not generated yet
     GRAMMARParser = None  # ty:ignore[invalid-assignment]
+
+
+# ── Escape resolution (leaf value, not structure) ────────────────────────────
+# The grammar recognises an escape (`ESC`/`HEX_ESC` tokens); mapping it to a code
+# point is leaf *value* semantics a grammar can't express, so it lives here as the
+# single escape table. Named control characters plus the metacharacters that need
+# escaping to appear literally; any other escaped character resolves to itself (so
+# `\!` -> `!`). `\r` matches a carriage return, so CRLF target text is handled.
+ESCAPES = {
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "\\": "\\",
+    "{": "{",
+    "}": "}",
+    '"': '"',
+}
+
+# Fixed-width hex code-point escapes, Python/C spellings: `\xHH` (a byte),
+# `\uHHHH` (BMP), `\UHHHHHHHH` (full plane). Fixed width — not a `\u{…}` brace
+# form — so the trailing hex never looks like a brace to a depth scanner.
+_HEX_ESCAPE_WIDTH = {"x": 2, "u": 4, "U": 8}
+_HEX_DIGITS = set("0123456789abcdefABCDEF")
+
+
+def unescape(s: str) -> str:
+    """Resolve backslash escapes in a literal fragment (\\!, \\{, \\n, \\x41, …).
+
+    `\\xHH`/`\\uHHHH`/`\\UHHHHHHHH` resolve to the code point; any other escape
+    resolves to the escaped character itself (so `\\!` -> `!`, and a `\\x` without
+    two hex digits stays a literal `x`).
+    """
+    if "\\" not in s:
+        return s
+    out: list[str] = []
+    i = 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s):
+            width = _HEX_ESCAPE_WIDTH.get(s[i + 1])
+            hexits = s[i + 2 : i + 2 + width] if width else ""
+            if width and len(hexits) == width and set(hexits) <= _HEX_DIGITS:
+                out.append(chr(int(hexits, 16)))
+                i += 2 + width
+            else:
+                out.append(ESCAPES.get(s[i + 1], s[i + 1]))
+                i += 2
+        else:
+            out.append(s[i])
+            i += 1
+    return "".join(out)
 
 
 # ── Script-local variable text expansion ─────────────────────────────────────
@@ -283,8 +331,9 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
         (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext),
     ):
         raise NotImplementedError("complex exclusion operand not in band slice")
-    inner = operand_band.getText()
-    return [m.strip() for m in split_top(",", inner)]
+    # The operand's members are already the universe's comma-separated arms — walk
+    # them straight off the CST instead of re-splitting the raw text.
+    return [a.getText().strip() for a in operand_band.universe().arm()]
 
 
 def _is_whole_nested_brace(universe: GRAMMARParser.UniverseContext) -> bool:
@@ -358,6 +407,50 @@ def _resolve_leaf(literal_run: GRAMMARParser.LiteralRunContext) -> str:
         out.append(raw[i])
         i += 1
     return "".join(out)
+
+
+def _count_int(
+    term: GRAMMARParser.CountTermContext, count: GRAMMARParser.CountContext
+) -> int:
+    """The integer value of a count endpoint. A count-reference endpoint (`[#i..]`)
+    has no `CountSpec` representation, so it is rejected — matching the old parser."""
+    if term.INT() is None:
+        raise CompileError(f"Invalid count expression: {count.getText()}")
+    return int(term.INT().getText())
+
+
+def _resolve_count(count: GRAMMARParser.CountContext) -> t.CountSpec:
+    """Build a `CountSpec` directly from the parsed count CST (`count → countArm →
+    countTerm`), the single source of count syntax — no text re-parse. Dispatches on
+    the labeled `countArm` alternatives, so endpoint position is read from the tree,
+    never recovered from token order."""
+    arms = count.countBody().countArm()
+    # `[a,b,c]` — a union of exact integers (a range or ref in a union is invalid).
+    if len(arms) > 1:
+        values: set[int] = set()
+        for arm in arms:
+            if not isinstance(arm, GRAMMARParser.ExactCountContext):
+                raise CompileError(f"Invalid count expression: {count.getText()}")
+            values.add(_count_int(arm.countTerm(), count))
+        return t.CountSet(values=sorted(values))
+    arm = arms[0]
+    if isinstance(arm, GRAMMARParser.ExactCountContext):
+        term = arm.countTerm()
+        if term.countRef() is not None:  # `[#i]` — repeat as group i did
+            return t.CountRefSpec(group=int(term.countRef().INT().getText()))
+        n = _count_int(term, count)  # `[n]` — exact
+        return t.CountRange(min=n, max=n)
+    if isinstance(arm, GRAMMARParser.FullOpenCountContext):  # `[..]`
+        return t.CountRange(min=0, max=None)
+    if isinstance(arm, GRAMMARParser.OpenLowerCountContext):  # `[..y]`
+        return t.CountRange(min=0, max=_count_int(arm.countTerm(), count))
+    if isinstance(arm, GRAMMARParser.OpenUpperCountContext):  # `[x..]`
+        return t.CountRange(min=_count_int(arm.countTerm(), count), max=None)
+    # closedCount: `[x..y]`
+    return t.CountRange(
+        min=_count_int(arm.countTerm(0), count),
+        max=_count_int(arm.countTerm(1), count),
+    )
 
 
 # ── Resolver: band → semantic node, with a variable environment ──────────────
@@ -572,11 +665,7 @@ class _Resolver:
                 if ctx.braceGroup() is not None or ctx.complement() is not None:
                     flush_leaf()
                     count_ctx = ctx.count()
-                    count = (
-                        parse_count(count_ctx.countBody().getText())
-                        if count_ctx
-                        else None
-                    )
+                    count = _resolve_count(count_ctx) if count_ctx else None
                     if ctx.braceGroup() is not None:
                         bband = ctx.braceGroup().band()
                         children.append(
@@ -655,7 +744,7 @@ class _Resolver:
         children: list[t.Node] = []
         for factor in pattern.factor():
             count_ctx = factor.count()
-            count = parse_count(count_ctx.countBody().getText()) if count_ctx else None
+            count = _resolve_count(count_ctx) if count_ctx else None
 
             if factor.braceGroup() is not None:
                 band = factor.braceGroup().band()
