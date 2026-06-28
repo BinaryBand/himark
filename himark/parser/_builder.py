@@ -318,10 +318,18 @@ class _AstBuilder(GRAMMARVisitor):
     # (These replace the isinstance chains in _Resolver.resolve_brace_body)
 
     def visitValueBand(self, ctx: GRAMMARParser.ValueBandContext) -> t.SemanticNode:
-        return self._resolve_band(ctx)
+        """Resolve a `{payload::spec}` band — explicit payload alphabet."""
+        alpha = self._resolve_universe(ctx.universe(0))
+        spec = ctx.universe(1)
+        options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
+        return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitAmbientBand(self, ctx: GRAMMARParser.AmbientBandContext) -> t.SemanticNode:
-        return self._resolve_band(ctx)
+        """Resolve a `{::spec}` band — implicit @uni payload alphabet."""
+        alpha = _ambient_alpha()
+        spec = ctx.universe()
+        options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
+        return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitBareAlphabet(self, ctx: GRAMMARParser.BareAlphabetContext) -> t.SemanticNode:
         universe = ctx.universe()
@@ -332,20 +340,11 @@ class _AstBuilder(GRAMMARVisitor):
             return t.SequenceNode(children=self._universe_to_sequence_children(universe))
         return self._resolve_universe(universe)
 
-    # ── Band logic ───────────────────────────────────────────────────────────
-
-    def _resolve_band(self, band: GRAMMARParser.BandContext) -> t.SemanticNode:
-        if isinstance(band, GRAMMARParser.ValueBandContext):
-            alpha = self._resolve_universe(band.universe(0))
-            spec = band.universe(1)
-        else:
-            alpha = _ambient_alpha()
-            spec = band.universe()
-        options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
-        return options[0] if len(options) == 1 else t.UnionNode(options=options)
+    # ── Band arm resolution (isinstance here is type-matching for parameter
+    #     shapes, not dispatch routing — universe arms and band arms share the
+    #     same ArmContext types but need different construction) ────────────────
 
     def _resolve_band_arm(self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext) -> t.ValueRangeNode:
-        # Uses self.visit to dispatch on the labeled arm alternative
         if isinstance(arm, GRAMMARParser.SingleContext):
             value, ref = self._band_endpoint(arm.term())
             return t.ValueRangeNode.from_band_view(
