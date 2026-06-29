@@ -53,6 +53,9 @@ _REPS_OPCODES = frozenset(
     }
 )
 
+# Opcode → referent kind, for the three reference opcodes (see _resolve_referent).
+_REF_KIND = {BACK_REF: "back", COUNT_REF: "count", STAGE_REF: "stage"}
+
 
 # ── Repetition spec ───────────────────────────────────────────────────────────
 
@@ -423,21 +426,8 @@ def _run_program(
             _ComplementMatcher(inner_groups), reps, state, text, pos, cont
         )
 
-    if opcode == BACK_REF:
-        (group,) = args
-        caps = state.root.captures
-        referent = _cap_text(caps[group], text) if group < len(caps) else None
-        return _match_referent(referent, reps, text, pos, state, cont)
-
-    if opcode == COUNT_REF:
-        (group,) = args
-        caps = state.root.captures
-        referent = str(_rep_count(caps[group])) if group < len(caps) else None
-        return _match_referent(referent, reps, text, pos, state, cont)
-
-    if opcode == STAGE_REF:
-        stage, path = args
-        referent = _stage_referent(state.root.stages, stage, tuple(path))
+    if opcode in _REF_KIND:
+        referent = _resolve_referent((_REF_KIND[opcode], *args), state, text)
         return _match_referent(referent, reps, text, pos, state, cont)
 
     if opcode == VALUE_RANGE:
@@ -453,8 +443,8 @@ def _run_program(
 
     if opcode == DYN_RANGE:
         alph, lo_static, hi_static, lo_ref, hi_ref, excl_list = args
-        lower = lo_static if lo_ref is None else _endpoint_text(lo_ref, state, text)
-        upper = hi_static if hi_ref is None else _endpoint_text(hi_ref, state, text)
+        lower = lo_static if lo_ref is None else _resolve_referent(lo_ref, state, text)
+        upper = hi_static if hi_ref is None else _resolve_referent(hi_ref, state, text)
         if (lo_ref is not None and lower is None) or (
             hi_ref is not None and upper is None
         ):
@@ -511,13 +501,14 @@ def _run_matcher(
 ) -> int | None:
     caps = state.captures
 
+    def zero() -> int | None:
+        if not reps.accepts(0):
+            return None
+        return _push(caps, Capture("", (pos, pos), [], count=0), pos, cont)
+
     first_end = matcher.match(text, pos)
     if first_end is None or first_end == pos:
-        return (
-            _push(caps, Capture("", (pos, pos), [], count=0), pos, cont)
-            if reps.accepts(0)
-            else None
-        )
+        return zero()
 
     for unit_len in range(first_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
@@ -538,11 +529,7 @@ def _run_matcher(
             r = _push(caps, Capture("", (pos, end), rep_list, count=k), end, cont)
             if r is not None:
                 return r
-    return (
-        _push(caps, Capture("", (pos, pos), [], count=0), pos, cont)
-        if reps.accepts(0)
-        else None
-    )
+    return zero()
 
 
 def _cap_text(cap: Capture, text: str) -> str:
@@ -603,7 +590,7 @@ def _stage_referent(
     return cap.text if cap is not None else None
 
 
-def _endpoint_text(desc: list | tuple, state: _State, text: str) -> str | None:
+def _resolve_referent(desc: list | tuple, state: _State, text: str) -> str | None:
     caps = state.root.captures
     kind = desc[0]
     if kind == "back":
