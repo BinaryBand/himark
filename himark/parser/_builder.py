@@ -101,7 +101,7 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
         return None
     operand_band = atoms[0].complement().braceGroup().band()
     if isinstance(operand_band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)):
-        raise NotImplementedError("complex exclusion operand not in band slice")
+        raise CompileError("an exclusion operand must be a simple alphabet, not a band")
     return [a.getText().strip() for a in operand_band.universe().arm()]
 
 
@@ -268,7 +268,10 @@ class _AstBuilder(GRAMMARVisitor):
                 )
             else:  # literalRun
                 if count_ctx is not None:
-                    raise NotImplementedError("counted bare literal run not in slice")
+                    raise CompileError(
+                        "a repetition count cannot apply to bare literal text; "
+                        "put the text in a brace, e.g. {x}[2]"
+                    )
                 content = _resolve_leaf_escapes(factor.literalRun().getText())
                 if content:
                     elements.append((LIT, content))
@@ -326,7 +329,7 @@ class _AstBuilder(GRAMMARVisitor):
             return None, _resolve_reference_atom(atoms[0].reference())
         sval = _term_singleton(term)
         if sval is None:
-            raise NotImplementedError("non-literal band endpoint not in slice")
+            raise CompileError("a band bound must be a literal value or a reference")
         return sval, None
 
     # Ã¢â€â‚¬Ã¢â€â‚¬ Arm alternatives Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -340,14 +343,20 @@ class _AstBuilder(GRAMMARVisitor):
         av = _term_singleton(terms[0])
         bv = _term_singleton(terms[1])
         if av is None or bv is None:
-            raise CompileError("non-literal `..` endpoint not in band slice")
+            raise CompileError("a `..` range endpoint must be a literal value")
         return t.ValueRangeNode(alpha=t.CharRangeNode.uni(), lower=av, upper=bv)
 
     def visitOpenUpper(self, ctx: GRAMMARParser.OpenUpperContext) -> t.SemanticNode:
-        raise NotImplementedError("open-ended `..` range not in band slice")
+        raise CompileError(
+            "an open-ended range like {a..} or {..z} is only valid as a band bound "
+            "(e.g. {@d::0..}), not as a bare alphabet"
+        )
 
     def visitOpenLower(self, ctx: GRAMMARParser.OpenLowerContext) -> t.SemanticNode:
-        raise NotImplementedError("open-ended `..` range not in band slice")
+        raise CompileError(
+            "an open-ended range like {a..} or {..z} is only valid as a band bound "
+            "(e.g. {@d::0..}), not as a bare alphabet"
+        )
 
     # Ã¢â€â‚¬Ã¢â€â‚¬ Universe Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -401,7 +410,7 @@ class _AstBuilder(GRAMMARVisitor):
         if all(_atom_is_literal(a) for a in atoms):
             return t.LiteralNode(content=unescape(term.getText()))
 
-        raise NotImplementedError("grouping/sequence brace not in band slice")
+        raise CompileError("a grouping brace is not allowed inside a band or range here")
 
     # -- Sequence flattening ----------------------------------------------------
 

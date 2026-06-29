@@ -99,7 +99,10 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
             ).pattern()
         if _all_literal(pattern):
             if any(f.count() is not None for f in pattern.factor()):
-                raise NotImplementedError("counted bare literal run not in slice")
+                raise CompileError(
+                    "a repetition count cannot apply to bare literal text; "
+                    "put the text in a brace, e.g. {x}[2]"
+                )
             literal = "".join(
                 _resolve_leaf_escapes(f.literalRun().getText())
                 for f in pattern.factor()

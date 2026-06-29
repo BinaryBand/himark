@@ -239,7 +239,7 @@ def reference_from_view(
         group = index or 0
         return CountRefNode(group=group) if is_count else BackRefNode(group=group)
     if is_count:  # `N#` / `N#i` — no node type for a stage count-ref
-        raise NotImplementedError("stage count-ref `N#` has no reference node")
+        raise CompileError("a stage count-reference like {2#} is not supported")
     path = (index,) if index is not None else ()
     return StageRefNode(stage=stage, path=path)
 
