@@ -109,45 +109,15 @@ def strip_insignificant_ws(text: str) -> str:
         elif c == "}":
             depth = max(0, depth - 1)
             out.append(c)
+        elif depth == 0 and c == "/" and not inq and text[i + 1 : i + 2] == "/":
+            j = text.find("\n", i)
+            i = n if j == -1 else j  # skip comment body; the newline is kept below
+            continue
         elif depth == 0 and c in (" ", "\t"):
             pass  # insignificant whitespace at top level / in a count — drop it
         else:
             out.append(c)
         i += 1
-    return "".join(out)
-
-
-# ── Depth-aware comment stripping ────────────────────────────────────────────
-def strip_comments(source: str) -> str:
-    """Drop `//` line comments — but only at brace/quote **depth 0** (HMK.md). A
-    `//` inside a `{…}` brace or a `"…"` template is literal, so `{//}` and a
-    `http://…` in a template survive; a top-level `// note` runs to end of line.
-    Depth and quote state carry across physical lines, since a brace or template
-    may span them. ANTLR's lexer is context-free and cannot express this depth-0
-    rule, so comment stripping is a pre-pass before the grammar sees the source."""
-    out: list[str] = []
-    depth = 0
-    inq = False
-    i = 0
-    n = len(source)
-    while i < n:
-        c = source[i]
-        if c == "\\" and i + 1 < n:  # an escape — both chars ride along literal
-            out.append(source[i : i + 2])
-            i += 2
-            continue
-        if c == '"':
-            inq = not inq
-            out.append(c)
-            i += 1
-        elif not inq and depth == 0 and c == "/" and source[i + 1 : i + 2] == "/":
-            j = source.find("\n", i)
-            i = n if j == -1 else j  # skip to (but keep) the newline
-        else:
-            if not inq:
-                depth += (c == "{") - (c == "}")
-            out.append(c)
-            i += 1
     return "".join(out)
 
 

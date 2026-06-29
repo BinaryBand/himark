@@ -23,11 +23,28 @@ import re
 from pathlib import Path
 
 from himark.models.exceptions import CompileError
-from himark.parser._helpers import strip_comments
 
 PRELUDE_PATH = Path(__file__).parent / "std.hmk"
 
 _VARIABLE_RE = re.compile(r"@(\w+)\s*=\s*(.*)")
+
+
+def _strip_inline_comment(s: str) -> str:
+    depth = 0
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            i += 2
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth = max(0, depth - 1)
+        elif depth == 0 and c == "/" and s[i + 1 : i + 2] == "/":
+            return s[:i].rstrip()
+        i += 1
+    return s
 
 
 def _load() -> dict[str, str]:
@@ -35,12 +52,12 @@ def _load() -> dict[str, str]:
     `@name` alphabet declaration is a `CompileError` — the prelude is declarations
     only, so a stray statement is a typo, not silent input."""
     variables: dict[str, str] = {}
-    for raw in strip_comments(PRELUDE_PATH.read_text("utf-8")).splitlines():
+    for raw in PRELUDE_PATH.read_text("utf-8").splitlines():
         line = raw.strip()
-        if not line:
+        if not line or line.startswith("//"):
             continue
         if (m := _VARIABLE_RE.fullmatch(line)) is not None:
-            variables[m.group(1)] = m.group(2).strip()
+            variables[m.group(1)] = _strip_inline_comment(m.group(2).strip())
         else:
             raise CompileError(f"{PRELUDE_PATH.name}: not a declaration: {line!r}")
     return variables

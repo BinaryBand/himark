@@ -4,9 +4,7 @@ A `.hmk` file is a pipeline: an ordered list of statements (each a `=>`/`<=>`
 chain), optionally preceded by `@name = <body>` definitions scoped to the file.
 ANTLR's `script` rule owns the file's structure — statement boundaries, blank
 lines, continuation lines (a leading-arrow line continues the previous statement),
-`=>` vs `<=>`, and definitions — so this module only walks the parse tree. The one
-pre-pass ANTLR cannot do context-free is stripping `//` comments at brace/quote
-depth 0 (see `strip_comments`).
+`=>` vs `<=>`, and definitions — so this module only walks the parse tree. Comments are stripped by `strip_insignificant_ws` before ANTLR sees the source.
 
 The product is a `list[list[Step]]` — one inner list of compiled steps per
 statement — ready for `engine.run_pipeline`.
@@ -18,7 +16,7 @@ from pathlib import Path
 
 from himark.models.compiled import Step
 from himark.models.exceptions import CompileError
-from himark.parser._helpers import strip_comments, strip_insignificant_ws
+from himark.parser._helpers import strip_insignificant_ws
 
 
 def compile_script(source: str) -> list[list[Step]]:
@@ -30,7 +28,7 @@ def compile_script(source: str) -> list[list[Step]]:
     from himark.parser import _parse_script_tree, parse
     from himark.prelude import VARIABLES
 
-    source = strip_insignificant_ws(strip_comments(source))
+    source = strip_insignificant_ws(source)
     local: dict[str, str] = {}
     pipeline: list[list[Step]] = []
     for item in _parse_script_tree(source).scriptItem():
