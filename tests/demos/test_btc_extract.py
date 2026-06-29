@@ -14,12 +14,12 @@ import re
 import time
 from pathlib import Path
 
-from himark.tools import precompiled
+from himark import engine
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "btc_extract.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
+_PIPELINE = engine.load_script(str(SCRIPT))
 
 # Real legacy mainnet addresses (the Genesis coinbase and two vanity ones).
 ADDRS = [
@@ -34,7 +34,7 @@ _TAG = re.compile(r"<btc>([^<]+)</btc>")
 
 
 def run(text: str) -> str:
-    return precompiled.apply(_PIPELINE, text)
+    return engine.run_pipeline(_PIPELINE, text)
 
 
 def tagged(text: str) -> list[str]:

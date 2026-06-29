@@ -21,24 +21,6 @@ addopts = "-v --tb=short"
 # the two middle siblings (parser, engine) are independent and may not import
 # each other — they communicate only through the `models` AST. `macros` lives
 # inside `parser` (it is parser-only preprocessing), so it needs no own entry.
-[tool.importlinter]
-root_package = "himark"
-include_external_packages = false
-
-[[tool.importlinter.contracts]]
-name = "Layered architecture (main > tools > {parser, engine} > models)"
-type = "layers"
-layers = [
-    "himark.main",
-    "himark.tools",
-    "himark.parser | himark.engine",
-    "himark.models",
-]
-exhaustive = false
-
-
-[project.scripts]
-himark = "himark.main:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

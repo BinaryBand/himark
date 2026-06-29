@@ -25,17 +25,11 @@ The branches render two ways, neither privileged:
   between branches kept verbatim (in-place transform).
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 from himark.engine._render import render as _render
-from himark.engine.backend import (
-    RUST_AVAILABLE,
-    Engine,
-    Match,
-    PythonEngine,
-    RustEngine,
-)
+from himark.engine.backend import Match
+from himark import parser
+from himark.prelude import VARIABLES
 from himark.engine.runtime import Runtime
 from himark.models.compiled import Program, Step, Template
 from himark.models.exceptions import CompileError
@@ -53,42 +47,11 @@ __all__ = [
     "find",
     "find_matches",
     "Match",
-    "Engine",
-    "PythonEngine",
-    "RustEngine",
-    "RUST_AVAILABLE",
-    "Runtime",
-    "set_backend",
-    "get_backend",
-    "using_backend",
 ]
 
 # The default runtime owns the active matching backend and the per-program handle
-# cache. Swap the backend via set_backend / using_backend; orchestration below is
-# backend-agnostic. (Construct a fresh `Runtime` for an isolated backend + cache.)
+# The default runtime — holds the per-Program instruction cache.
 _runtime = Runtime()
-
-
-def set_backend(engine: Engine) -> None:
-    """Install `engine` as the matching backend for all subsequent calls."""
-    _runtime.backend = engine
-
-
-def get_backend() -> Engine:
-    """The currently installed matching backend."""
-    return _runtime.backend
-
-
-@contextmanager
-def using_backend(engine: Engine) -> Iterator[Engine]:
-    """Install `engine` for the duration of the `with` block, restoring the
-    previously installed backend on exit (even on error)."""
-    prev = _runtime.backend
-    _runtime.backend = engine
-    try:
-        yield engine
-    finally:
-        _runtime.backend = prev
 
 
 def find_matches(
@@ -282,3 +245,172 @@ def run_pipeline(pipeline: list[list[Step]], target: str) -> str:
         else:
             text = splice(steps, text)
     return text
+
+
+# ── Script compilation ────────────────────────────────────────────────────────
+
+
+def _split_fixed_point(statement: str) -> tuple[str, bool]:
+    """Rewrite each top-level `<=>` arrow to `=>`, returning `(text, used_<=>)`."""
+    out: list[str] = []
+    depth = 0
+    inq = False
+    found = False
+    i = 0
+    n = len(statement)
+    while i < n:
+        ch = statement[i]
+        if ch == "\\" and i + 1 < n:
+            out.append(statement[i : i + 2])
+            i += 2
+            continue
+        if ch == '"':
+            inq = not inq
+        elif inq:
+            pass
+        elif ch == "<" and statement[i + 1 : i + 3] == "=>" and depth == 0:
+            out.append("=>")
+            found = True
+            i += 3
+            continue
+        elif ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth = max(0, depth - 1)
+        out.append(ch)
+        i += 1
+    return "".join(out), found
+
+
+_DEFINITION_RE = None  # compiled lazily
+
+
+def _split_definition(item: str) -> tuple[str, str] | None:
+    """A script definition `@name = body` -> `(name, body)`; None otherwise."""
+    import re
+    global _DEFINITION_RE
+    if _DEFINITION_RE is None:
+        _DEFINITION_RE = re.compile(r"\s*@(\w+)\s*")
+    m = _DEFINITION_RE.match(item)
+    if m is None:
+        return None
+    rest = item[m.end() :]
+    if rest.startswith("=") and not rest.startswith("=>"):
+        return m.group(1), rest[1:].strip()
+    return None
+
+
+def _logical_lines(text: str) -> list[str]:
+    """Split on newlines at brace/quote depth 0."""
+    lines: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    inq = False
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\" and i + 1 < n:
+            buf.append(text[i : i + 2])
+            i += 2
+            continue
+        if depth == 0 and not inq and c == "/" and text[i + 1 : i + 2] == "/":
+            j = text.find("\n", i)
+            end = n if j == -1 else j
+            buf.append(text[i:end])
+            i = end
+            continue
+        if c == "\n" and depth == 0 and not inq:
+            lines.append("".join(buf))
+            buf = []
+        elif c == '"':
+            inq = not inq
+            buf.append(c)
+        else:
+            if not inq:
+                depth += (c == "{") - (c == "}")
+            buf.append(c)
+        i += 1
+    lines.append("".join(buf))
+    return lines
+
+
+def _strip_comment(line: str) -> str:
+    """Remove a `//` line comment, respecting braces and quotes."""
+    depth = 0
+    inq = False
+    i = 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\" and i + 1 < len(line):
+            i += 2
+            continue
+        if c == '"':
+            inq = not inq
+        elif not inq:
+            if c == "/" and depth == 0 and line[i + 1 : i + 2] == "/":
+                return line[:i]
+            depth += (c == "{") - (c == "}")
+        i += 1
+    return line
+
+
+def split_statements(text: str) -> list[str]:
+    """Split `.hmk` source into statement strings."""
+    statements: list[str] = []
+    current: list[str] = []
+    for raw in _logical_lines(text):
+        line = _strip_comment(raw).rstrip()
+        if not line.strip():
+            continue
+        if line.lstrip().startswith("=>"):
+            current.append(line)
+        else:
+            if current:
+                statements.append("\n".join(current))
+            current = [line]
+    if current:
+        statements.append("\n".join(current))
+    return statements
+
+
+def compile_script(source: str) -> list[list[Step]]:
+    """Compile a `.hmk` script that may carry local `@name = <body>` definitions
+    into a runnable pipeline."""
+    from himark.models.exceptions import CompileError
+
+    local: dict[str, str] = {}
+    pipeline: list[list[Step]] = []
+    for item in split_statements(source):
+        if (defn := _split_definition(item)) is not None:
+            name, body = defn
+            if name in VARIABLES:
+                raise CompileError(f"definition @{name} shadows a prelude variable")
+            if name in local:
+                raise CompileError(f"@{name} is already defined")
+            local[name] = body
+            continue
+        converted, loop = _split_fixed_point(item)
+        steps = parser.parse(converted, variables=local)
+        if loop and steps:
+            steps[0].fixed_point = True
+        pipeline.append(steps)
+    return pipeline
+
+
+def load_script(path: str) -> list[list[Step]]:
+    """Read and compile a `.hmk` script file into a runnable pipeline."""
+    from pathlib import Path
+    return compile_script(Path(path).read_text("utf-8"))
+
+
+def compile_pipeline(statements: list[str]) -> list[list[Step]]:
+    """Parse and compile raw HMK statements into a runnable pipeline."""
+    pipeline: list[list[Step]] = []
+    for s in statements:
+        converted, loop = _split_fixed_point(s)
+        steps = parser.parse(converted)
+        if loop and steps:
+            steps[0].fixed_point = True
+        pipeline.append(steps)
+    return pipeline

@@ -87,17 +87,7 @@ def _expr_to_json(e: Expr) -> dict:
     return {"filter": e.name, "src": _expr_to_json(e.src)}
 
 
-def _expr_from_json(d: dict) -> Expr:
-    if "lit" in d:
-        return ExLit(d["lit"])
-    if "cur" in d:
-        return ExCurrent()
-    if "ref" in d:
-        stage, is_count, path = d["ref"]
-        return ExRef(stage, is_count, tuple(path) if path is not None else None)
-    if "cat" in d:
-        return ExConcat([_expr_from_json(p) for p in d["cat"]])
-    return ExFilter(_expr_from_json(d["src"]), d["filter"])
+
 
 
 # ── Compiled steps ────────────────────────────────────────────────────────────
@@ -138,13 +128,7 @@ class Template:
             ],
         }
 
-    @classmethod
-    def from_json(cls, data: dict) -> "Template":
-        parts: list[str | Moustache] = [
-            p if isinstance(p, str) else Moustache(expr=_expr_from_json(p["m"]))
-            for p in data["template"]
-        ]
-        return cls(parts=parts, fixed_point=data["fixed_point"])
+
 
 
 # A compiled pipeline step: a matcher program or a render template.

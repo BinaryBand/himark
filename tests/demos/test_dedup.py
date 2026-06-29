@@ -15,10 +15,7 @@ These tests pin each pass and the merge on small crafted inputs — cross-column
 (both orders), unmatched fall-through, quoted fields, and the case/punctuation
 near-misses the script documents as out of scope — then a slice of the real
 `podcasts.csv` (fast on any backend). The cross-document self-reference scan is
-~quadratic, so reconciling all 859 rows is only feasible on the native backend:
-`test_full_file_reconciles_under_rust` forces `RustEngine` (~1.5s, after the QUICK
-pre-pass and with the incremental `stop` prune) and is skipped when the extension
-isn't built; the runbook does the whole file there too.
+~quadratic, so a 24-row slice is used for fast testing.
 """
 
 import csv
@@ -29,19 +26,19 @@ from contextlib import nullcontext
 
 import pytest
 
-from himark.engine import RUST_AVAILABLE, RustEngine, using_backend
-from himark.tools import precompiled
+# (no Rust backend — Python only)
+from himark import engine
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "dedup.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
+_PIPELINE = engine.load_script(str(SCRIPT))
 
 HEADER = "youtube_title,podcast_title\n"
 
 
 def dedup(text: str) -> str:
-    return precompiled.apply(_PIPELINE, text)
+    return engine.run_pipeline(_PIPELINE, text)
 
 
 def rows(text: str) -> list[list[str]]:
@@ -140,25 +137,6 @@ def _parse_csv(text: str) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text)))
 
 
-@pytest.mark.skipif(
-    not RUST_AVAILABLE, reason="whole-file dedup needs the native backend"
-)
-def test_full_file_reconciles_under_rust():
-    # Reconciling all 859 rows is ~quadratic, infeasible on the Python backend but
-    # ~1.5s on the native one — so force RustEngine regardless of the default.
-    src = (RESOURCES / "podcasts.csv").read_text("utf-8")
-    with using_backend(RustEngine()):
-        parsed = _parse_csv(dedup(src))
-    assert parsed[0] == ["youtube_title", "podcast_title"]
-    body = parsed[1:]
-    assert all(len(r) == 2 for r in body)  # valid 2-column CSV throughout
-    matched = [r for r in body if r[0] and r[1]]
-    assert len(matched) >= 60  # ~66 cross-column episode twins recovered
-    assert [
-        "Episode 791: The Murder of Martha Moxley (Part 1)",
-        "The Murder of Martha Moxley (Part 1)",
-    ] in matched
-
 
 # ── Runbook ───────────────────────────────────────────────────────────────────
 # Run this file directly to reconcile the real CSV into
@@ -170,18 +148,9 @@ if __name__ == "__main__":
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     rows_in = (RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)
-    if RUST_AVAILABLE:
-        src, label, ctx = (
-            "".join(rows_in),
-            "rust, whole file",
-            using_backend(RustEngine()),
-        )
-    else:
-        src = "".join(rows_in[:25])
-        label, ctx = (
-            "python, 24-row slice (build himark_rs for the whole file)",
-            nullcontext(),
-        )
+    src = "".join(rows_in[:25])
+    label = "python, 24-row slice"
+    ctx = nullcontext()
     with ctx:
         t0 = time.perf_counter()
         result = dedup(src)

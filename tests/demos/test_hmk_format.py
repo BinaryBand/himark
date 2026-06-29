@@ -9,14 +9,14 @@ template interiors: an inline `=>`, odd spacing, or an escaped quote inside a
 
 from pathlib import Path
 
-from himark.tools import precompiled
+from himark import engine
 
 FMT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_hmk.hmk"
-_PIPELINE = precompiled.compile_pipeline(precompiled.load_script(FMT))
+_PIPELINE = engine.load_script(str(FMT))
 
 
 def tidy(src: str) -> str:
-    return precompiled.apply(_PIPELINE, src)
+    return engine.run_pipeline(_PIPELINE, src)
 
 
 def test_collapses_blank_runs():

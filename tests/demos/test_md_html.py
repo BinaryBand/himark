@@ -11,16 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from himark.tools import precompiled
+from himark import engine
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "md_html.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
-_PIPELINE = precompiled.compile_pipeline(precompiled.load_script(SCRIPT))
+_PIPELINE = engine.load_script(str(SCRIPT))
 
 
 def md(source: str) -> str:
     """Transpile `source` Markdown to HTML with the shipped pipeline."""
-    return precompiled.apply(_PIPELINE, source)
+    return engine.run_pipeline(_PIPELINE, source)
 
 
 # ── Headings ──────────────────────────────────────────────────────────────────

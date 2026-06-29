@@ -1,30 +1,16 @@
-"""The swappable matching backend — the compile+run pair behind the `Engine` seam.
+"""The matching backend — the opcode VM and its shared types.
 
-This subpackage holds everything that turns a resolved AST into matches and is
-private to one backend: the `Engine` Protocol (`interface`), the built-in
-pure-Python implementation (`python.PythonEngine`), the opcode VM (`_vm`),
-the Rust translator (`_translate`), and the `Match`/`Capture` seam types
-(`_types`). It depends only on `himark.models` — never on the orchestration
-layer above it (`engine.__init__`, `engine._render`) — so a native backend
-(e.g. Rust via PyO3) can replace it wholesale via `engine.set_backend`
-without pulling in the Python core.
-
-The swap unit is the whole pair: `compile` returns an opaque handle that only the
-*same* backend's `run` consumes, so the compiler and runner are never mixed
-across backends.
+The parser already compiled the query to a `Program`; `python.prepare` lowers it
+to VM-ready instructions, and `python.find_matches` runs them against text.
 """
 
-from himark.engine.backend.interface import Engine
-from himark.engine.backend.python import PythonEngine
-from himark.engine.backend.rust import RUST_AVAILABLE, RustEngine
+from himark.engine.backend.python import find_matches, prepare
 from himark.engine.backend._types import Capture, Match
 from himark.models.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
 
 __all__ = [
-    "Engine",
-    "PythonEngine",
-    "RustEngine",
-    "RUST_AVAILABLE",
+    "find_matches",
+    "prepare",
     "Match",
     "Capture",
     "Alphabet",

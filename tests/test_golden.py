@@ -27,7 +27,7 @@ import pytest
 
 from himark import parser
 from himark.engine import find_matches
-from himark.tools import precompiled
+from himark import engine
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "himark" / "scripts"
@@ -67,9 +67,9 @@ PIPELINES = [
     "name,script,resource,slice_", PIPELINES, ids=[p[0] for p in PIPELINES]
 )
 def test_pipeline_golden(name, script, resource, slice_):
-    pipeline = precompiled.compile_pipeline(precompiled.load_script(SCRIPTS / script))
+    pipeline = engine.load_script(str(SCRIPTS / script))
     src = slice_((RESOURCES / resource).read_text("utf-8"))
-    out = precompiled.apply(pipeline, src)
+    out = engine.run_pipeline(pipeline, src)
 
     path = GOLDEN / "pipelines" / f"{name}.out"
     if _UPDATE:

@@ -125,19 +125,3 @@ class Program:
     groups: int = 0  # total capture group count (for allocation)
     fixed_point: bool = False  # <=> arrow
 
-    def to_json(self) -> dict:
-        """Serialise to a JSON-serialisable dict."""
-        return {
-            "version": 1,
-            "groups": self.groups,
-            "fixed_point": self.fixed_point,
-            "program": list(self.elements),
-        }
-
-    @classmethod
-    def from_json(cls, data: dict) -> "Program":
-        return cls(
-            elements=tuple(tuple(x) for x in data["program"]),
-            groups=data["groups"],
-            fixed_point=data["fixed_point"],
-        )
