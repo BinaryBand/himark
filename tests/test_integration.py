@@ -1,12 +1,13 @@
 """Integration tests — north-star examples from docs/HMK.md."""
 
 from himark import parser
-from himark.engine import execute
-from himark.engine import find_matches
+from himark.engine import execute, find_matches
+from himark.models.compiled import Program
 
 
 def matches(pattern, text):
     trees = parser.parse(pattern)
+    assert isinstance(trees[0], Program)
     return [m.text for m in find_matches(trees[0], text)]
 
 
@@ -48,6 +49,7 @@ def test_literal_pattern():
 
 def test_multiple_brace_groups():
     trees = parser.parse("{a..z}{0..9}")
+    assert isinstance(trees[0], Program)
     ms = find_matches(trees[0], "a1 b2 c3")
     assert [m.text for m in ms] == ["a1", "b2", "c3"]
 

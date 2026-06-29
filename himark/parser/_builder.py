@@ -251,14 +251,18 @@ class _AstBuilder(GRAMMARVisitor):
         """Resolve a `{payload::spec}` band Ã¢â‚¬â€ explicit payload alphabet."""
         alpha = self._resolve_universe(ctx.universe(0))
         spec = ctx.universe(1)
-        options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
+        options: list[t.SemanticNode] = [
+            self._resolve_band_arm(alpha, arm) for arm in spec.arm()
+        ]
         return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitAmbientBand(self, ctx: GRAMMARParser.AmbientBandContext) -> t.SemanticNode:
         """Resolve a `{::spec}` band Ã¢â‚¬â€ implicit @uni payload alphabet."""
         alpha = _ambient_alpha()
         spec = ctx.universe()
-        options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
+        options: list[t.SemanticNode] = [
+            self._resolve_band_arm(alpha, arm) for arm in spec.arm()
+        ]
         return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitBareAlphabet(

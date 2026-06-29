@@ -38,7 +38,9 @@ def test_sequence_node():
         ]
     )
     assert len(seq.items) == 2
-    assert seq.items[0].node.content == "a"
+    node = seq.items[0].node
+    assert isinstance(node, LiteralNode)
+    assert node.content == "a"
 
 
 def test_semantic_payload_fields():

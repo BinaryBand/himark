@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from himark import parser
+from himark.models.compiled import Program
 from himark.engine import execute, find_matches
 from himark.models.exceptions import CompileError
 from himark.prelude import VARIABLES
@@ -15,6 +16,7 @@ DOC = (Path(__file__).parent.parent / "docs" / "HMK.md").read_text("utf-8")
 
 def matches(pattern, text):
     trees = parser.parse(pattern)
+    assert isinstance(trees[0], Program)
     return [m.text for m in find_matches(trees[0], text)]
 
 
@@ -44,8 +46,10 @@ def test_doc_congruence_pair_repetition():
 def test_doc_captures_example():
     # The Captures section: {#}[1..]{Sphinx}{of{black}{quartz}} numbers groups
     # 0,1,2 left-to-right, with {black}/{quartz} as sub-captures of group 2.
+    trees = parser.parse("{#}[1..]{Sphinx}{of{black}{quartz}}")
+    assert isinstance(trees[0], Program)
     ms = find_matches(
-        parser.parse("{#}[1..]{Sphinx}{of{black}{quartz}}")[0],
+        trees[0],
         "###Sphinxofblackquartz",
     )
     assert len(ms) == 1

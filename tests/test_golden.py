@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from himark import parser
+from himark.models.compiled import Program
 from himark.engine import find_matches
 from himark import engine
 
@@ -123,6 +124,7 @@ def _norm_capture(c) -> dict:
 
 def _norm_matches(pattern: str, text: str) -> dict:
     tree = parser.parse(pattern)[0]
+    assert isinstance(tree, Program)
     matches = find_matches(tree, text)
     return {
         "pattern": pattern,

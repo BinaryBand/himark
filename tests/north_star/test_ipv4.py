@@ -1,6 +1,7 @@
 """North Star: IPv4 — docs/HMK.md"""
 
 from himark import parser
+from himark.models.compiled import Program
 from himark.engine import find_matches
 
 PATTERN = "{@d::0..255}{.}{@d::0..255}{.}{@d::0..255}{.}{@d::0..255}"
@@ -8,6 +9,7 @@ PATTERN = "{@d::0..255}{.}{@d::0..255}{.}{@d::0..255}{.}{@d::0..255}"
 
 def matches(text):
     trees = parser.parse(PATTERN)
+    assert isinstance(trees[0], Program)
     return [m.text for m in find_matches(trees[0], text)]
 
 

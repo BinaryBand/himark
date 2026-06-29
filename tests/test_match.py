@@ -2,10 +2,12 @@
 
 from himark import parser
 from himark.engine import execute, find_matches, splice
+from himark.models.compiled import Program
 
 
 def matches(pattern, text):
     trees = parser.parse(pattern)
+    assert isinstance(trees[0], Program)
     return [m.text for m in find_matches(trees[0], text)]
 
 
@@ -468,13 +470,17 @@ def test_class_to_class_range_unsupported():
 
 
 def test_capture_groups_numbered():
-    ms = find_matches(parser.parse("{@d}{@l}")[0], "1a 2b")
+    trees = parser.parse("{@d}{@l}")
+    assert isinstance(trees[0], Program)
+    ms = find_matches(trees[0], "1a 2b")
     assert [m.groups for m in ms] == [["1", "a"], ["2", "b"]]
 
 
 def test_grouping_brace_sub_captures():
     # A grouping brace is one capture whose nested braces are sub-captures.
-    ms = find_matches(parser.parse("{of{black}{quartz}}")[0], "ofblackquartz")
+    trees = parser.parse("{of{black}{quartz}}")
+    assert isinstance(trees[0], Program)
+    ms = find_matches(trees[0], "ofblackquartz")
     assert len(ms) == 1
     assert ms[0].groups == ["ofblackquartz"]
     assert ms[0].sub_groups == [["black", "quartz"]]

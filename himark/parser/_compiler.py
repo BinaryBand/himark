@@ -27,6 +27,7 @@ from himark.models.compiled import (
     Moustache,
     Template,
 )
+from himark.parser._generated.GRAMMARParser import GRAMMARParser
 from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
 from himark.models.opcodes import (
     ANCHOR,
@@ -256,11 +257,25 @@ def _ref_descriptor(ref: t.SemanticNode) -> tuple:
 # ── Value formatting ───────────────────────────────────────────────────────────
 
 
-def _format_value(alph: Alphabet, value: int, width: int) -> str:
+def _format_value(alph: Alphabet | RangeAlphabet, value: int, width: int) -> str:
     """Format `value` as a canonical string of `width` in `alph` (most-significant
     first, zero-padded with the alphabet's zero symbol)."""
+    if isinstance(alph, RangeAlphabet):
+        zero = chr(alph.lo)
+        chars: list[str] = []
+        for _ in range(width):
+            chars.append(zero)
+        v = value
+        pos = width - 1
+        while v > 0 and pos >= 0:
+            idx = v % alph.base
+            chars[pos] = chr(alph.lo + idx)
+            v //= alph.base
+            pos -= 1
+        return "".join(chars)
+    # Materialized Alphabet path
     zero = alph.groups[0][0]
-    chars: list[str] = []
+    chars = []
     for _ in range(width):
         chars.append(zero)
     v = value
@@ -440,16 +455,18 @@ class _ExprVisitor(GRAMMARVisitor):
     recursive descent. The leaf-value semantics the grammar can't state (a `#` needs
     a capture index; a dotted path is a tuple of ints) live in `visitAccessor`."""
 
-    def visitMoustacheExpression(self, ctx: GRAMMARVisitor) -> Expr:
+    def visitMoustacheExpression(
+        self, ctx: GRAMMARParser.MoustacheExpressionContext
+    ) -> Expr:
         return self.visit(ctx.pipeExpr())
 
-    def visitPipeExpr(self, ctx: GRAMMARVisitor) -> Expr:
+    def visitPipeExpr(self, ctx: GRAMMARParser.PipeExprContext) -> Expr:
         value = self.visit(ctx.primary())
         for f in ctx.filter_():  # `| name` pipes, left-associative
             value = ExFilter(value, f.NAME().getText())
         return value
 
-    def visitPrimary(self, ctx: GRAMMARVisitor) -> Expr:
+    def visitPrimary(self, ctx: GRAMMARParser.PrimaryContext) -> Expr:
         if ctx.LPAREN() is not None:
             parts = [self.visit(e) for e in ctx.pipeExpr()]
             return parts[0] if len(parts) == 1 else ExConcat(parts)
@@ -459,7 +476,7 @@ class _ExprVisitor(GRAMMARVisitor):
             return ExLit(ctx.INT().getText())
         return ExLit(ctx.STRING().getText()[1:-1])  # strip the quotes
 
-    def visitAccessor(self, ctx: GRAMMARVisitor) -> Expr:
+    def visitAccessor(self, ctx: GRAMMARParser.AccessorContext) -> Expr:
         sigil = ctx.DOLLAR() or ctx.HASH()
         if sigil is None:
             return ExCurrent()  # the lone `.`

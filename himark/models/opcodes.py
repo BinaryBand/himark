@@ -12,6 +12,7 @@ Adding a construct:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, TypeAlias
 
 # ── Opcode constants ───────────────────────────────────────────────────────────
@@ -73,7 +74,6 @@ SEQ_GROUP = 11
 #   ["=", [v1, v2, …]]  — count set [a,b,c]; one of these exact values
 
 # A ``Reps`` tiny struct the VM uses internally (resolved from the tuple form).
-from dataclasses import dataclass
 
 
 @dataclass(slots=True)

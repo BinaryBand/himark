@@ -4,10 +4,13 @@ branch-per-moustache flow, `@<`/`@>` anchors)."""
 
 from himark import parser
 from himark.engine import execute, find_matches
+from himark.models.compiled import Program
 
 
 def m(pattern, text):
-    return [x.text for x in find_matches(parser.parse(pattern)[0], text)]
+    trees = parser.parse(pattern)
+    assert isinstance(trees[0], Program)
+    return [x.text for x in find_matches(trees[0], text)]
 
 
 def ex(pattern, text):

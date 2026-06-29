@@ -3,11 +3,13 @@
 import pytest
 
 from himark import parser
+from himark.models.compiled import Program
 from himark.engine import find_matches
 
 
 def matches(pattern, text):
     trees = parser.parse(pattern)
+    assert isinstance(trees[0], Program)
     return [m.text for m in find_matches(trees[0], text)]
 
 
