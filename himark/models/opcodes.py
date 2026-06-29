@@ -125,3 +125,13 @@ class Program:
     elements: tuple[Instruction, ...]
     groups: int = 0  # total capture group count (for allocation)
     fixed_point: bool = False  # <=> arrow
+
+    def to_json(self) -> dict:
+        """Serialise to a JSON-stable dict — parity with `Template.to_json`.
+        Nested tuples serialise as JSON arrays via json.dumps."""
+        return {
+            "kind": "program",
+            "elements": self.elements,
+            "groups": self.groups,
+            "fixed_point": self.fixed_point,
+        }

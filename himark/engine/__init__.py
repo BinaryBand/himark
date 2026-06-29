@@ -26,6 +26,7 @@ The branches render two ways, neither privileged:
 """
 
 from himark.engine._render import render as _render
+from himark.engine._runner import run_pipeline
 from himark.engine._types import Match
 from himark.engine._vm import find_matches as _vm_find_matches, prepare
 from himark.models.compiled import Program, Step, Template
@@ -204,14 +205,4 @@ def splice_to_fixed_point(steps: list[Step], target: str) -> str:
     )
 
 
-def run_pipeline(pipeline: list[list[Step]], target: str) -> str:
-    """Run a pipeline of statements over `target`, each spliced in turn, returning
-    the transformed document. A `<=` (fixed-point) statement — flagged on its first
-    step — is re-spliced until the text stops changing (`splice_to_fixed_point`)."""
-    text = target
-    for steps in pipeline:
-        if steps and steps[0].fixed_point:
-            text = splice_to_fixed_point(steps, text)
-        else:
-            text = splice(steps, text)
-    return text
+# run_pipeline is imported from _runner (subprocess engine seam).
