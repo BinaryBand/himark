@@ -39,6 +39,9 @@ exclude = ["_generated/", ".venv/", "tests/", "regenerate.py"]
 ignore_names = ["recognizer", "offendingSymbol"]
 min_confidence = 80
 
+[project.scripts]
+himark = "himark.cli:app"
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
