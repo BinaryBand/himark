@@ -23,31 +23,11 @@ import re
 from pathlib import Path
 
 from himark.models.exceptions import CompileError
+from himark.parser._helpers import strip_comments
 
 PRELUDE_PATH = Path(__file__).parent / "std.hmk"
 
 _VARIABLE_RE = re.compile(r"@(\w+)\s*=\s*(.*)")
-
-
-def _strip_comment(line: str) -> str:
-    """Drop a `//` line comment, ignoring `//` inside braces or quotes (so a `//`
-    that is part of a declared alphabet survives). Mirrors the script loader."""
-    depth = 0
-    inq = False
-    i = 0
-    while i < len(line):
-        c = line[i]
-        if c == "\\" and i + 1 < len(line):
-            i += 2
-            continue
-        if c == '"':
-            inq = not inq
-        elif not inq:
-            if c == "/" and depth == 0 and line[i + 1 : i + 2] == "/":
-                return line[:i]
-            depth += (c == "{") - (c == "}")
-        i += 1
-    return line
 
 
 def _load() -> dict[str, str]:
@@ -55,8 +35,8 @@ def _load() -> dict[str, str]:
     `@name` alphabet declaration is a `CompileError` — the prelude is declarations
     only, so a stray statement is a typo, not silent input."""
     variables: dict[str, str] = {}
-    for raw in PRELUDE_PATH.read_text("utf-8").splitlines():
-        line = _strip_comment(raw).strip()
+    for raw in strip_comments(PRELUDE_PATH.read_text("utf-8")).splitlines():
+        line = raw.strip()
         if not line:
             continue
         if (m := _VARIABLE_RE.fullmatch(line)) is not None:

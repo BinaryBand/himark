@@ -247,12 +247,13 @@ class _AstBuilder(GRAMMARVisitor):
         finally:
             self._resolving.discard(name)
 
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Entry: pattern Ã¢â€ â€™ Program (CST Ã¢â€ â€™ opcodes, no structural AST) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Entry: pattern Ã¢â€ â€™ Program (CST Ã¢â€ â€™ opcodes via a transient semantic IR) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def compile_pattern(self, pattern: GRAMMARParser.PatternContext) -> Program:
-        """Compile a pattern CST **straight to an opcode `Program`** -- the
-        single compile path. It walks the factors and emits opcodes
-        from the visitor.
+        """Compile a pattern CST into an opcode `Program`. It walks the factors,
+        building a transient semantic node (`models.nodes_typed`) per construct via
+        the visitor and lowering it to opcodes with `_emit_semantic` — the engine
+        only ever receives the resulting `Program`, never a semantic node.
         """
         elements: list[Instruction] = []
         for factor in pattern.factor():

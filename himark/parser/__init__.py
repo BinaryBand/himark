@@ -120,3 +120,5 @@ from himark.parser._script import (  # noqa: E402
     compile_script,
     load_script,
 )
+
+__all__ = ["parse", "compile_script", "load_script", "compile_pipeline"]

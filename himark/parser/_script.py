@@ -19,7 +19,6 @@ from pathlib import Path
 from himark.models.compiled import Step
 from himark.models.exceptions import CompileError
 from himark.parser._helpers import strip_comments, strip_insignificant_ws
-from himark.prelude import VARIABLES
 
 
 def compile_script(source: str) -> list[list[Step]]:
@@ -29,6 +28,7 @@ def compile_script(source: str) -> list[list[Step]]:
     leaving no trace in the compiled pipeline. Shadowing a prelude variable or
     redefining a local is a `CompileError`."""
     from himark.parser import _parse_script_tree, parse
+    from himark.prelude import VARIABLES
 
     source = strip_insignificant_ws(strip_comments(source))
     local: dict[str, str] = {}
