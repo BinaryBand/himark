@@ -2,7 +2,7 @@
 
 Replaces the manual `isinstance` dispatch in `_Resolver` with ANTLR's
 double-dispatch. Each labeled alternative in the grammar gets a `visit*` method,
-so adding a grammar rule means adding a visitor method — no `elif isinstance(...)`
+so adding a grammar rule means adding a visitor method Ã¢â‚¬â€ no `elif isinstance(...)`
 branch to forget.
 
 The output is the same AST (`himark.models.nodes_typed`) that `_Resolver` produces.
@@ -22,7 +22,7 @@ from himark.parser._generated.GRAMMARParser import GRAMMARParser
 from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
 
 
-# ── Pure helpers (no environment, same as original __init__.py) ──────────────
+# Ã¢â€â‚¬Ã¢â€â‚¬ Pure helpers (no environment, same as original __init__.py) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 
 def _ambient_alpha() -> t.SemanticNode:
@@ -68,42 +68,6 @@ def _atom_is_literal(atom: GRAMMARParser.AtomContext) -> bool:
     )
 
 
-# ── CST views (unchanged from original) ──────────────────────────────────────
-
-
-class _AnchorView:
-    __slots__ = ("is_start", "is_document")
-    def __init__(self, is_start: bool, is_document: bool):
-        self.is_start = is_start
-        self.is_document = is_document
-
-
-class _ReferenceView:
-    __slots__ = ("is_count", "stage", "index")
-    def __init__(self, is_count: bool, stage: int | None, index: int | None):
-        self.is_count = is_count
-        self.stage = stage
-        self.index = index
-
-
-class _RangeView:
-    __slots__ = ("lower", "upper")
-    def __init__(self, lower: str, upper: str):
-        self.lower = lower
-        self.upper = upper
-
-
-class _BandArmView:
-    __slots__ = ("alpha", "lower", "upper", "lower_ref", "upper_ref")
-    def __init__(self, alpha, lower, upper, lower_ref, upper_ref):
-        self.alpha = alpha
-        self.lower = lower
-        self.upper = upper
-        self.lower_ref = lower_ref
-        self.upper_ref = upper_ref
-
-
-# ── Singleton helpers on CST nodes ───────────────────────────────────────────
 
 
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
@@ -180,7 +144,7 @@ def _cst_is_sequence_brace(universe: GRAMMARParser.UniverseContext) -> bool:
     return False
 
 
-# ── Reference / Anchor resolution (unchanged from original) ──────────────────
+# Ã¢â€â‚¬Ã¢â€â‚¬ Reference / Anchor resolution (unchanged from original) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 
 def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNode:
@@ -194,15 +158,17 @@ def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNo
         stage = None
         index = int(ints[0].getText())
     return t.reference_from_view(
-        _ReferenceView(is_count=ref.HASH() is not None, stage=stage, index=index)
+        is_count=ref.HASH() is not None, stage=stage, index=index
     )
 
 
 def _resolve_anchor_atom(anchor: GRAMMARParser.AnchorContext) -> t.AnchorNode:
     lts = anchor.LT()
-    return t.AnchorNode.from_view(
-        _AnchorView(is_start=bool(lts), is_document=len(lts or anchor.GT()) == 2)
-    )
+    is_start = bool(lts)
+    is_document = len(lts or anchor.GT()) == 2
+    if is_document:
+        return t.AnchorNode(at="doc_start" if is_start else "doc_end")
+    return t.AnchorNode(at="line_start" if is_start else "line_end")
 
 
 def _count_int(term: GRAMMARParser.CountTermContext, count: GRAMMARParser.CountContext) -> int:
@@ -239,9 +205,9 @@ def _resolve_count(count: GRAMMARParser.CountContext) -> t.CountSpec:
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# VISITOR — one method per labeled grammar alternative
-# ═══════════════════════════════════════════════════════════════════════════════
+# Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+# VISITOR Ã¢â‚¬â€ one method per labeled grammar alternative
+# Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 
 class _AstBuilder(GRAMMARVisitor):
@@ -257,7 +223,7 @@ class _AstBuilder(GRAMMARVisitor):
         self._resolving: set[str] = set()
         self._parsed_env: dict[str, GRAMMARParser.BandContext] = {}
 
-    # ── Environment ──────────────────────────────────────────────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Environment Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def _get_parsed_body(self, name: str) -> GRAMMARParser.BandContext:
         if name not in self._parsed_env:
@@ -281,7 +247,7 @@ class _AstBuilder(GRAMMARVisitor):
         finally:
             self._resolving.discard(name)
 
-    # ── Entry: pattern → Program (CST → opcodes, no structural AST) ───────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Entry: pattern Ã¢â€ â€™ Program (CST Ã¢â€ â€™ opcodes, no structural AST) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def compile_pattern(self, pattern: GRAMMARParser.PatternContext) -> Program:
         """Compile a pattern CST **straight to an opcode `Program`** -- the
@@ -307,18 +273,18 @@ class _AstBuilder(GRAMMARVisitor):
                     elements.append((LIT, content))
         return Program(elements=tuple(elements))
 
-    # ── Band alternatives → SemanticNode ─────────────────────────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Band alternatives Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     # (These replace the isinstance chains in _Resolver.resolve_brace_body)
 
     def visitValueBand(self, ctx: GRAMMARParser.ValueBandContext) -> t.SemanticNode:
-        """Resolve a `{payload::spec}` band — explicit payload alphabet."""
+        """Resolve a `{payload::spec}` band Ã¢â‚¬â€ explicit payload alphabet."""
         alpha = self._resolve_universe(ctx.universe(0))
         spec = ctx.universe(1)
         options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
         return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitAmbientBand(self, ctx: GRAMMARParser.AmbientBandContext) -> t.SemanticNode:
-        """Resolve a `{::spec}` band — implicit @uni payload alphabet."""
+        """Resolve a `{::spec}` band Ã¢â‚¬â€ implicit @uni payload alphabet."""
         alpha = _ambient_alpha()
         spec = ctx.universe()
         options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
@@ -334,16 +300,14 @@ class _AstBuilder(GRAMMARVisitor):
             return t.SequenceNode(children=children, _literal_mask=tuple(mask), _child_counts=tuple(child_counts))
         return self._resolve_universe(universe)
 
-    # ── Band arm resolution (isinstance here is type-matching for parameter
-    #     shapes, not dispatch routing — universe arms and band arms share the
-    #     same ArmContext types but need different construction) ────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Band arm resolution (isinstance here is type-matching for parameter
+    #     shapes, not dispatch routing Ã¢â‚¬â€ universe arms and band arms share the
+    #     same ArmContext types but need different construction) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def _resolve_band_arm(self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext) -> t.ValueRangeNode:
         if isinstance(arm, GRAMMARParser.SingleContext):
             value, ref = self._band_endpoint(arm.term())
-            return t.ValueRangeNode.from_band_view(
-                _BandArmView(alpha, value, value, ref, ref)
-            )
+            return t.ValueRangeNode.band_arm(alpha, value, ref, value, ref)
         lower = upper = None
         lower_ref = upper_ref = None
         if isinstance(arm, GRAMMARParser.ClosedRangeContext):
@@ -353,9 +317,7 @@ class _AstBuilder(GRAMMARVisitor):
             lower, lower_ref = self._band_endpoint(arm.term())
         elif isinstance(arm, GRAMMARParser.OpenLowerContext):
             upper, upper_ref = self._band_endpoint(arm.term())
-        return t.ValueRangeNode.from_band_view(
-            _BandArmView(alpha, lower, upper, lower_ref, upper_ref)
-        )
+        return t.ValueRangeNode.band_arm(alpha, lower, lower_ref, upper, upper_ref)
 
     def _band_endpoint(self, term: GRAMMARParser.TermContext) -> tuple[str | None, t.SemanticNode | None]:
         atoms = term.atom()
@@ -366,7 +328,7 @@ class _AstBuilder(GRAMMARVisitor):
             raise NotImplementedError("non-literal band endpoint not in slice")
         return sval, None
 
-    # ── Arm alternatives → SemanticNode ──────────────────────────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Arm alternatives Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     # (These replace isinstance in _Resolver.resolve_arm)
 
     def visitSingle(self, ctx: GRAMMARParser.SingleContext) -> t.SemanticNode:
@@ -378,7 +340,7 @@ class _AstBuilder(GRAMMARVisitor):
         bv = _term_singleton(terms[1])
         if av is None or bv is None:
             raise CompileError("non-literal `..` endpoint not in band slice")
-        return t.ValueRangeNode.from_range_view(_RangeView(lower=av, upper=bv))
+        return t.ValueRangeNode(alpha=t.CharRangeNode.uni(), lower=av, upper=bv)
 
     def visitOpenUpper(self, ctx: GRAMMARParser.OpenUpperContext) -> t.SemanticNode:
         raise NotImplementedError("open-ended `..` range not in band slice")
@@ -386,7 +348,7 @@ class _AstBuilder(GRAMMARVisitor):
     def visitOpenLower(self, ctx: GRAMMARParser.OpenLowerContext) -> t.SemanticNode:
         raise NotImplementedError("open-ended `..` range not in band slice")
 
-    # ── Universe → SemanticNode ──────────────────────────────────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Universe Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def _resolve_universe(self, universe: GRAMMARParser.UniverseContext) -> t.SemanticNode:
         arms: list[GRAMMARParser.ArmContext] = []
@@ -418,7 +380,7 @@ class _AstBuilder(GRAMMARVisitor):
             return t.GroupClassNode(groups=groups)
         return _attach_exclusions(t.UnionNode(options=resolved), exclusions)
 
-    # ── Term → SemanticNode ──────────────────────────────────────────────────
+    # Ã¢â€â‚¬Ã¢â€â‚¬ Term Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
     def _resolve_term(self, term: GRAMMARParser.TermContext) -> t.SemanticNode:
         atoms = term.atom()
@@ -519,4 +481,5 @@ class _AstBuilder(GRAMMARVisitor):
         walk(universe)
         flush_leaf()
         return children, literal_mask, counts
+
 

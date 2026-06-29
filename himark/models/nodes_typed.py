@@ -5,7 +5,6 @@ from typing import Literal, TypeAlias
 
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from himark.models.cst_view import AnchorView, BandArmView, RangeView, ReferenceView
 from himark.models.exceptions import CompileError
 
 # -----------------------------
@@ -92,20 +91,6 @@ class ValueRangeNode:
     exclusions: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_range_view(cls, v: RangeView) -> ValueRangeNode:
-        """A written `τ..τ` range is a value band over ambient `@uni` (HMK.md
-        §Universes): `{a..z}` == `{@uni::a..z}`. Single- and multi-char ranges are one
-        node; the engine fast-paths a single-code-point `@uni` band to a direct
-        matcher. The CST→AST decision a parser used to make inline, now on the model."""
-        return cls(alpha=CharRangeNode.uni(), lower=v.lower, upper=v.upper)
-
-    @classmethod
-    def from_band_view(cls, v: BandArmView) -> ValueRangeNode:
-        """Build a band arm `{alpha::lo..hi}` from a resolved view — see `band_arm`. A
-        parser fills the view's four endpoint slots; the canonicalisation lives below."""
-        return cls.band_arm(v.alpha, v.lower, v.lower_ref, v.upper, v.upper_ref)
-
-    @classmethod
     def band_arm(
         cls,
         alpha: SemanticNode,
@@ -165,14 +150,6 @@ class AnchorNode:
         "doc_end",
     ]
     type: Literal["anchor"] = "anchor"
-
-    @classmethod
-    def from_view(cls, v: AnchorView) -> AnchorNode:
-        """Build from a front-end's `AnchorView` — the mechanical CST→AST map a
-        parser used to do by hand: `<`/`>` choose the side, single/double the scope."""
-        if v.is_document:
-            return cls(at="doc_start" if v.is_start else "doc_end")
-        return cls(at="line_start" if v.is_start else "line_end")
 
 
 @dataclass(slots=True)
@@ -251,22 +228,22 @@ class StageRefNode:
 
 
 def reference_from_view(
-    v: ReferenceView,
+    is_count: bool, stage: int | None, index: int | None,
 ) -> BackRefNode | CountRefNode | StageRefNode:
-    """Build the right reference node from a front-end's `ReferenceView`.
+    """Build the right reference node from a front-end's parsed fields.
 
-    The three reference node types are one structural choice over the view: a
+    The three reference node types are one structural choice over the fields: a
     no-stage form (`$i`/`#i`) is a back- or count-reference by sigil; a stage form
     (`N$`/`N$i`) is a cross-stage reference. The stage count-ref (`N#`/`N#i`) has no
     node type — it is not a representable reference — so it is rejected here, the one
-    place that decision lives (a parser used to special-case it inline)."""
-    if v.stage is None:  # `$i` / `#i` — index is the group, sigil picks the kind
-        group = v.index or 0
-        return CountRefNode(group=group) if v.is_count else BackRefNode(group=group)
-    if v.is_count:  # `N#` / `N#i` — no node type for a stage count-ref
+    place that decision lives."""
+    if stage is None:  # `$i` / `#i` — index is the group, sigil picks the kind
+        group = index or 0
+        return CountRefNode(group=group) if is_count else BackRefNode(group=group)
+    if is_count:  # `N#` / `N#i` — no node type for a stage count-ref
         raise NotImplementedError("stage count-ref `N#` has no reference node")
-    path = (v.index,) if v.index is not None else ()
-    return StageRefNode(stage=v.stage, path=path)
+    path = (index,) if index is not None else ()
+    return StageRefNode(stage=stage, path=path)
 
 
 @pydantic_dataclass(slots=True)
