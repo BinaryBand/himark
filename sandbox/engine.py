@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-# ── Opcode constants (mirrors himark/models/opcodes.py) ───────────────────────
+# ── Opcode constants ──────────────────────────────────────────────────────────
 
 LIT = 0
 ANCHOR = 1
@@ -92,7 +92,6 @@ class Capture:
     reps: list[str]
     subs: list[Capture] = field(default_factory=list)
     count: int = -1
-    alphabet: Alphabet | RangeAlphabet | None = None
 
 
 @dataclass
@@ -117,52 +116,46 @@ class Match:
         return cap
 
 
-# ── Alphabet (mirrors himark/models/alphabet.py) ──────────────────────────────
+# ── Alphabet ──────────────────────────────────────────────────────────────────
 
 
 class Alphabet:
-    __slots__ = ("groups", "base", "_index")
+    __slots__ = ("base", "_index", "_lo", "_hi")
 
     def __init__(self, groups: list[list[str]]) -> None:
-        self.groups = groups
+        self._index: dict[str, int] = {
+            m: i for i, grp in enumerate(groups) for m in grp
+        }
         self.base = len(groups)
-        self._index = {m: i for i, grp in enumerate(groups) for m in grp}
+        self._lo = self._hi = -1
+
+    @classmethod
+    def from_range(cls, lo: int, hi: int) -> "Alphabet":
+        obj = cls.__new__(cls)
+        obj._index = {}
+        obj._lo, obj._hi = lo, hi
+        obj.base = hi - lo + 1
+        return obj
 
     def __contains__(self, ch: str) -> bool:
+        if self._lo >= 0:
+            return self._lo <= ord(ch) <= self._hi
         return ch in self._index
 
-    def is_zero(self, ch: str) -> bool:
-        return self._index[ch] == 0
-
     def value(self, s: str) -> int:
         v = 0
-        for c in s:
-            v = v * self.base + self._index[c]
+        if self._lo >= 0:
+            for c in s:
+                v = v * self.base + (ord(c) - self._lo)
+        else:
+            for c in s:
+                v = v * self.base + self._index[c]
         return v
 
 
-class RangeAlphabet:
-    __slots__ = ("lo", "hi", "base")
-
-    def __init__(self, lo: int, hi: int) -> None:
-        self.lo, self.hi, self.base = lo, hi, hi - lo + 1
-
-    def __contains__(self, ch: str) -> bool:
-        return self.lo <= ord(ch) <= self.hi
-
-    def is_zero(self, ch: str) -> bool:
-        return ord(ch) == self.lo
-
-    def value(self, s: str) -> int:
-        v = 0
-        for c in s:
-            v = v * self.base + (ord(c) - self.lo)
-        return v
-
-
-def _make_alphabet(desc: list) -> Alphabet | RangeAlphabet:
+def _make_alphabet(desc: list) -> Alphabet:
     if desc[0] == "range":
-        return RangeAlphabet(desc[1], desc[2])
+        return Alphabet.from_range(desc[1], desc[2])
     return Alphabet(desc[1])
 
 
@@ -175,20 +168,57 @@ class _State:
     __slots__ = ("captures", "root", "stages")
 
     def __init__(
-        self, root: _State | None = None, stages: tuple[Match, ...] = ()
+        self, root: "_State | None" = None, stages: tuple[Match, ...] = ()
     ) -> None:
         self.captures: list[Capture] = []
         self.root = root if root is not None else self
         self.stages = stages
 
 
-# ── Prepare: lower serialised opcodes to VM-ready form ────────────────────────
-# Mirrors himark/engine/_vm.py::prepare() + _prepare_elements().
-# JSON deserialises tuples as lists, so operand indexing uses lists throughout;
-# the VM dispatch is identical to the reference engine.
+# ── Matcher base + concrete matchers ─────────────────────────────────────────
 
 
-class _GroupMatcher:
+class _Matcher:
+    __slots__ = ()
+
+    def match(self, text: str, pos: int) -> int | None:
+        raise NotImplementedError
+
+    def accepts(self, s: str) -> bool:
+        return self.match(s, 0) == len(s)
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        return pos + len(first) if text.startswith(first, pos) else None
+
+
+class _CharMatcher(_Matcher):
+    __slots__ = ("lo", "hi", "excl")
+
+    def __init__(self, lo: int, hi: int, excl: Any) -> None:
+        self.lo = lo
+        self.hi = hi
+        self.excl = excl
+
+    def match(self, text: str, pos: int) -> int | None:
+        if pos >= len(text):
+            return None
+        ch = text[pos]
+        if not (self.lo <= ord(ch) <= self.hi):
+            return None
+        if self.excl:
+            singles, ranges, literals = self.excl
+            if ch in singles:
+                return None
+            for lo2, hi2 in ranges:
+                if lo2 <= ch <= hi2:
+                    return None
+            for lit in literals:
+                if text.startswith(lit, pos):
+                    return None
+        return pos + 1
+
+
+class _GroupMatcher(_Matcher):
     __slots__ = ("members", "accept_set")
 
     def __init__(self, groups: list[list[str]]) -> None:
@@ -198,61 +228,63 @@ class _GroupMatcher:
         self.accept_set = frozenset(m for m, _ in members)
 
     def match(self, text: str, pos: int) -> int | None:
-        r = _group_unit(text, pos, self)
-        return r[0] if r else None
+        for m, _ in self.members:
+            if text.startswith(m, pos):
+                return pos + len(m)
+        return None
 
     def accepts(self, s: str) -> bool:
         return s in self.accept_set
 
     def equal_unit(self, text: str, pos: int, first: str) -> int | None:
-        return _group_equal_unit(text, pos, first, self)
+        # re-match group-index sequence of first at pos
+        members = self.members
+        seq: list[int] = []
+        i = 0
+        while i < len(first):
+            for m, idx in members:
+                if first.startswith(m, i):
+                    seq.append(idx)
+                    i += len(m)
+                    break
+            else:
+                return None
+        cur = pos
+        for gidx in seq:
+            for m, idx in members:
+                if idx == gidx and text.startswith(m, cur):
+                    cur += len(m)
+                    break
+            else:
+                return None
+        return cur
 
 
-class _CharMatcher:
-    __slots__ = ("lo", "hi", "excl")
-
-    def __init__(self, lo: int, hi: int, excl: Any) -> None:
-        self.lo = lo
-        self.hi = hi
-        self.excl = excl
-
-    def match(self, text: str, pos: int) -> int | None:
-        return _char_match(text, pos, self.lo, self.hi, self.excl)
-
-    def accepts(self, s: str) -> bool:
-        if len(s) != 1 or not (self.lo <= ord(s) <= self.hi):
-            return False
-        if self.excl:
-            singles, _ranges, _literals = self.excl
-            return s not in singles
-        return True
-
-    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
-        return pos + len(first) if text.startswith(first, pos) else None
-
-
-class _ComplementMatcher:
+class _ComplementMatcher(_Matcher):
     __slots__ = ("inner_groups",)
 
     def __init__(self, inner_groups: list[list[str]]) -> None:
         self.inner_groups = inner_groups
 
     def match(self, text: str, pos: int) -> int | None:
-        return _complement_match(text, pos, self.inner_groups)
-
-    def accepts(self, s: str) -> bool:
-        return _complement_match(s, 0, self.inner_groups) == len(s)
+        if pos >= len(text):
+            return None
+        for grp in self.inner_groups:
+            for m in grp:
+                if m and text.startswith(m, pos):
+                    return None
+        return pos + 1
 
     def equal_unit(self, text: str, pos: int, first: str) -> int | None:
-        return _complement_match(text, pos, self.inner_groups)
+        return self.match(text, pos)
 
 
-class _ValueMatcher:
+class _ValueMatcher(_Matcher):
     __slots__ = ("alph", "lo_val", "hi_val", "wmin", "wmax", "excl")
 
     def __init__(
         self,
-        alph: Alphabet | RangeAlphabet,
+        alph: Alphabet,
         lo_val: int | None,
         hi_val: int | None,
         wmin: int,
@@ -267,26 +299,39 @@ class _ValueMatcher:
         self.excl = excl
 
     def match(self, text: str, pos: int) -> int | None:
-        return _match_value(
-            text,
-            pos,
-            self.alph,
-            self.lo_val,
-            self.hi_val,
-            self.wmin,
-            self.wmax,
-            self.excl,
-        )
+        alph = self.alph
+        end = pos
+        n = len(text)
+        while end < n and text[end] in alph:
+            end += 1
+        avail = end - pos
+        top = avail if self.wmax is None else min(self.wmax, avail)
+        for width in range(top, self.wmin - 1, -1):
+            candidate = text[pos : pos + width]
+            if self.excl:
+                singles, ranges, literals = self.excl
+                if candidate in singles:
+                    continue
+                if width == 1 and any(lo2 <= candidate <= hi2 for lo2, hi2 in ranges):
+                    continue
+                if any(
+                    candidate.startswith(lit) and len(candidate) == len(lit)
+                    for lit in literals
+                ):
+                    continue
+            val = alph.value(candidate)
+            if (self.lo_val is not None and val < self.lo_val) or (
+                self.hi_val is not None and val > self.hi_val
+            ):
+                continue
+            return pos + width
+        return None
 
-    def accepts(self, s: str) -> bool:
-        return self.match(s, 0) == len(s)
 
-    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
-        return pos + len(first) if text.startswith(first, pos) else None
+# ── Prepare: lower serialised opcodes to VM-ready form ────────────────────────
 
 
 def _prepare_elements(elements: list) -> list:
-    """Lower serialised opcode lists to VM-ready instructions (bake Reps + alphabets)."""
     out: list = []
     for el in elements:
         opcode = el[0]
@@ -305,7 +350,19 @@ def _prepare_elements(elements: list) -> list:
     return out
 
 
-# ── VM execution (mirrors himark/engine/_vm.py) ───────────────────────────────
+# ── Capture helper ────────────────────────────────────────────────────────────
+
+
+def _push(caps: list[Capture], cap: Capture, end: int, cont: Cont) -> int | None:
+    mark = len(caps)
+    caps.append(cap)
+    result = cont(end)
+    if result is None:
+        del caps[mark:]
+    return result
+
+
+# ── VM execution ──────────────────────────────────────────────────────────────
 
 
 def _find_matches(
@@ -336,6 +393,13 @@ def _run_program(
 
     opcode, *args = elements[idx]
 
+    # Resolve reps once for all reps-bearing opcodes
+    if opcode in _REPS_OPCODES:
+        reps = _resolve_reps(args[-1], state)
+        if reps is None:
+            return None
+        args = args[:-1]
+
     if opcode == LIT:
         s: str = args[0]
         return cont(pos + len(s)) if text[pos : pos + len(s)] == s else None
@@ -344,69 +408,51 @@ def _run_program(
         return cont(pos) if _check_anchor(args[0], text, pos) else None
 
     if opcode == CHAR:
-        lo, hi, excl_list, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        lo, hi, excl_list = args
         return _run_matcher(
             _CharMatcher(lo, hi, excl_list), reps, state, text, pos, cont
         )
 
     if opcode == GROUP:
-        gm, _het, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
-        return _run_matcher(gm, reps, state, text, pos, cont, alphabet=None)
+        gm = args[0]
+        return _run_matcher(gm, reps, state, text, pos, cont)
 
     if opcode == COMPLEMENT:
-        inner_groups, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        (inner_groups,) = args
         return _run_matcher(
             _ComplementMatcher(inner_groups), reps, state, text, pos, cont
         )
 
     if opcode == BACK_REF:
-        group, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        (group,) = args
         caps = state.root.captures
         referent = _cap_text(caps[group], text) if group < len(caps) else None
         return _match_referent(referent, reps, text, pos, state, cont)
 
     if opcode == COUNT_REF:
-        group, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        (group,) = args
         caps = state.root.captures
         referent = str(_rep_count(caps[group])) if group < len(caps) else None
         return _match_referent(referent, reps, text, pos, state, cont)
 
     if opcode == STAGE_REF:
-        stage, path, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        stage, path = args
         referent = _stage_referent(state.root.stages, stage, tuple(path))
         return _match_referent(referent, reps, text, pos, state, cont)
 
     if opcode == VALUE_RANGE:
-        alph, lo_val, hi_val, wmin, wmax, excl_list, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
-        matcher = _ValueMatcher(alph, lo_val, hi_val, wmin, wmax, excl_list)
-        return _run_matcher(matcher, reps, state, text, pos, cont, alphabet=alph)
+        alph, lo_val, hi_val, wmin, wmax, excl_list = args
+        return _run_matcher(
+            _ValueMatcher(alph, lo_val, hi_val, wmin, wmax, excl_list),
+            reps,
+            state,
+            text,
+            pos,
+            cont,
+        )
 
     if opcode == DYN_RANGE:
-        alph, lo_static, hi_static, lo_ref, hi_ref, excl_list, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        if reps is None:
-            return None
+        alph, lo_static, hi_static, lo_ref, hi_ref, excl_list = args
         lower = lo_static if lo_ref is None else _endpoint_text(lo_ref, state, text)
         upper = hi_static if hi_ref is None else _endpoint_text(hi_ref, state, text)
         if (lo_ref is not None and lower is None) or (
@@ -417,11 +463,8 @@ def _run_program(
         return _run_matcher(matcher, reps, state, text, pos, cont) if matcher else None
 
     if opcode == SEQ_GROUP:
-        children, reps_spec = args
-        reps = _resolve_reps(reps_spec, state)
-        return (
-            _match_seq_group(children, reps, text, pos, state, cont) if reps else None
-        )
+        (children,) = args
+        return _match_seq_group(children, reps, text, pos, state, cont)
 
     raise ValueError(f"Unknown opcode: {opcode}")
 
@@ -436,114 +479,8 @@ def _check_anchor(kind: int, text: str, pos: int) -> bool:
     return pos == len(text)
 
 
-def _char_match(text: str, pos: int, lo: int, hi: int, excl: Any) -> int | None:
-    if pos >= len(text):
-        return None
-    ch = text[pos]
-    if not (lo <= ord(ch) <= hi):
-        return None
-    if excl:
-        singles, ranges, literals = excl
-        if ch in singles:
-            return None
-        for lo2, hi2 in ranges:
-            if lo2 <= ch <= hi2:
-                return None
-        for lit in literals:
-            if text.startswith(lit, pos):
-                return None
-    return pos + 1
-
-
-def _complement_match(text: str, pos: int, inner_groups: list[list[str]]) -> int | None:
-    if pos >= len(text):
-        return None
-    for grp in inner_groups:
-        for m in grp:
-            if m and text.startswith(m, pos):
-                return None
-    return pos + 1
-
-
-def _group_unit(text: str, pos: int, gm: _GroupMatcher) -> tuple[int, int] | None:
-    for m, idx in gm.members:
-        if text.startswith(m, pos):
-            return pos + len(m), idx
-    return None
-
-
-def _group_equal_unit(text: str, pos: int, first: str, gm: _GroupMatcher) -> int | None:
-    members = gm.members
-    seq: list[int] = []
-    i = 0
-    while i < len(first):
-        for m, idx in members:
-            if first.startswith(m, i):
-                seq.append(idx)
-                i += len(m)
-                break
-        else:
-            return None
-    cur = pos
-    for gidx in seq:
-        for m, idx in members:
-            if idx == gidx and text.startswith(m, cur):
-                cur += len(m)
-                break
-        else:
-            return None
-    return cur
-
-
-def _match_value(
-    text: str,
-    pos: int,
-    alphabet: Alphabet | RangeAlphabet,
-    lo_val: int | None,
-    hi_val: int | None,
-    wmin: int,
-    wmax: int | None,
-    excl: Any,
-) -> int | None:
-    if isinstance(alphabet, RangeAlphabet):
-        end = pos
-        n = len(text)
-        while end < n and alphabet.lo <= ord(text[end]) <= alphabet.hi:
-            end += 1
-    elif isinstance(alphabet, Alphabet):
-        end = pos
-        n = len(text)
-        while end < n and text[end] in alphabet:
-            end += 1
-    else:
-        return None
-
-    avail = end - pos
-    top = avail if wmax is None else min(wmax, avail)
-    for width in range(top, wmin - 1, -1):
-        candidate = text[pos : pos + width]
-        if excl:
-            singles, ranges, literals = excl
-            if candidate in singles:
-                continue
-            if width == 1 and any(lo2 <= candidate <= hi2 for lo2, hi2 in ranges):
-                continue
-            if any(
-                candidate.startswith(lit) and len(candidate) == len(lit)
-                for lit in literals
-            ):
-                continue
-        val = alphabet.value(candidate)
-        if (lo_val is not None and val < lo_val) or (
-            hi_val is not None and val > hi_val
-        ):
-            continue
-        return pos + width
-    return None
-
-
 def _build_dyn_matcher(
-    alph: Alphabet | RangeAlphabet,
+    alph: Alphabet,
     lower: str | None,
     upper: str | None,
     excl: Any,
@@ -565,28 +502,22 @@ def _build_dyn_matcher(
 
 
 def _run_matcher(
-    matcher: Any,
+    matcher: _Matcher,
     reps: Reps,
     state: _State,
     text: str,
     pos: int,
     cont: Cont,
-    alphabet: Alphabet | RangeAlphabet | None = None,
 ) -> int | None:
     caps = state.captures
 
-    def attempt(end: int, rep_list: list[str], k: int) -> int | None:
-        mark = len(caps)
-        caps.append(Capture("", (pos, end), rep_list, count=k, alphabet=alphabet))
-        r = cont(end)
-        if r is not None:
-            return r
-        del caps[mark:]
-        return None
-
     first_end = matcher.match(text, pos)
     if first_end is None or first_end == pos:
-        return attempt(pos, [], 0) if reps.accepts(0) else None
+        return (
+            _push(caps, Capture("", (pos, pos), [], count=0), pos, cont)
+            if reps.accepts(0)
+            else None
+        )
 
     for unit_len in range(first_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
@@ -604,10 +535,14 @@ def _run_matcher(
             current = nxt
         for k in _counts(reps, len(rep_list)):
             end = pos if k == 0 else ends[k - 1]
-            r = attempt(end, rep_list, k)
+            r = _push(caps, Capture("", (pos, end), rep_list, count=k), end, cont)
             if r is not None:
                 return r
-    return attempt(pos, [], 0) if reps.accepts(0) else None
+    return (
+        _push(caps, Capture("", (pos, pos), [], count=0), pos, cont)
+        if reps.accepts(0)
+        else None
+    )
 
 
 def _cap_text(cap: Capture, text: str) -> str:
@@ -641,32 +576,16 @@ def _match_referent(
 ) -> int | None:
     caps = state.captures
     if referent == "":
-        mark = len(caps)
-        caps.append(Capture("", (pos, pos), [""] * reps.min))
-        r = cont(pos)
-        if r is None:
-            del caps[mark:]
-        return r
+        return _push(caps, Capture("", (pos, pos), [""] * reps.min), pos, cont)
     ends = [pos, *_referent_run(text, pos, referent, reps.max)] if referent else [pos]
-
-    def attempt(k: int) -> int | None:
-        end = ends[k]
-        mark = len(caps)
-        caps.append(
-            Capture(
-                text[pos:end],
-                (pos, end),
-                [referent] * k if referent else [],
-            )
-        )
-        r = cont(end)
-        if r is not None:
-            return r
-        del caps[mark:]
-        return None
-
     for k in _counts(reps, len(ends) - 1):
-        r = attempt(k)
+        end = ends[k]
+        r = _push(
+            caps,
+            Capture(text[pos:end], (pos, end), [referent] * k if referent else []),
+            end,
+            cont,
+        )
         if r is not None:
             return r
     return None
@@ -713,22 +632,13 @@ def _match_seq_group(
         runs.append((end, sub.captures))
         current = end
 
-    def attempt(k: int) -> int | None:
+    for k in _counts(reps, len(runs)):
         end = pos if k == 0 else runs[k - 1][0]
         rep_texts = [
             text[(pos if i == 0 else runs[i - 1][0]) : runs[i][0]] for i in range(k)
         ]
         subs = [c for i in range(k) for c in runs[i][1]]
-        mark = len(caps)
-        caps.append(Capture(text[pos:end], (pos, end), rep_texts, subs))
-        r = cont(end)
-        if r is not None:
-            return r
-        del caps[mark:]
-        return None
-
-    for k in _counts(reps, len(runs)):
-        r = attempt(k)
+        r = _push(caps, Capture(text[pos:end], (pos, end), rep_texts, subs), end, cont)
         if r is not None:
             return r
     return None
@@ -765,51 +675,7 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
     return Match(text[start:end], start, end, state.captures)
 
 
-# ── Expr types (mirrors himark/models/compiled.py) ────────────────────────────
-
-
-@dataclass(slots=True)
-class ExLit:
-    text: str
-
-
-@dataclass(slots=True)
-class ExCurrent:
-    pass
-
-
-@dataclass(slots=True)
-class ExRef:
-    stage: int | None
-    is_count: bool
-    path: tuple[int, ...] | None
-
-
-@dataclass(slots=True)
-class ExConcat:
-    parts: list[Any]  # list[Expr]
-
-
-@dataclass(slots=True)
-class ExFilter:
-    src: Any  # Expr
-    name: str
-
-
-def _json_to_expr(d: dict) -> Any:
-    if "lit" in d:
-        return ExLit(d["lit"])
-    if "cur" in d:
-        return ExCurrent()
-    if "ref" in d:
-        stage, is_count, path = d["ref"]
-        return ExRef(stage, is_count, tuple(path) if path is not None else None)
-    if "cat" in d:
-        return ExConcat([_json_to_expr(p) for p in d["cat"]])
-    return ExFilter(_json_to_expr(d["src"]), d["filter"])
-
-
-# ── Template rendering (mirrors himark/engine/_render.py) ─────────────────────
+# ── Template rendering ────────────────────────────────────────────────────────
 
 
 def _indent(s: str) -> str:
@@ -820,40 +686,34 @@ _FILTERS = {"trim": str.strip, "indent": _indent}
 
 
 @dataclass
-class _Moustache:
-    expr: Any  # Expr
-
-
-@dataclass
 class _Template:
-    parts: list[str | _Moustache]
+    parts: list[str | dict]  # str = literal, dict = raw expr JSON
     fixed_point: bool = False
 
 
-def _eval_expr(expr: Any, current: str, stages: list[Match]) -> str:
-    if isinstance(expr, ExLit):
-        return expr.text
-    if isinstance(expr, ExCurrent):
+def _eval_expr(d: dict[str, Any], current: str, stages: list[Match]) -> str:
+    if "lit" in d:
+        return d["lit"]
+    if "cur" in d:
         return current
-    if isinstance(expr, ExRef):
-        pipe_idx = expr.stage if expr.stage is not None else len(stages) - 1
+    if "ref" in d:
+        stage_idx, is_count, path = d["ref"]
+        pipe_idx = stage_idx if stage_idx is not None else len(stages) - 1
         if not 0 <= pipe_idx < len(stages):
             raise RuntimeError(f"Moustache stage {pipe_idx} out of range")
         stage_match = stages[pipe_idx]
-        if expr.path is None:
+        if path is None:
             return stage_match.text
-        cap = stage_match.capture_at(expr.path)
+        cap = stage_match.capture_at(tuple(path))
         if cap is None:
-            raise RuntimeError(f"Moustache capture {expr.path} out of range")
-        return str(len(cap.reps)) if expr.is_count else cap.text
-    if isinstance(expr, ExConcat):
-        return "".join(_eval_expr(p, current, stages) for p in expr.parts)
-    if isinstance(expr, ExFilter):
-        fn = _FILTERS.get(expr.name)
-        if fn is None:
-            raise RuntimeError(f"Unknown template filter: '{expr.name}'")
-        return fn(_eval_expr(expr.src, current, stages))
-    raise RuntimeError(f"Unknown expr type: {type(expr).__name__}")
+            raise RuntimeError(f"Moustache capture {tuple(path)} out of range")
+        return str(len(cap.reps)) if is_count else cap.text
+    if "cat" in d:
+        return "".join(_eval_expr(p, current, stages) for p in d["cat"])
+    fn = _FILTERS.get(d["filter"])
+    if fn is None:
+        raise RuntimeError(f"Unknown template filter: '{d['filter']}'")
+    return fn(_eval_expr(d["src"], current, stages))
 
 
 def _render_template(
@@ -863,17 +723,15 @@ def _render_template(
     length = 0
     spans: list[tuple[int, int]] = []
     for part in template.parts:
-        if isinstance(part, _Moustache):
-            value = _eval_expr(part.expr, current, stages)
-            start = length
-            out.append(value)
-            length += len(value)
-            spans.append((start, length))
-        else:
+        if isinstance(part, str):
             out.append(part)
             length += len(part)
-    full = "".join(out)
-    return full, (spans or None)
+        else:
+            value = _eval_expr(part, current, stages)
+            spans.append((length, length + len(value)))
+            out.append(value)
+            length += len(value)
+    return "".join(out), (spans or None)
 
 
 # ── JSON step deserialization ─────────────────────────────────────────────────
@@ -881,7 +739,7 @@ def _render_template(
 
 @dataclass
 class _Program:
-    elements: list  # VM-ready (prepared) instructions
+    elements: list
     groups: int
     fixed_point: bool
 
@@ -895,23 +753,17 @@ def _json_to_step(d: dict) -> _Program | _Template:
             bool(d.get("fixed_point", False)),
         )
     if kind == "template":
-        parts: list[str | _Moustache] = []
+        parts: list[str | dict] = []
         for p in d["template"]:
             if isinstance(p, str):
                 parts.append(p)
             else:
-                parts.append(_Moustache(_json_to_expr(p["m"])))
+                parts.append(p["m"])
         return _Template(parts, bool(d.get("fixed_point", False)))
     raise ValueError(f"Unknown step kind: {kind!r}")
 
 
-# ── Pipeline execution (mirrors himark/engine/__init__.py) ────────────────────
-
-
-def _step_find_matches(
-    program: _Program, text: str, stages: tuple[Match, ...] = ()
-) -> list[Match]:
-    return _find_matches(program.elements, text, stages)
+# ── Pipeline execution ────────────────────────────────────────────────────────
 
 
 def _transform(
@@ -945,11 +797,10 @@ def _transform(
         pieces.append(full[last:])
         return "".join(pieces)
 
-    # Query branch: splice each match's transform in place
     pieces = []
     last = 0
     matched = False
-    for m in _step_find_matches(head, text, ancestors):
+    for m in _find_matches(head.elements, text, ancestors):
         matched = True
         sub = _transform(rest, m.text, (*ancestors, m), committed)
         if sub is None:
@@ -974,7 +825,7 @@ def _deltas(
         return [] if result is None else [(0, len(target), result)]
     rest = steps[1:]
     out: list[tuple[int, int, str]] = []
-    for m in _step_find_matches(head, target):
+    for m in _find_matches(head.elements, target):
         result = _transform(rest, m.text, (m,))
         if result is not None:
             out.append((m.start, m.end, result))
