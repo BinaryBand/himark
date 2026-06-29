@@ -19,11 +19,11 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from himark.engine.backend._compile import compile_pattern
 from himark.engine.backend._translate import Unsupported, to_json
 from himark.engine.backend._types import Capture, Match
 from himark.engine.backend.python import PythonEngine
 from himark.models import nodes_typed as t
+from himark.engine.backend._compiler import compile_pattern
 
 # The native module is built separately and has no type stubs, so it is held as
 # `Any`. Absent (not built) → `RUST_AVAILABLE` is False and `RustEngine` raises.

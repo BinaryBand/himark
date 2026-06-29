@@ -275,7 +275,7 @@ A statement's result is **(span, output)** pairs. The semantics is **splice**: e
 
 ```proto
 {(}!{(,)}[..]{)} <=> "{{$1}}"                // strip innermost (...), deepest first
-{@d::0..},{@d::0..$0}, <=> "{{$1}},{{$0}},"  // bubble-sort: swap adjacent out-of-order pairs
+{@d::0..}{,}{@d::0..$0} <=> "{{$2}},{{$0}}"  // bubble-sort: swap adjacent out-of-order pairs
 ```
 
 The rule must **contract** toward a fixed point; one that grows the document (`{a} <=> "aa"`) or oscillates never settles. The runner halts on a pass that lengthens or repeats a state; a provably non-contracting rule is rejected at compile time. Use `=>` for a single pass; only a single statement can be looped, not a whole group.

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from himark.engine.backend.alphabet import Alphabet, RangeAlphabet
+from himark.models.alphabet import Alphabet, RangeAlphabet
 
 
 @dataclass(slots=True)

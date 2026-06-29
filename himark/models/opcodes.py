@@ -56,10 +56,14 @@ VALUE_RANGE = 7
 # lo_ref/hi_ref are None for static, or ("back"|"count"|"stage", ...) descriptors.
 DYN_RANGE = 8
 
+# A complement ``{^abc}`` — match one position whose value is NOT in the inner
+# alphabet.  Operands: (inner_groups: list[list[str]], reps: Reps)
+COMPLEMENT = 10
+
 # A grouping brace ``{of{black}{quartz}}`` — a sub-program that is one capture
 # group whose inner elements become sub-captures.
 # Operands: (children: list[Instruction], reps: Reps)
-SEQ_GROUP = 9
+SEQ_GROUP = 11
 
 # ── Repetition spec ────────────────────────────────────────────────────────────
 
@@ -89,9 +93,10 @@ def reps_from_tuple(r: Any) -> Reps:
     """Parse a serialised reps tuple into a ``Reps``."""
     if r is None:
         return Reps(1, 1)
-    if isinstance(r, list) and r and r[0] == "#":
+    # Tagged form: ("#", group) for count-reference, ("=", [values]) for count set
+    if isinstance(r, (list, tuple)) and r and r[0] == "#":
         return Reps(count_ref=r[1])
-    if isinstance(r, list) and r and r[0] == "=":
+    if isinstance(r, (list, tuple)) and r and r[0] == "=":
         vals = frozenset(r[1])
         return Reps(min=min(vals), max=max(vals), allowed=vals)
     lo, hi = r

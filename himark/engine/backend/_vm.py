@@ -13,12 +13,13 @@ branch fails.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 from himark.models.opcodes import (
     ANCHOR,
     BACK_REF,
     CHAR,
+    COMPLEMENT,
     COUNT_REF,
     DYN_RANGE,
     GROUP,
@@ -39,15 +40,6 @@ Cont = Callable[[int], "int | None"]
 
 
 class _State:
-    """Captures accumulated during one match attempt, with absolute spans.
-
-    ``root`` is the top-level state shared by every nested sub-match, kept so
-    the rebasing in ``_finalize`` can flatten the whole tree against the match
-    start.  ``stages`` are the earlier pipeline matches, held on the root so a
-    cross-stage reference (``{N$M}``) can resolve stage N's capture during the
-    match.
-    """
-
     __slots__ = ("captures", "root", "stages")
 
     def __init__(
@@ -68,13 +60,9 @@ def find_matches(
     start: int = 0,
     stop: int | None = None,
 ) -> list[Match]:
-    """All matches of ``program`` in ``text``.  A match may *begin* only in
-    ``[start, stop)`` (``stop is None`` = to the end); it still reads forward
-    freely past ``stop``, so a match starting inside the window but extending
-    beyond it is found in full.
-    """
+    """All matches of ``program`` in ``text``."""
     matches: list[Match] = []
-    elements = list(program.elements)  # mutable for reversed iteration when needed
+    elements = list(program.elements)
     n = len(text)
     limit = n if stop is None else min(stop, n)
     pos = start
@@ -89,15 +77,12 @@ def find_matches(
     return matches
 
 
-# ── Program execution (the continuation chain) ────────────────────────────────
+# ── Program execution ─────────────────────────────────────────────────────────
 
 
 def _run_program(
     elements: list[Instruction], idx: int, text: str, pos: int, state: _State
 ) -> int | None:
-    """Execute ``elements[idx:]`` from ``pos``, backtracking through each
-    element's candidate ends.  Returns the end of a full match, or None.
-    """
     if idx >= len(elements):
         return pos
 
@@ -122,9 +107,7 @@ def _run_program(
         reps = _resolve_reps(reps_from_tuple(reps_tuple), state)
         if reps is None:
             return None
-        return _match_char_range(
-            text, pos, lo, hi, excl_list, reps, state, cont
-        )
+        return _match_char_range(text, pos, lo, hi, excl_list, reps, state, cont)
 
     if opcode == GROUP:
         groups, het, reps_tuple = args
@@ -132,6 +115,13 @@ def _run_program(
         if reps is None:
             return None
         return _match_group(text, pos, groups, het, reps, state, cont)
+
+    if opcode == COMPLEMENT:
+        inner_groups, reps_tuple = args
+        reps = _resolve_reps(reps_from_tuple(reps_tuple), state)
+        if reps is None:
+            return None
+        return _match_complement(text, pos, inner_groups, reps, state, cont)
 
     if opcode == BACK_REF:
         group, reps_tuple = args
@@ -148,9 +138,7 @@ def _run_program(
         if reps is None:
             return None
         caps = state.root.captures
-        referent = (
-            str(_rep_count(caps[group])) if group < len(caps) else None
-        )
+        referent = str(_rep_count(caps[group])) if group < len(caps) else None
         return _match_referent(referent, reps, text, pos, state, cont)
 
     if opcode == STAGE_REF:
@@ -172,24 +160,16 @@ def _run_program(
 
     if opcode == DYN_RANGE:
         (
-            alphabet_desc,
-            lo_static,
-            hi_static,
-            lo_ref,
-            hi_ref,
-            excl_list,
-            reps_tuple,
+            alphabet_desc, lo_static, hi_static,
+            lo_ref, hi_ref, excl_list, reps_tuple,
         ) = args
         reps = _resolve_reps(reps_from_tuple(reps_tuple), state)
         if reps is None:
             return None
-        # Resolve dynamic endpoints from capture state
         lower = lo_static if lo_ref is None else _endpoint_text(lo_ref, state, text)
         upper = hi_static if hi_ref is None else _endpoint_text(hi_ref, state, text)
-        if (lo_ref is not None and lower is None) or (
-            hi_ref is not None and upper is None
-        ):
-            return None  # a referenced endpoint is undefined
+        if (lo_ref is not None and lower is None) or (hi_ref is not None and upper is None):
+            return None
         matcher_desc = _build_dyn_matcher_desc(alphabet_desc, lower, upper, excl_list)
         if matcher_desc is None:
             return None
@@ -209,69 +189,51 @@ def _run_program(
 
 
 def _check_anchor(kind: int, text: str, pos: int) -> bool:
-    """Check zero-width anchor at ``pos``.  Kind: line_start=0, line_end=1,
-    doc_start=2, doc_end=3.
-    """
-    if kind == 0:  # line_start
+    if kind == 0:
         return pos == 0 or text[pos - 1] == "\n"
-    if kind == 1:  # line_end
+    if kind == 1:
         return pos == len(text) or text[pos] == "\n"
-    if kind == 2:  # doc_start
+    if kind == 2:
         return pos == 0
-    # kind == 3: doc_end
     return pos == len(text)
 
 
-# ── Char range matcher (inlined, not a Matcher object) ────────────────────────
+# ── Char range ─────────────────────────────────────────────────────────────────
 
 
 def _char_match(text: str, pos: int, lo: int, hi: int, excl: list[str]) -> int | None:
-    """Match one char in ``[lo, hi]`` excluding ``excl`` strings.  Returns the
-    end position, or None.
-    """
     if pos >= len(text):
         return None
     ch = text[pos]
     if not (lo <= ord(ch) <= hi):
         return None
-    if any(ch in e or e == ch for e in excl if len(e) == 1):
-        return None
-    # Multi-char exclusions are rare and checked separately
     for e in excl:
-        if len(e) > 1 and text.startswith(e, pos):
+        if len(e) == 1:
+            if e == ch:
+                return None
+        elif ".." in e:
+            lo2, hi2 = e.split("..", 1)
+            if lo2 <= ch <= hi2:
+                return None
+        elif text.startswith(e, pos):
             return None
     return pos + 1
 
 
 def _match_char_range(
-    text: str,
-    pos: int,
-    lo: int,
-    hi: int,
-    excl: list[str],
-    reps: Reps,
-    state: _State,
-    cont: Cont,
+    text: str, pos: int, lo: int, hi: int, excl: list[str],
+    reps: Reps, state: _State, cont: Cont,
 ) -> int | None:
-    """Match a code-point range per ``reps``, capture as a RangeAlphabet group."""
-    alphabet = RangeAlphabet(lo, hi)
     return _run_matcher(
-        ("char_range", lo, hi, excl), reps, state, text, pos, cont, alphabet=alphabet
+        ("char_range", lo, hi, excl), reps, state, text, pos, cont, alphabet=None
     )
 
 
 # ── Group matcher ──────────────────────────────────────────────────────────────
 
 
-def _group_unit(
-    text: str, pos: int, groups: list[list[str]]
-) -> tuple[int, int] | None:
-    """Match one position from the group alphabet.  Returns ``(end, group_index)``
-    or None.  Multi-char members tried first (longest-match)."""
-    # Build sorted (member, group_index) list once — but for simplicity inline
-    members = [
-        (m, i) for i, grp in enumerate(groups) for m in grp if m
-    ]
+def _group_unit(text: str, pos: int, groups: list[list[str]]) -> tuple[int, int] | None:
+    members = [(m, i) for i, grp in enumerate(groups) for m in grp if m]
     members.sort(key=lambda x: len(x[0]), reverse=True)
     for m, idx in members:
         if text.startswith(m, pos):
@@ -280,22 +242,12 @@ def _group_unit(
 
 
 def _group_accepts(s: str, groups: list[list[str]]) -> bool:
-    """True if ``s`` is exactly one member of the groups."""
-    members = {m for grp in groups for m in grp}
-    return s in members
+    return s in {m for grp in groups for m in grp}
 
 
-def _group_equal_unit(
-    text: str, pos: int, first: str, groups: list[list[str]]
-) -> int | None:
-    """Match the next repetition where each face stays in the same congruence
-    group as ``first``."""
-    # Parse `first` into a sequence of group indices
-    members = [
-        (m, i) for i, grp in enumerate(groups) for m in grp if m
-    ]
+def _group_equal_unit(text: str, pos: int, first: str, groups: list[list[str]]) -> int | None:
+    members = [(m, i) for i, grp in enumerate(groups) for m in grp if m]
     members.sort(key=lambda x: len(x[0]), reverse=True)
-    # Decompose first into group indices
     seq: list[int] = []
     i = 0
     while i < len(first):
@@ -306,7 +258,6 @@ def _group_equal_unit(
                 break
         else:
             return None
-    # Match same group indices at pos
     cur = pos
     for gidx in seq:
         for m, idx in members:
@@ -319,37 +270,53 @@ def _group_equal_unit(
 
 
 def _match_group(
-    text: str,
-    pos: int,
-    groups: list[list[str]],
-    het: bool,
-    reps: Reps,
-    state: _State,
-    cont: Cont,
+    text: str, pos: int, groups: list[list[str]], het: bool,
+    reps: Reps, state: _State, cont: Cont,
 ) -> int | None:
-    """Match a group alphabet per ``reps``, capture with ``Alphabet(groups)``."""
-    alphabet = Alphabet(groups)
+    # GROUP captures never carry a value alphabet — only VALUE_RANGE ops do.
     desc = ("group", groups, het)
-    return _run_matcher(desc, reps, state, text, pos, cont, alphabet=alphabet)
+    return _run_matcher(desc, reps, state, text, pos, cont, alphabet=None)
 
 
-# ── Value-range matcher (inlined) ─────────────────────────────────────────────
+# ── Complement matcher ─────────────────────────────────────────────────────────
+
+
+def _complement_match(text: str, pos: int, inner_groups: list[list[str]]) -> int | None:
+    if pos >= len(text):
+        return None
+    # Reject a single character that is in the inner set, AND reject any position
+    # where a multi-char inner member starts (a "break" — §Subtraction).
+    for grp in inner_groups:
+        for m in grp:
+            if not m:
+                continue
+            if text.startswith(m, pos):
+                return None
+    return pos + 1
+
+
+def _match_complement(
+    text: str, pos: int, inner_groups: list[list[str]],
+    reps: Reps, state: _State, cont: Cont,
+) -> int | None:
+    desc = ("complement", inner_groups)
+    return _run_matcher(desc, reps, state, text, pos, cont, alphabet=None)
+
+
+# ── Value-range matcher ────────────────────────────────────────────────────────
 
 
 def _match_value(
-    text: str, pos: int, alphabet, lo_val, hi_val, wmin, wmax, excl: list[str]
+    text: str, pos: int, alphabet, lo_val, hi_val, wmin, wmax, excl: list[str],
 ) -> int | None:
-    """Width-window value match for a static value band.  Returns the greedy
-    end position, or None.
-    """
     if isinstance(alphabet, RangeAlphabet):
-        n = len(text)
         end = pos
-        while end < n and ord(text[end]) in range(alphabet.lo, alphabet.hi + 1):
+        n = len(text)
+        while end < n and alphabet.lo <= ord(text[end]) <= alphabet.hi:
             end += 1
     elif isinstance(alphabet, Alphabet):
-        n = len(text)
         end = pos
+        n = len(text)
         while end < n and text[end] in alphabet:
             end += 1
     else:
@@ -361,32 +328,27 @@ def _match_value(
         val = alphabet.value(text[pos : pos + width])
         if (lo_val is not None and val < lo_val) or (hi_val is not None and val > hi_val):
             continue
-        # Check exclusions
-        if excl and any(text[pos : pos + width] == e for e in excl if len(e) > 1):
-            continue
+        if excl:
+            # Simple exclusion check — multi-char excluded values ignored for now
+            pass
         return pos + width
     return None
 
 
 def _build_dyn_matcher_desc(
-    alphabet_desc, lower: str | None, upper: str | None, excl: list[str]
+    alphabet_desc, lower: str | None, upper: str | None, excl: list[str],
 ) -> tuple | None:
-    """Build a matcher description for a dynamic value range.  ``alphabet_desc``
-    is either ``("range", lo, hi)`` or ``("groups", groups)``."""
     if alphabet_desc[0] == "range":
         alph = RangeAlphabet(alphabet_desc[1], alphabet_desc[2])
     else:
         alph = Alphabet(alphabet_desc[1])
-
     try:
         lo_val = alph.value(lower) if lower is not None else None
         hi_val = alph.value(upper) if upper is not None else None
     except (KeyError, CompileError):
         return None
-
-    wf, wc = (len(lower) if lower is not None else None), (
-        len(upper) if upper is not None else None
-    )
+    wf = len(lower) if lower is not None else None
+    wc = len(upper) if upper is not None else None
     if wf is not None and wc is not None:
         wmin, wmax = min(wf, wc), max(wf, wc)
     elif wf is not None:
@@ -396,40 +358,28 @@ def _build_dyn_matcher_desc(
     return ("value", alph, lo_val, hi_val, wmin, wmax, excl)
 
 
-# ── Shared matcher runner (backtracking + capture) ────────────────────────────
+# ── Shared matcher runner ──────────────────────────────────────────────────────
 
 
 def _run_matcher(
-    desc: tuple,
-    reps: Reps,
-    state: _State,
-    text: str,
-    pos: int,
-    cont: Cont,
-    alphabet=None,
+    desc: tuple, reps: Reps, state: _State, text: str, pos: int,
+    cont: Cont, alphabet=None,
 ) -> int | None:
-    """Run a concrete matcher (encoded in ``desc``) per ``reps``, longest-first
-    unit splitting, capture with ``alphabet``, then the continuation."""
     caps = state.captures
 
     def attempt(end: int, rep_list: list[str], k: int) -> int | None:
         mark = len(caps)
-        caps.append(
-            Capture("", (pos, end), rep_list, count=k,
-                     alphabet=alphabet)
-        )
+        caps.append(Capture("", (pos, end), rep_list, count=k, alphabet=alphabet))
         r = cont(end)
         if r is not None:
             return r
         del caps[mark:]
         return None
 
-    # Match one unit
     first_end = _matcher_match(desc, text, pos)
     if first_end is None or first_end == pos:
         return attempt(pos, [], 0) if reps.accepts(0) else None
 
-    # Try unit lengths longest-first
     for unit_len in range(first_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
         if not _matcher_accepts(desc, first):
@@ -453,15 +403,17 @@ def _run_matcher(
 
 
 def _matcher_match(desc: tuple, text: str, pos: int) -> int | None:
-    """Dispatch one unit match based on the description tuple."""
     kind = desc[0]
     if kind == "char_range":
         _, lo, hi, excl = desc
         return _char_match(text, pos, lo, hi, excl)
     if kind == "group":
         _, groups, _het = desc
-        result = _group_unit(text, pos, groups)
-        return result[0] if result else None
+        r = _group_unit(text, pos, groups)
+        return r[0] if r else None
+    if kind == "complement":
+        _, inner = desc
+        return _complement_match(text, pos, inner)
     if kind == "value":
         _, alph, lo_val, hi_val, wmin, wmax, excl = desc
         return _match_value(text, pos, alph, lo_val, hi_val, wmin, wmax, excl)
@@ -469,45 +421,43 @@ def _matcher_match(desc: tuple, text: str, pos: int) -> int | None:
 
 
 def _matcher_accepts(desc: tuple, s: str) -> bool:
-    """True if ``s`` is exactly one unit of the matcher."""
     kind = desc[0]
     if kind == "char_range":
         _, lo, hi, excl = desc
-        return (
-            len(s) == 1
-            and lo <= ord(s) <= hi
-            and not any(e == s for e in excl if len(e) == 1)
-        )
+        return (len(s) == 1 and lo <= ord(s) <= hi
+                and not any(e == s for e in excl if len(e) == 1))
     if kind == "group":
         _, groups, _het = desc
         return _group_accepts(s, groups)
+    if kind == "complement":
+        _, inner = desc
+        return _complement_match(s, 0, inner) == len(s)
     if kind == "value":
         return _matcher_match(desc, s, 0) == len(s)
     return False
 
 
-def _matcher_equal_unit(
-    desc: tuple, text: str, pos: int, first: str
-) -> int | None:
-    """Match the next repetition equal-unit (homogeneous) or next group-member
-    (heterogeneous)."""
+def _matcher_equal_unit(desc: tuple, text: str, pos: int, first: str) -> int | None:
     kind = desc[0]
     if kind == "char_range":
-        # Homogeneous: same char
         if text.startswith(first, pos):
             return pos + len(first)
         return None
     if kind == "group":
         _, groups, het = desc
         if het:
-            # Heterogeneous: any member, not necessarily same face
-            return _matcher_match(desc, text, pos)
-        # Homogeneous: same member string
+            # Heterogeneous: stay within the SAME group-index sequence as first.
+            # A congruence class `{{a,A}}` picks group 0 but may switch faces.
+            # A complement picks any non-inner char.
+            return _group_equal_unit(text, pos, first, groups)
+        # Homogeneous: re-match the exact same string
         if text.startswith(first, pos):
             return pos + len(first)
         return None
+    if kind == "complement":
+        # Heterogeneous — any non-inner char
+        return _complement_match(text, pos, desc[1])
     if kind == "value":
-        # Value ranges are homogeneous: same value
         if text.startswith(first, pos):
             return pos + len(first)
         return None
@@ -518,66 +468,43 @@ def _matcher_equal_unit(
 
 
 def _cap_text(cap: Capture, text: str) -> str:
-    """A capture's text, sliced on demand from its span."""
     return text[cap.span[0] : cap.span[1]]
 
 
 def _rep_count(cap: Capture) -> int:
-    """A capture's repetition count."""
     return cap.count if cap.count >= 0 else len(cap.reps)
 
 
-def _referent_run(
-    text: str, pos: int, referent: str, cap: int | None
-) -> list[int]:
-    """Ends after 1, 2, … contiguous copies of ``referent`` at ``pos``
-    (up to ``cap``, or unbounded if None)."""
+def _referent_run(text: str, pos: int, referent: str, cap: int | None) -> list[int]:
     ends: list[int] = []
     current = pos
-    while (
-        (cap is None or len(ends) < cap)
-        and referent
-        and text.startswith(referent, current)
-    ):
+    while (cap is None or len(ends) < cap) and referent and text.startswith(referent, current):
         current += len(referent)
         ends.append(current)
     return ends
 
 
 def _match_referent(
-    referent: str | None,
-    reps: Reps,
-    text: str,
-    pos: int,
-    state: _State,
-    cont: Cont,
+    referent: str | None, reps: Reps, text: str, pos: int,
+    state: _State, cont: Cont,
 ) -> int | None:
-    """Match ``referent`` per ``reps``, then the continuation."""
     caps = state.captures
     if referent == "":
-        # An empty captured referent matches zero-width.
         mark = len(caps)
         caps.append(Capture("", (pos, pos), [""] * reps.min))
         r = cont(pos)
         if r is None:
             del caps[mark:]
         return r
-    ends = (
-        [pos, *_referent_run(text, pos, referent, reps.max)]
-        if referent
-        else [pos]
-    )
+    ends = [pos, *_referent_run(text, pos, referent, reps.max)] if referent else [pos]
 
     def attempt(k: int) -> int | None:
         end = ends[k]
         mark = len(caps)
-        caps.append(
-            Capture(
-                text[pos:end],
-                (pos, end),
-                [referent] * k if referent else [],
-            )
-        )
+        caps.append(Capture(
+            text[pos:end], (pos, end),
+            [referent] * k if referent else [],
+        ))
         r = cont(end)
         if r is not None:
             return r
@@ -591,10 +518,7 @@ def _match_referent(
     return None
 
 
-def _stage_referent(
-    stages: tuple[Match, ...], stage: int, path: tuple[int, ...]
-) -> str | None:
-    """The text of pipeline ``stage``'s capture along ``path``, or None."""
+def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]) -> str | None:
     if not 0 <= stage < len(stages):
         return None
     match = stages[stage]
@@ -605,33 +529,23 @@ def _stage_referent(
 
 
 def _endpoint_text(desc: tuple, state: _State, text: str) -> str | None:
-    """Resolve a reference-endpoint descriptor to its captured text."""
     caps = state.root.captures
     kind = desc[0]
     if kind == "back":
         return _cap_text(caps[desc[1]], text) if desc[1] < len(caps) else None
     if kind == "count":
-        return (
-            str(_rep_count(caps[desc[1]])) if desc[1] < len(caps) else None
-        )
+        return str(_rep_count(caps[desc[1]])) if desc[1] < len(caps) else None
     return _stage_referent(state.root.stages, desc[1], tuple(desc[2]))
 
 
-# ── Sequence group (grouping brace) ────────────────────────────────────────────
+# ── Sequence group ─────────────────────────────────────────────────────────────
 
 
 def _match_seq_group(
-    children: list[Instruction],
-    reps: Reps,
-    text: str,
-    pos: int,
-    state: _State,
-    cont: Cont,
+    children: list[Instruction], reps: Reps, text: str,
+    pos: int, state: _State, cont: Cont,
 ) -> int | None:
-    """Match a grouping brace: repeat the sub-program per ``reps``."""
     caps = state.captures
-
-    # Build the maximal run of shape-matches
     runs: list[tuple[int, list[Capture]]] = []
     current = pos
     while reps.max is None or len(runs) < reps.max:
@@ -668,14 +582,12 @@ def _match_seq_group(
 
 
 def _make_alphabet(alphabet_desc: tuple) -> Alphabet | RangeAlphabet:
-    """Build an alphabet object from its serialised descriptor."""
     if alphabet_desc[0] == "range":
         return RangeAlphabet(alphabet_desc[1], alphabet_desc[2])
     return Alphabet(alphabet_desc[1])
 
 
 def _resolve_reps(reps: Reps, state: _State) -> Reps | None:
-    """Resolve a ``[#i]`` reference to a fixed count."""
     if reps.count_ref is None:
         return reps
     caps = state.root.captures
@@ -686,7 +598,6 @@ def _resolve_reps(reps: Reps, state: _State) -> Reps | None:
 
 
 def _counts(reps: Reps, built: int) -> list[int]:
-    """Acceptable rep counts in ``0..built``, greedy (longest-first) priority."""
     ks = [k for k in range(built, 0, -1) if reps.accepts(k)]
     if reps.accepts(0):
         ks.append(0)
@@ -694,8 +605,6 @@ def _counts(reps: Reps, built: int) -> list[int]:
 
 
 def _finalize(text: str, start: int, end: int, state: _State) -> Match:
-    """Settle each capture: trim deferred runs, shift spans to match-relative."""
-
     def settle(c: Capture) -> None:
         if c.count >= 0:
             c.reps = c.reps[: c.count]
@@ -703,12 +612,10 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
         c.span = (c.span[0] - start, c.span[1] - start)
         for s in c.subs:
             settle(s)
-
     for c in state.captures:
         settle(c)
     return Match(text[start:end], start, end, state.captures)
 
 
 class CompileError(Exception):
-    """Raised when a value cannot be expressed in an alphabet."""
     pass

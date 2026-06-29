@@ -14,6 +14,7 @@ from himark.models.opcodes import (
     ANCHOR,
     BACK_REF,
     CHAR,
+    COMPLEMENT,
     COUNT_REF,
     DYN_RANGE,
     GROUP,
@@ -220,6 +221,26 @@ def _ref_descriptor(ref: t.SemanticNode) -> tuple:
     raise CompileError(f"Unsupported bound reference: {type(ref).__name__}")
 
 
+# ── Value formatting ───────────────────────────────────────────────────────────
+
+
+def _format_value(alph: Alphabet, value: int, width: int) -> str:
+    """Format `value` as a canonical string of `width` in `alph` (most-significant
+    first, zero-padded with the alphabet's zero symbol)."""
+    zero = alph.groups[0][0]
+    chars: list[str] = []
+    for _ in range(width):
+        chars.append(zero)
+    v = value
+    pos = width - 1
+    while v > 0 and pos >= 0:
+        idx = v % alph.base
+        chars[pos] = alph.groups[idx][0]  # first member of the group
+        v //= alph.base
+        pos -= 1
+    return "".join(chars)
+
+
 # ── Group lowering (LiteralNode / UnionNode / GroupClassNode → groups) ────────
 
 
@@ -232,19 +253,47 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
         excl = _drop_excluded([[chr(c)] for c in range(lo, hi + 1)], node.exclusions)
         return excl, False
     if isinstance(node, t.UnionNode):
-        # Try to merge into one class; if not possible, flatten to groups
+        # Try to merge into one flat group class. If a sub-node is a value-range
+        # with multi-char endpoints (e.g. {0..9::9..12} → "12"), _groups raises.
+        # Fall back to flattening each option individually into value-strings.
         try:
             groups = _groups(node)
         except CompileError:
-            raise CompileError(f"Cannot lower union node as a group alphabet")
+            groups = []
+            for opt in node.options:
+                if isinstance(opt, t.ValueRangeNode):
+                    alph = _value_alphabet(opt.alpha)
+                    lo_static = _static_str(opt.lower)
+                    hi_static = _static_str(opt.upper)
+                    if lo_static is None or hi_static is None:
+                        raise CompileError("Cannot lower open-ended value range to groups")
+                    lo_val = _endpoint_value(alph, lo_static, "floor")
+                    hi_val = _endpoint_value(alph, hi_static, "ceiling")
+                    for val in range(lo_val, hi_val + 1):
+                        width = alph.canonical_len(val)
+                        # Build the canonical representation of `val` in `alph`
+                        s = _format_value(alph, val, width)
+                        groups.append([s])
+                elif isinstance(opt, t.LiteralNode):
+                    groups.append([opt.content])
+                elif isinstance(opt, t.CharRangeNode):
+                    lo, hi = ord(opt.start), ord(opt.end)
+                    for c in range(lo, hi + 1):
+                        groups.append([chr(c)])
+                else:
+                    raise CompileError(f"Cannot lower {type(opt).__name__} to groups")
         return groups, False
     if isinstance(node, t.GroupClassNode):
         return [list(g) for g in node.groups], True
+    if isinstance(node, t.ValueRangeNode):
+        # Lower the value-range band into its resolved sub-alphabet groups
+        try:
+            groups = _sliced_groups(node)
+        except CompileError:
+            # If we can't slice (e.g. has exclusions), fall through to error
+            raise CompileError("Cannot lower ValueRangeNode as a group alphabet")
+        return groups, False
     if isinstance(node, t.ComplementNode):
-        # Complement: everything BUT inner. We compile it as a virtual group.
-        # But the opcode model doesn't have a complement opcode — it uses
-        # the GROUP opcode with het=True and a different matcher. For now,
-        # we raise — complement needs a special matcher that we'll handle below.
         raise CompileError("Complement not expressible as group list")
     raise CompileError(
         f"Cannot lower {type(node).__name__} as a group alphabet"
@@ -359,26 +408,11 @@ def compile_pattern(root: t.RootNode) -> Program:
                 )
                 continue
 
-            # Complement — compile inner as a group with het=True
-            # (The complement behavior is handled by the VM's het flag)
+            # Complement — match anything NOT in the inner alphabet
             if isinstance(sem, t.ComplementNode):
-                # For complement, we compile the inner as a group and mark het=True
                 inner_groups, _ = _lower_to_groups(sem.inner)
-                # We need a special marker that this is a complement.
-                # The VM matches "anything NOT in inner" with het flag.
-                # We'll use a negative groups convention: empty groups + het=True
-                # means "complement of the inner groups".
-                # Actually, let's use the inner groups + a special flag.
-                # The simplest approach: use the inner groups and let the VM know
-                # this is a complement via a convention. For now, we pass the inner
-                # as groups with het=True and also store the complement info.
-                # BUT the current GROUP opcode doesn't handle complement.
-                # Let me add a COMPLEMENT opcode or extend GROUP...
-                # For now, let's raise and handle complement as a special case.
-                raise CompileError(
-                    "Complement not yet supported in opcode VM — "
-                    "needs COMPLEMENT opcode or GROUP extension"
-                )
+                elements.append((COMPLEMENT, inner_groups, reps))
+                continue
 
             # Group (LiteralNode, CharRangeNode, UnionNode, GroupClassNode)
             groups, het = _lower_to_groups(sem)
