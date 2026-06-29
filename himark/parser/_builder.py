@@ -66,13 +66,15 @@ def _atom_is_literal(atom: GRAMMARParser.AtomContext) -> bool:
     )
 
 
-
-
 def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
     atoms = term.atom()
     if all(_atom_is_literal(a) for a in atoms):
         return unescape(term.getText())
-    if len(atoms) == 1 and atoms[0].braceGroup() is not None and atoms[0].count() is None:
+    if (
+        len(atoms) == 1
+        and atoms[0].braceGroup() is not None
+        and atoms[0].count() is None
+    ):
         return _brace_singleton(atoms[0].braceGroup())
     return None
 
@@ -103,13 +105,15 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
     return [a.getText().strip() for a in operand_band.universe().arm()]
 
 
-#Ã¢â€â‚¬Ã¢â€â‚¬ Reference / Anchor resolution (unchanged from original) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+# Ã¢â€â‚¬Ã¢â€â‚¬ Reference / Anchor resolution (unchanged from original) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 
 def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNode:
     sigil = ref.DOLLAR() or ref.HASH()
     ints = ref.INT()
-    leading_int = bool(ints) and ints[0].getSymbol().tokenIndex < sigil.getSymbol().tokenIndex
+    leading_int = (
+        bool(ints) and ints[0].getSymbol().tokenIndex < sigil.getSymbol().tokenIndex
+    )
     if leading_int:
         stage = int(ints[0].getText())
         index = int(ints[1].getText()) if len(ints) == 2 else None
@@ -130,7 +134,9 @@ def _resolve_anchor_atom(anchor: GRAMMARParser.AnchorContext) -> t.AnchorNode:
     return t.AnchorNode(at="line_start" if is_start else "line_end")
 
 
-def _count_int(term: GRAMMARParser.CountTermContext, count: GRAMMARParser.CountContext) -> int:
+def _count_int(
+    term: GRAMMARParser.CountTermContext, count: GRAMMARParser.CountContext
+) -> int:
     if term.INT() is None:
         raise CompileError(f"Invalid count expression: {count.getText()}")
     return int(term.INT().getText())
@@ -191,7 +197,9 @@ class _AstBuilder(GRAMMARVisitor):
             tree = _parse_pattern_tree("{" + self._env[name] + "}")
             brace = tree.pattern().factor()[0].braceGroup()
             if brace is None:
-                raise CompileError(f"variable @{name} is not a universe: {self._env[name]!r}")
+                raise CompileError(
+                    f"variable @{name} is not a universe: {self._env[name]!r}"
+                )
             self._parsed_env[name] = brace.band()
         return self._parsed_env[name]
 
@@ -199,7 +207,9 @@ class _AstBuilder(GRAMMARVisitor):
         if name not in self._env:
             return t.LiteralNode(content="@" + name)
         if name in self._resolving:
-            raise CompileError(f"circular variable definition: @{name} references itself")
+            raise CompileError(
+                f"circular variable definition: @{name} references itself"
+            )
         self._resolving.add(name)
         try:
             return self.visit(self._get_parsed_body(name))
@@ -222,9 +232,7 @@ class _AstBuilder(GRAMMARVisitor):
                 _emit_semantic(elements, self.visit(factor.braceGroup().band()), reps)
             elif factor.complement() is not None:
                 band = factor.complement().braceGroup().band()
-                _emit_semantic(
-                    elements, t.ComplementNode(inner=self.visit(band)), reps
-                )
+                _emit_semantic(elements, t.ComplementNode(inner=self.visit(band)), reps)
             else:  # literalRun
                 if count_ctx is not None:
                     raise CompileError(
@@ -253,10 +261,14 @@ class _AstBuilder(GRAMMARVisitor):
         options = [self._resolve_band_arm(alpha, arm) for arm in spec.arm()]
         return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
-    def visitBareAlphabet(self, ctx: GRAMMARParser.BareAlphabetContext) -> t.SemanticNode:
+    def visitBareAlphabet(
+        self, ctx: GRAMMARParser.BareAlphabetContext
+    ) -> t.SemanticNode:
         return self._resolve_universe(ctx.universe())
 
-    def visitSequenceBrace(self, ctx: GRAMMARParser.SequenceBraceContext) -> t.SemanticNode:
+    def visitSequenceBrace(
+        self, ctx: GRAMMARParser.SequenceBraceContext
+    ) -> t.SemanticNode:
         """Build a grouping/sequence brace from its structurally-typed children.
 
         The grammar's `sequence` rule already separates literal text runs (`seqText`)
@@ -281,7 +293,9 @@ class _AstBuilder(GRAMMARVisitor):
             node = t.ComplementNode(inner=self.visit(inner))
         return t.SeqItem(node=node, reps=reps)
 
-    def _seq_text(self, ctx: GRAMMARParser.SeqTextContext, items: list[t.SeqItem]) -> None:
+    def _seq_text(
+        self, ctx: GRAMMARParser.SeqTextContext, items: list[t.SeqItem]
+    ) -> None:
         """A run of `seqAtom`s: literal text folds into one `LIT` item, while a macro,
         reference, or anchor breaks the run into its own resolved item."""
         buf: list[str] = []
@@ -289,13 +303,19 @@ class _AstBuilder(GRAMMARVisitor):
         def flush() -> None:
             if buf:
                 content = _resolve_leaf_escapes("".join(buf))
-                items.append(t.SeqItem(node=t.LiteralNode(content=content), literal=True))
+                items.append(
+                    t.SeqItem(node=t.LiteralNode(content=content), literal=True)
+                )
                 buf.clear()
 
         for atom in ctx.seqAtom():
             if atom.macro() is not None:
                 flush()
-                items.append(t.SeqItem(node=self._resolve_variable(atom.macro().NAME().getText())))
+                items.append(
+                    t.SeqItem(
+                        node=self._resolve_variable(atom.macro().NAME().getText())
+                    )
+                )
             elif atom.reference() is not None:
                 flush()
                 items.append(t.SeqItem(node=_resolve_reference_atom(atom.reference())))
@@ -310,7 +330,9 @@ class _AstBuilder(GRAMMARVisitor):
     #     shapes, not dispatch routing Ã¢â‚¬â€ universe arms and band arms share the
     #     same ArmContext types but need different construction) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-    def _resolve_band_arm(self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext) -> t.ValueRangeNode:
+    def _resolve_band_arm(
+        self, alpha: t.SemanticNode, arm: GRAMMARParser.ArmContext
+    ) -> t.ValueRangeNode:
         if isinstance(arm, GRAMMARParser.SingleContext):
             value, ref = self._band_endpoint(arm.term())
             return t.ValueRangeNode.band_arm(alpha, value, ref, value, ref)
@@ -325,7 +347,9 @@ class _AstBuilder(GRAMMARVisitor):
             upper, upper_ref = self._band_endpoint(arm.term())
         return t.ValueRangeNode.band_arm(alpha, lower, lower_ref, upper, upper_ref)
 
-    def _band_endpoint(self, term: GRAMMARParser.TermContext) -> tuple[str | None, t.SemanticNode | None]:
+    def _band_endpoint(
+        self, term: GRAMMARParser.TermContext
+    ) -> tuple[str | None, t.SemanticNode | None]:
         atoms = term.atom()
         if len(atoms) == 1 and atoms[0].reference() is not None:
             return None, _resolve_reference_atom(atoms[0].reference())
@@ -362,7 +386,9 @@ class _AstBuilder(GRAMMARVisitor):
 
     # Ã¢â€â‚¬Ã¢â€â‚¬ Universe Ã¢â€ â€™ SemanticNode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-    def _resolve_universe(self, universe: GRAMMARParser.UniverseContext) -> t.SemanticNode:
+    def _resolve_universe(
+        self, universe: GRAMMARParser.UniverseContext
+    ) -> t.SemanticNode:
         arms: list[GRAMMARParser.ArmContext] = []
         exclusions: list[str] = []
         for arm in universe.arm():
@@ -375,7 +401,9 @@ class _AstBuilder(GRAMMARVisitor):
             raise CompileError(f"Empty brace group: {{{universe.getText()}}}")
         return self._classify_arms(arms, exclusions)
 
-    def _classify_arms(self, arms: list[GRAMMARParser.ArmContext], exclusions: list[str]) -> t.SemanticNode:
+    def _classify_arms(
+        self, arms: list[GRAMMARParser.ArmContext], exclusions: list[str]
+    ) -> t.SemanticNode:
         if len(arms) == 1:
             return _attach_exclusions(self.visit(arms[0]), exclusions)
 
@@ -403,7 +431,11 @@ class _AstBuilder(GRAMMARVisitor):
         if len(atoms) == 1 and atoms[0].macro() is not None:
             return self._resolve_variable(atoms[0].macro().NAME().getText())
 
-        if len(atoms) == 1 and atoms[0].braceGroup() is not None and atoms[0].count() is None:
+        if (
+            len(atoms) == 1
+            and atoms[0].braceGroup() is not None
+            and atoms[0].count() is None
+        ):
             sval = _brace_singleton(atoms[0].braceGroup())
             if sval is not None:
                 return t.LiteralNode(content=sval)
@@ -412,6 +444,6 @@ class _AstBuilder(GRAMMARVisitor):
         if all(_atom_is_literal(a) for a in atoms):
             return t.LiteralNode(content=unescape(term.getText()))
 
-        raise CompileError("a grouping brace is not allowed inside a band or range here")
-
-
+        raise CompileError(
+            "a grouping brace is not allowed inside a band or range here"
+        )

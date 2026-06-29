@@ -24,7 +24,6 @@ from pathlib import Path
 
 from contextlib import nullcontext
 
-import pytest
 
 # (no Rust backend — Python only)
 from himark import engine, parser
@@ -135,7 +134,6 @@ def test_real_slice_reconciles_a_known_twin():
 def _parse_csv(text: str) -> list[list[str]]:
     """CSV-parse `text` directly (no second dedup pass, unlike `rows`)."""
     return list(csv.reader(io.StringIO(text)))
-
 
 
 # ── Runbook ───────────────────────────────────────────────────────────────────

@@ -69,10 +69,7 @@ def _alphabet_desc(node: t.SemanticNode) -> tuple:
     if isinstance(node, t.CharRangeNode):
         return ("range", ord(node.start), ord(node.end))
     # ValueRangeNode over @uni with single-char endpoints
-    if (
-        isinstance(node, t.ValueRangeNode)
-        and isinstance(node.alpha, t.CharRangeNode)
-    ):
+    if isinstance(node, t.ValueRangeNode) and isinstance(node.alpha, t.CharRangeNode):
         lo = _static_str(node.lower)
         hi = _static_str(node.upper)
         if lo is not None and len(lo) == 1 and hi is not None and len(hi) == 1:
@@ -87,9 +84,7 @@ def _static_str(end: "str | t.SemanticNode") -> str | None:
     return end if isinstance(end, str) else None
 
 
-def _drop_excluded(
-    groups: list[list[str]], exclusions: list[str]
-) -> list[list[str]]:
+def _drop_excluded(groups: list[list[str]], exclusions: list[str]) -> list[list[str]]:
     """Remove excluded symbols from groups."""
     if not exclusions:
         return groups
@@ -153,9 +148,7 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
                 f"Range {node.start!r}..{node.end!r} is too large "
                 f"to use as a value bound"
             )
-        return _drop_excluded(
-            [[chr(c)] for c in range(lo, hi + 1)], node.exclusions
-        )
+        return _drop_excluded([[chr(c)] for c in range(lo, hi + 1)], node.exclusions)
     if isinstance(node, t.UnionNode):
         groups = [g for o in node.options for g in _groups(o)]
         return _drop_excluded(groups, node.exclusions)
@@ -202,9 +195,7 @@ def _sliced_groups(node: t.ValueRangeNode) -> list[list[str]]:
 # ── Value-view computation ────────────────────────────────────────────────────
 
 
-def _endpoint_value(
-    alph: Alphabet | RangeAlphabet, s: str, which: str
-) -> int:
+def _endpoint_value(alph: Alphabet | RangeAlphabet, s: str, which: str) -> int:
     """The positional value of bound endpoint ``s``."""
     bad = next((c for c in s if c not in alph), None)
     if bad is not None:
@@ -233,7 +224,11 @@ def _value_view(node: t.ValueRangeNode) -> tuple:
     else:
         wmin, wmax = 1, wc
 
-    alphabet_desc = ("range", alph.lo, alph.hi) if isinstance(alph, RangeAlphabet) else ("groups", alph.groups)
+    alphabet_desc = (
+        ("range", alph.lo, alph.hi)
+        if isinstance(alph, RangeAlphabet)
+        else ("groups", alph.groups)
+    )
     return alphabet_desc, lo, hi, wmin, wmax, _normalize_exclusions(node.exclusions)
 
 
@@ -303,7 +298,9 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
                     lo_static = _static_str(opt.lower)
                     hi_static = _static_str(opt.upper)
                     if lo_static is None or hi_static is None:
-                        raise CompileError("Cannot lower open-ended value range to groups")
+                        raise CompileError(
+                            "Cannot lower open-ended value range to groups"
+                        )
                     lo_val = _endpoint_value(alph, lo_static, "floor")
                     hi_val = _endpoint_value(alph, hi_static, "ceiling")
                     for val in range(lo_val, hi_val + 1):
@@ -332,9 +329,8 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
         return groups, False
     if isinstance(node, t.ComplementNode):
         raise CompileError("Complement not expressible as group list")
-    raise CompileError(
-        f"Cannot lower {type(node).__name__} as a group alphabet"
-    )
+    raise CompileError(f"Cannot lower {type(node).__name__} as a group alphabet")
+
 
 # ── Per-construct lowering ────────────────────────────────────────────────────────────
 # The single map from a resolved SemanticNode to opcodes. Called by the CST
@@ -362,7 +358,11 @@ def _emit_semantic(
     if isinstance(sem, t.SequenceNode):  # grouping brace -> one capture, sub-elements
         sub: list[Instruction] = []
         for item in sem.items:
-            if item.literal and isinstance(item.node, t.LiteralNode) and item.node.content:
+            if (
+                item.literal
+                and isinstance(item.node, t.LiteralNode)
+                and item.node.content
+            ):
                 sub.append((LIT, item.node.content))
             else:
                 _emit_semantic(sub, item.node, item.reps)
@@ -415,11 +415,16 @@ def _emit_value_range(
         and (high_s := _static_str(sem.upper)) is not None
         and len(high_s) == 1
     ):
-        elements.append((CHAR, ord(low_s), ord(high_s), _normalize_exclusions(sem.exclusions), reps))
+        elements.append(
+            (CHAR, ord(low_s), ord(high_s), _normalize_exclusions(sem.exclusions), reps)
+        )
         return
     # General static value band → VALUE_RANGE
     alphabet_desc, lo_val, hi_val, wmin, wmax, excl = _value_view(sem)
-    elements.append((VALUE_RANGE, alphabet_desc, lo_val, hi_val, wmin, wmax, excl, reps))
+    elements.append(
+        (VALUE_RANGE, alphabet_desc, lo_val, hi_val, wmin, wmax, excl, reps)
+    )
+
 
 # ── Template compilation ──────────────────────────────────────────────────────
 

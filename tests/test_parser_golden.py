@@ -20,7 +20,6 @@ from typing import Any
 import pytest
 
 from himark import parser
-from himark.models.exceptions import CompileError
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "himark" / "scripts"
@@ -30,6 +29,7 @@ _UPDATE = bool(os.environ.get("HIMARK_UPDATE_GOLDEN"))
 
 
 # ── Compiled-output canonicalisation ─────────────────────────────────────────────────
+
 
 def _step_to_json(step) -> dict:
     """Canonicalise a compiled `Program` or `Template` step to a JSON dict.
@@ -132,6 +132,7 @@ SCRIPT_FILES = sorted(p.name for p in SCRIPTS.glob("*.hmk"))
 
 # ── Corpus builders ──────────────────────────────────────────────────────────
 
+
 def _build_pattern_compiled() -> dict[str, Any]:
     return {pid: _canon_steps(parser.parse(src)) for pid, src in PATTERNS}
 
@@ -171,15 +172,12 @@ def _check_golden(built: dict[str, Any], golden_path: Path, label: str) -> None:
 
 # ── Tests ────────────────────────────────────────────────────────────────────
 
+
 def test_pattern_compiled_golden():
     """The parser's compiled output over the pattern corpus matches its pin."""
-    _check_golden(
-        _build_pattern_compiled(), GOLDEN / "patterns.json", "pattern"
-    )
+    _check_golden(_build_pattern_compiled(), GOLDEN / "patterns.json", "pattern")
 
 
 def test_script_compiled_golden():
     """The parser's compiled output over every shipped `.hmk` matches its pin."""
-    _check_golden(
-        _build_script_compiled(), GOLDEN / "scripts.json", "script"
-    )
+    _check_golden(_build_script_compiled(), GOLDEN / "scripts.json", "script")

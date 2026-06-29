@@ -111,6 +111,7 @@ Instruction: TypeAlias = tuple
 
 # ── Compiled program ───────────────────────────────────────────────────────────
 
+
 # `weakref_slot` lets the engine's `Runtime` cache the per-backend handle off the
 # Program (keyed by identity, evicted when the Program dies). It is not frozen
 # because the pipeline runner sets `fixed_point` on a statement's first step after
@@ -124,4 +125,3 @@ class Program:
     elements: tuple[Instruction, ...]
     groups: int = 0  # total capture group count (for allocation)
     fixed_point: bool = False  # <=> arrow
-

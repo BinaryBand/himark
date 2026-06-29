@@ -88,7 +88,17 @@ def find_matches(
 # Opcodes whose last operand is a reps spec (so it is baked). LIT and ANCHOR carry no
 # reps. The order of the other operands is unchanged — only their *values* are baked.
 _REPS_OPCODES = frozenset(
-    {CHAR, GROUP, COMPLEMENT, BACK_REF, COUNT_REF, STAGE_REF, VALUE_RANGE, DYN_RANGE, SEQ_GROUP}
+    {
+        CHAR,
+        GROUP,
+        COMPLEMENT,
+        BACK_REF,
+        COUNT_REF,
+        STAGE_REF,
+        VALUE_RANGE,
+        DYN_RANGE,
+        SEQ_GROUP,
+    }
 )
 
 
@@ -200,15 +210,22 @@ def _run_program(
 
     if opcode == DYN_RANGE:
         (
-            alph, lo_static, hi_static,
-            lo_ref, hi_ref, excl_list, reps_spec,
+            alph,
+            lo_static,
+            hi_static,
+            lo_ref,
+            hi_ref,
+            excl_list,
+            reps_spec,
         ) = args
         reps = _resolve_reps(reps_spec, state)
         if reps is None:
             return None
         lower = lo_static if lo_ref is None else _endpoint_text(lo_ref, state, text)
         upper = hi_static if hi_ref is None else _endpoint_text(hi_ref, state, text)
-        if (lo_ref is not None and lower is None) or (hi_ref is not None and upper is None):
+        if (lo_ref is not None and lower is None) or (
+            hi_ref is not None and upper is None
+        ):
             return None
         matcher = _build_dyn_matcher(alph, lower, upper, excl_list)
         if matcher is None:
@@ -261,8 +278,14 @@ def _char_match(text: str, pos: int, lo: int, hi: int, excl) -> int | None:
 
 
 def _match_char_range(
-    text: str, pos: int, lo: int, hi: int, excl,
-    reps: Reps, state: _State, cont: Cont,
+    text: str,
+    pos: int,
+    lo: int,
+    hi: int,
+    excl,
+    reps: Reps,
+    state: _State,
+    cont: Cont,
 ) -> int | None:
     return _run_matcher(
         _CharMatcher(lo, hi, excl), reps, state, text, pos, cont, alphabet=None
@@ -349,8 +372,16 @@ class _ValueMatcher:
         self.excl = excl
 
     def match(self, text: str, pos: int) -> int | None:
-        return _match_value(text, pos, self.alph, self.lo_val, self.hi_val,
-                            self.wmin, self.wmax, self.excl)
+        return _match_value(
+            text,
+            pos,
+            self.alph,
+            self.lo_val,
+            self.hi_val,
+            self.wmin,
+            self.wmax,
+            self.excl,
+        )
 
     def accepts(self, s: str) -> bool:
         return self.match(s, 0) == len(s)
@@ -396,8 +427,13 @@ def _group_equal_unit(text: str, pos: int, first: str, gm: _GroupMatcher) -> int
 
 
 def _match_group(
-    text: str, pos: int, gm: "_GroupMatcher", het: bool,
-    reps: Reps, state: _State, cont: Cont,
+    text: str,
+    pos: int,
+    gm: "_GroupMatcher",
+    het: bool,
+    reps: Reps,
+    state: _State,
+    cont: Cont,
 ) -> int | None:
     # GROUP captures never carry a value alphabet — only VALUE_RANGE ops do.
     return _run_matcher(gm, reps, state, text, pos, cont, alphabet=None)
@@ -421,8 +457,12 @@ def _complement_match(text: str, pos: int, inner_groups: list[list[str]]) -> int
 
 
 def _match_complement(
-    text: str, pos: int, inner_groups: list[list[str]],
-    reps: Reps, state: _State, cont: Cont,
+    text: str,
+    pos: int,
+    inner_groups: list[list[str]],
+    reps: Reps,
+    state: _State,
+    cont: Cont,
 ) -> int | None:
     return _run_matcher(
         _ComplementMatcher(inner_groups), reps, state, text, pos, cont, alphabet=None
@@ -433,7 +473,14 @@ def _match_complement(
 
 
 def _match_value(
-    text: str, pos: int, alphabet, lo_val, hi_val, wmin, wmax, excl,
+    text: str,
+    pos: int,
+    alphabet,
+    lo_val,
+    hi_val,
+    wmin,
+    wmax,
+    excl,
 ) -> int | None:
     if isinstance(alphabet, RangeAlphabet):
         end = pos
@@ -460,17 +507,24 @@ def _match_value(
             if width == 1 and any(lo2 <= candidate <= hi2 for lo2, hi2 in ranges):
                 continue
             # Check literals
-            if any(candidate.startswith(lit) and len(candidate) == len(lit) for lit in literals):
+            if any(
+                candidate.startswith(lit) and len(candidate) == len(lit)
+                for lit in literals
+            ):
                 continue
         val = alphabet.value(candidate)
-        if (lo_val is not None and val < lo_val) or (hi_val is not None and val > hi_val):
+        if (lo_val is not None and val < lo_val) or (
+            hi_val is not None and val > hi_val
+        ):
             continue
         return pos + width
     return None
 
 
 def _build_dyn_matcher(
-    alph: "Alphabet | RangeAlphabet", lower: str | None, upper: str | None,
+    alph: "Alphabet | RangeAlphabet",
+    lower: str | None,
+    upper: str | None,
     excl,
 ) -> "_ValueMatcher | None":
     # `alph` is baked by `prepare`; only the endpoint *values* vary per match (the
@@ -495,8 +549,13 @@ def _build_dyn_matcher(
 
 
 def _run_matcher(
-    matcher, reps: Reps, state: _State, text: str, pos: int,
-    cont: Cont, alphabet=None,
+    matcher,
+    reps: Reps,
+    state: _State,
+    text: str,
+    pos: int,
+    cont: Cont,
+    alphabet=None,
 ) -> int | None:
     caps = state.captures
 
@@ -535,9 +594,6 @@ def _run_matcher(
     return attempt(pos, [], 0) if reps.accepts(0) else None
 
 
-
-
-
 # ── Self-references ────────────────────────────────────────────────────────────
 
 
@@ -552,15 +608,23 @@ def _rep_count(cap: Capture) -> int:
 def _referent_run(text: str, pos: int, referent: str, cap: int | None) -> list[int]:
     ends: list[int] = []
     current = pos
-    while (cap is None or len(ends) < cap) and referent and text.startswith(referent, current):
+    while (
+        (cap is None or len(ends) < cap)
+        and referent
+        and text.startswith(referent, current)
+    ):
         current += len(referent)
         ends.append(current)
     return ends
 
 
 def _match_referent(
-    referent: str | None, reps: Reps, text: str, pos: int,
-    state: _State, cont: Cont,
+    referent: str | None,
+    reps: Reps,
+    text: str,
+    pos: int,
+    state: _State,
+    cont: Cont,
 ) -> int | None:
     caps = state.captures
     if referent == "":
@@ -575,10 +639,13 @@ def _match_referent(
     def attempt(k: int) -> int | None:
         end = ends[k]
         mark = len(caps)
-        caps.append(Capture(
-            text[pos:end], (pos, end),
-            [referent] * k if referent else [],
-        ))
+        caps.append(
+            Capture(
+                text[pos:end],
+                (pos, end),
+                [referent] * k if referent else [],
+            )
+        )
         r = cont(end)
         if r is not None:
             return r
@@ -592,7 +659,9 @@ def _match_referent(
     return None
 
 
-def _stage_referent(stages: tuple[Match, ...], stage: int, path: tuple[int, ...]) -> str | None:
+def _stage_referent(
+    stages: tuple[Match, ...], stage: int, path: tuple[int, ...]
+) -> str | None:
     if not 0 <= stage < len(stages):
         return None
     match = stages[stage]
@@ -616,8 +685,12 @@ def _endpoint_text(desc: tuple, state: _State, text: str) -> str | None:
 
 
 def _match_seq_group(
-    children: list[Instruction], reps: Reps, text: str,
-    pos: int, state: _State, cont: Cont,
+    children: list[Instruction],
+    reps: Reps,
+    text: str,
+    pos: int,
+    state: _State,
+    cont: Cont,
 ) -> int | None:
     caps = state.captures
     runs: list[tuple[int, list[Capture]]] = []
@@ -633,8 +706,7 @@ def _match_seq_group(
     def attempt(k: int) -> int | None:
         end = pos if k == 0 else runs[k - 1][0]
         rep_texts = [
-            text[(pos if i == 0 else runs[i - 1][0]) : runs[i][0]]
-            for i in range(k)
+            text[(pos if i == 0 else runs[i - 1][0]) : runs[i][0]] for i in range(k)
         ]
         subs = [c for i in range(k) for c in runs[i][1]]
         mark = len(caps)
@@ -686,6 +758,7 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
         c.span = (c.span[0] - start, c.span[1] - start)
         for s in c.subs:
             settle(s)
+
     for c in state.captures:
         settle(c)
     return Match(text[start:end], start, end, state.captures)

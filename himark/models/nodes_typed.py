@@ -236,7 +236,9 @@ class StageRefNode:
 
 
 def reference_from_view(
-    is_count: bool, stage: int | None, index: int | None,
+    is_count: bool,
+    stage: int | None,
+    index: int | None,
 ) -> BackRefNode | CountRefNode | StageRefNode:
     """Build the right reference node from a front-end's parsed fields.
 

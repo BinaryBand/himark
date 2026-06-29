@@ -25,7 +25,6 @@ The branches render two ways, neither privileged:
   between branches kept verbatim (in-place transform).
 """
 
-
 from himark.engine._render import render as _render
 from himark.engine._types import Match
 from himark.engine._vm import find_matches as _vm_find_matches, prepare
@@ -133,7 +132,8 @@ def _transform(
 
 
 def deltas(
-    steps: list[Step], target: str,
+    steps: list[Step],
+    target: str,
 ) -> list[tuple[int, int, str]]:
     """The branches as (start, end, text): each surviving first-query match's
     source span and its transformed result. `execute` lists the texts; `splice`

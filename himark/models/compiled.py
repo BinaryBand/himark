@@ -87,9 +87,6 @@ def _expr_to_json(e: Expr) -> dict:
     return {"filter": e.name, "src": _expr_to_json(e.src)}
 
 
-
-
-
 # ── Compiled steps ────────────────────────────────────────────────────────────
 
 
@@ -127,8 +124,6 @@ class Template:
                 for p in self.parts
             ],
         }
-
-
 
 
 # A compiled pipeline step: a matcher program or a render template.
