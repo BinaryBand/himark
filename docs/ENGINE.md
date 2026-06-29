@@ -53,7 +53,7 @@ for (start, end, replacement) in matches:
 out += target[last : ]            # the tail after the last match
 ```
 
-**Fixed-point statements.** Some statements carry a flag meaning "keep splicing until nothing changes" (the document reaches a *fixed point*). Run the splice, compare to the input; if different, run it again on the new text; repeat. Two safety rails matter: cap the number of rounds, and cap the output size -- a rule that grows or oscillates must error out instead of looping forever.
+**Fixed-point statements.** Some statements carry a flag meaning "keep splicing until nothing changes" (the document reaches a *fixed point*). Run the splice, compare to the input; if different, run it again on the new text; repeat. Two safety rails matter: cap the number of rounds, and cap the output size -- a rule that grows or oscillates must error out instead of looping forever. The flag lives on the *first step* of the statement -- read `steps[0].fixed_point` rather than a statement-level wrapper.
 
 ---
 
@@ -99,6 +99,8 @@ The clean way to handle this is **continuation-passing**. Instead of each opcode
               return result            # this length worked -- done
       return None                      # nothing worked -- caller will back up
 ```
+
+The closure `continuation(end)` can also be expressed without a closure by passing the full instruction list and an index: call `run(elements, next_idx, end)` instead of `continuation(end)`. This is identical in effect and avoids closure borrow conflicts in languages without garbage collection.
 
 **Tentative writes.** While exploring, an opcode that captures text appends a record, calls the continuation, and -- if the continuation fails -- **removes** that record before trying again. Append, recurse, roll back on failure. Centralise that push/try/rollback dance in one helper; you'll reach for it everywhere.
 
@@ -150,7 +152,9 @@ Here's the idea that ties query and template steps together. Each step doesn't j
   step 2 (template)  "{{ year }}/{{ month }}"  reads stage[0]'s captures
 ```
 
-Templates add one twist: a moustache marks **where its value landed** in the output, and that span becomes its own branch flowing into the next step. So a template can carve the document into pieces and route each piece down the rest of the line independently. Track the output spans of each moustache and recurse the remaining steps over each -- that's the whole mechanism.
+Templates add one twist: a moustache marks **where its value landed** in the output, and that span becomes its own branch flowing into the next step. So a template can carve the document into pieces and route each piece down the rest of the line independently. Track the output spans of each moustache and recurse the remaining steps over each -- that's the whole mechanism. If a template step has no moustache expressions at all, its entire output is treated as one anonymous stage and handed to the next step as a unit -- no branching.
+
+**The committed flag.** When a Program step is running inside an already-matched region -- after a template or another program step has committed to a match -- it should pass through any sub-region where it finds no matches rather than signalling failure. Call this mode `committed`. Set it to `false` at the outermost scan level (a no-match means the match simply does not contribute a delta), and to `true` once any earlier step in the chain has committed to a match (a no-match means pass through unchanged). A Template step always passes `committed=true` to subsequent steps because the template has already emitted its text.
 
 ---
 

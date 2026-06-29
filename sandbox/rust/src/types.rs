@@ -142,10 +142,13 @@ impl Alphabet {
 pub struct State {
     pub captures: Vec<Capture>,
     pub stages: Vec<HMatch>,
+    // Back-refs inside a SEQ_GROUP child see only captures[0..root_len].
+    // usize::MAX means "no restriction" (top-level, outside any SEQ_GROUP).
+    pub root_len: usize,
 }
 
 impl State {
     pub fn new(stages: Vec<HMatch>) -> Self {
-        State { captures: Vec::new(), stages }
+        State { captures: Vec::new(), stages, root_len: usize::MAX }
     }
 }

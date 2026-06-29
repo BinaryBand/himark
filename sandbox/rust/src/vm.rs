@@ -301,7 +301,8 @@ fn resolve_referent_desc(desc: &RefDesc, state: &State, text: &str) -> Option<St
 }
 
 fn resolve_back(idx: usize, state: &State, text: &str) -> Option<String> {
-    if idx < state.captures.len() {
+    let limit = state.root_len.min(state.captures.len());
+    if idx < limit {
         let span = state.captures[idx].span;
         Some(text[span.0..span.1].to_string())
     } else {
@@ -310,7 +311,8 @@ fn resolve_back(idx: usize, state: &State, text: &str) -> Option<String> {
 }
 
 fn resolve_count(idx: usize, state: &State) -> Option<String> {
-    if idx < state.captures.len() {
+    let limit = state.root_len.min(state.captures.len());
+    if idx < limit {
         Some(state.captures[idx].rep_count().to_string())
     } else {
         None
@@ -332,7 +334,8 @@ fn resolve_stage(stage_idx: usize, path: &[usize], state: &State) -> Option<Stri
 
 fn resolve_reps(reps: &Reps, state: &State) -> Option<Reps> {
     if let Some(cr) = reps.count_ref {
-        if cr >= state.captures.len() {
+        let limit = state.root_len.min(state.captures.len());
+        if cr >= limit {
             return None;
         }
         let k = state.captures[cr].rep_count();
@@ -675,6 +678,15 @@ fn match_seq_group(
     let mut runs: Vec<(usize, Vec<Capture>)> = Vec::new();
     let mut current = pos;
 
+    // Mirror Python's _State.root: children see only captures that existed before
+    // this SEQ_GROUP started. The outermost SEQ_GROUP sets the boundary; nested
+    // ones leave it unchanged (their root_len stays at the outer boundary).
+    let prev_root_len = state.root_len;
+    let snap_len = state.captures.len();
+    if state.root_len == usize::MAX {
+        state.root_len = snap_len;
+    }
+
     loop {
         if let Some(max) = reps.max {
             if runs.len() >= max {
@@ -695,6 +707,10 @@ fn match_seq_group(
             }
         }
     }
+
+    // Restore root_len before trying continuations (elements after this SEQ_GROUP
+    // are back in the outer scope and should see all parent captures again).
+    state.root_len = prev_root_len;
 
     for k in counts(reps, runs.len()) {
         let end = if k == 0 { pos } else { runs[k - 1].0 };

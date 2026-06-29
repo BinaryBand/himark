@@ -174,7 +174,7 @@ fn splice_to_fixed_point(steps: &[Step], target: &str) -> Result<String, String>
         }
     }
     Err(
-        "A `<=` statement did not settle -- the rule is not contracting toward a \
+        "A `<=` statement did not settle \u{2014} the rule is not contracting toward a \
          fixed point (it grows or oscillates). Use `=>` for a single pass."
             .to_string(),
     )
