@@ -1,8 +1,7 @@
 """Subprocess runner — delegates run_pipeline to an external engine process.
 
-The external engine is pointed to by _ENGINE. Right now that is _stub.py (a
-seam test that returns the target unchanged). Swap _ENGINE for a compiled
-binary path (Rust, Go, …) once the protocol is proven.
+The external engine is selected by the HMK_ENGINE env var: "rust" (default),
+"java", or "python".
 
 Protocol (stdin → stdout, newline-delimited JSON):
   in:  {"pipeline": [[[step], ...], ...], "target": "..."}
@@ -16,21 +15,33 @@ plus "kind": "template".
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 from himark.models.compiled import Step, Template
 
-_ENGINE: list[str] = [
-    str(
-        Path(__file__).parents[2]
-        / "sandbox"
-        / "rust"
-        / "target"
-        / "release"
-        / "himark-engine"
-    ),
-]
+_SANDBOX = Path(__file__).parents[2] / "sandbox"
+
+_JAVA_BUILD_DIR = _SANDBOX / "build" / "java"
+
+
+def _java_command() -> list[str]:
+    if (_JAVA_BUILD_DIR / "engine.class").exists():
+        return ["java", "-cp", str(_JAVA_BUILD_DIR), "engine"]
+    return ["java", str(_SANDBOX / "engine.java")]
+
+
+def _engine_command() -> list[str]:
+    name = os.environ.get("HMK_ENGINE", "rust")
+    if name == "rust":
+        return [str(_SANDBOX / "rust" / "target" / "release" / "himark-engine")]
+    if name == "java":
+        return _java_command()
+    if name == "python":
+        return [sys.executable, str(_SANDBOX / "engine.py")]
+    raise RuntimeError(f"Unknown HMK_ENGINE {name!r}; expected rust, java, or python")
 
 
 def _step_to_json(step: Step) -> dict:
@@ -51,7 +62,7 @@ def run_pipeline(pipeline: list[list[Step]], target: str) -> str:
         default=list,  # converts any remaining tuples to JSON arrays
     )
     proc = subprocess.run(
-        _ENGINE,
+        _engine_command(),
         input=payload,
         capture_output=True,
         text=True,

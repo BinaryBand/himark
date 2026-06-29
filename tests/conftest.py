@@ -54,3 +54,10 @@ def pytest_sessionstart(session: object) -> None:
     if not cargo.exists():
         cargo = Path("cargo")
     subprocess.run([str(cargo), "build", "--release"], cwd=rust_dir, check=True)
+
+    java_build_dir = ROOT / "sandbox" / "build" / "java"
+    java_build_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["javac", "-d", str(java_build_dir), str(ROOT / "sandbox" / "engine.java")],
+        check=True,
+    )
