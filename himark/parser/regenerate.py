@@ -8,12 +8,10 @@ docs/GRAMMAR.g4 (or on a fresh checkout):
 
 Requirements:
   • Java (any JRE/JDK 11+ on PATH).
-  • The ANTLR 4.13.2 *complete* tool jar. Point `ANTLR_JAR` at it, or drop it at
-    the default path below. Get it from https://www.antlr.org/download/antlr-4.13.2-complete.jar
-  • The matching runtime: `antlr4-python3-runtime==4.13.2` (a project test dependency).
+  • The matching runtime: `antlr4-python3-runtime==4.13.2` (a project dev dependency).
 
-The tool jar version must match the runtime version, or ANTLR refuses to load the
-generated parser.
+The tool jar is downloaded automatically on first run to ~/.antlr/. The jar version
+must match the runtime version, or ANTLR refuses to load the generated parser.
 """
 
 from __future__ import annotations
@@ -21,6 +19,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 ANTLR_VERSION = "4.13.2"
@@ -29,23 +28,22 @@ ROOT = HERE.parents[1]
 GRAMMAR = ROOT / "docs" / "GRAMMAR.g4"
 OUT = HERE / "_generated"
 
+_JAR_URL = f"https://www.antlr.org/download/antlr-{ANTLR_VERSION}-complete.jar"
 _DEFAULT_JAR = Path.home() / ".antlr" / f"antlr-{ANTLR_VERSION}-complete.jar"
 
 
-def _find_jar() -> Path:
+def _ensure_jar() -> Path:
     jar = Path(os.environ.get("ANTLR_JAR", _DEFAULT_JAR))
     if not jar.is_file():
-        sys.exit(
-            f"ANTLR tool jar not found at {jar}.\n"
-            f"Set ANTLR_JAR, or download antlr-{ANTLR_VERSION}-complete.jar from\n"
-            f"  https://www.antlr.org/download/antlr-{ANTLR_VERSION}-complete.jar\n"
-            f"and place it at {_DEFAULT_JAR} (or point ANTLR_JAR at it)."
-        )
+        print(f"Downloading ANTLR {ANTLR_VERSION} tool jar to {jar} ...")
+        jar.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(_JAR_URL, jar)
+        print("Download complete.")
     return jar
 
 
 def main() -> None:
-    jar = _find_jar()
+    jar = _ensure_jar()
     OUT.mkdir(parents=True, exist_ok=True)
     cmd = [
         "java",
@@ -60,8 +58,10 @@ def main() -> None:
         str(GRAMMAR),
     ]
     print("$", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-    # ANTLR does not emit a package marker; the slice imports `_generated` as one.
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        sys.exit("java not found on PATH. Install a JRE/JDK 11+.")
     (OUT / "__init__.py").touch()
     print(f"regenerated {OUT}")
 

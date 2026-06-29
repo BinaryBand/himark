@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+_BIN = Path(sys.executable).parent
+
 
 # ---------------------------------------------------------------------------
 # Proactive lint / format / type-check helpers
@@ -44,6 +46,6 @@ def _run_tool(cmd: list[str], label: str) -> None:
 
 def pytest_sessionstart(session: object) -> None:
     """Proactively fix trivial format/lint/type issues before the suite runs."""
-    _run_tool(["ruff", "format", str(ROOT)], "ruff format")
-    _run_tool(["ruff", "check", "--fix", str(ROOT)], "ruff check --fix")
-    _run_tool(["ty", "check", "--fix"], "ty check --fix")
+    _run_tool([str(_BIN / "ruff"), "format", str(ROOT)], "ruff format")
+    _run_tool([str(_BIN / "ruff"), "check", "--fix", str(ROOT)], "ruff check --fix")
+    _run_tool([str(_BIN / "ty"), "check", "--fix"], "ty check --fix")
