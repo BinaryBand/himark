@@ -67,7 +67,7 @@ PIPELINES = [
     "name,script,resource,slice_", PIPELINES, ids=[p[0] for p in PIPELINES]
 )
 def test_pipeline_golden(name, script, resource, slice_):
-    pipeline = engine.load_script(str(SCRIPTS / script))
+    pipeline = parser.load_script(str(SCRIPTS / script))
     src = slice_((RESOURCES / resource).read_text("utf-8"))
     out = engine.run_pipeline(pipeline, src)
 

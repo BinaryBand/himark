@@ -10,7 +10,8 @@ from pathlib import Path
 
 import typer
 
-from himark.engine import compile_script, run_pipeline
+from himark.engine import run_pipeline
+from himark.parser import compile_script
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "md_html.hmk"

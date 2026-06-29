@@ -9,12 +9,12 @@ the **masking pre-pass** protects fenced ``` … ``` code: messy interior spacin
 
 from pathlib import Path
 
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_md.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 
 def fmt(src: str) -> str:

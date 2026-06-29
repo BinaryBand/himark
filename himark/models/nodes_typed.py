@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, TypeAlias
 
-from pydantic.dataclasses import dataclass as pydantic_dataclass
-
 from himark.models.exceptions import CompileError
 
 # -----------------------------
@@ -137,7 +135,7 @@ class ComplementNode:
     type: Literal["complement"] = "complement"
 
 
-@pydantic_dataclass(slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class AnchorNode:
     """A zero-width anchor: `@<`/`@>` match a **line** start/end; `@<<`/`@>>` the
     whole **document** start/end. Matches a position without consuming or
@@ -190,7 +188,7 @@ class SequenceNode:
     children: list[SemanticNode] = field(default_factory=list)
 
 
-@pydantic_dataclass(slots=True)
+@dataclass(slots=True)
 class BackRefNode:
     """A self-reference `{$i}`: matches the literal text that capture group `i`
     captured earlier in the same match. Groups are numbered in document order,
@@ -202,7 +200,7 @@ class BackRefNode:
     group: int = 0
 
 
-@pydantic_dataclass(slots=True)
+@dataclass(slots=True)
 class CountRefNode:
     """A count-reference `{#i}`: matches the decimal *repetition count* of
     capture group `i` (`{…}[2..9]` then `{ repeated {#0} times}`). Like a
@@ -213,7 +211,7 @@ class CountRefNode:
     group: int = 0
 
 
-@pydantic_dataclass(slots=True)
+@dataclass(slots=True)
 class StageRefNode:
     """A cross-stage reference `{N$M}`: matches the literal text of pipeline
     stage `N`'s capture `M`. The capture part is a dotted path (`{N$M.K}`) into
@@ -246,7 +244,7 @@ def reference_from_view(
     return StageRefNode(stage=stage, path=path)
 
 
-@pydantic_dataclass(slots=True)
+@dataclass(slots=True)
 class FloorNode:
     """The alphabet's **floor** (its ordinal-0 symbol, width 1) as an explicit band
     endpoint — the self-describing form of an omitted lower bound (`{@d::..255}`).
@@ -255,7 +253,7 @@ class FloorNode:
     type: Literal["floor"] = "floor"
 
 
-@pydantic_dataclass(slots=True)
+@dataclass(slots=True)
 class InfNode:
     """An **unbounded ceiling** as an explicit band endpoint — the self-describing form
     of an omitted upper bound (`{@d::128..}`). Sits in a `ValueRangeNode.upper`

@@ -11,12 +11,12 @@ sample, a long reversed list, mixed widths, duplicates, and no trailing newline.
 
 from pathlib import Path
 
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "bubble_sort.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 
 def sort(text: str) -> str:

@@ -14,12 +14,12 @@ import re
 import time
 from pathlib import Path
 
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "btc_extract.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 # Real legacy mainnet addresses (the Genesis coinbase and two vanity ones).
 ADDRS = [

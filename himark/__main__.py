@@ -5,7 +5,7 @@ Run: python -m himark
 
 def main() -> None:
     print("himark — HMK pattern matching and text transformation.")
-    print("Usage: import himark.engine and call compile_script / run_pipeline directly.")
+    print("Usage: himark.parser.compile_script + himark.engine.run_pipeline.")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,6 @@ import pytest
 
 from himark import parser
 from himark.models.exceptions import CompileError
-from himark import engine
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "himark" / "scripts"
@@ -140,7 +139,7 @@ def _build_pattern_compiled() -> dict[str, Any]:
 def _build_script_compiled() -> dict[str, Any]:
     return {
         name: _canon_pipeline(
-            engine.compile_script((SCRIPTS / name).read_text("utf-8"))
+            parser.compile_script((SCRIPTS / name).read_text("utf-8"))
         )
         for name in SCRIPT_FILES
     }

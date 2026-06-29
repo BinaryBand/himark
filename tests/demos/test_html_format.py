@@ -11,11 +11,11 @@ structure, the real-markup features, the inline/block split, and idempotence.
 
 from pathlib import Path
 
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_html.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 
 def run(text: str) -> str:

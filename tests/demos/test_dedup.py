@@ -27,12 +27,12 @@ from contextlib import nullcontext
 import pytest
 
 # (no Rust backend — Python only)
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "dedup.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
 OUTPUT = Path(__file__).resolve().parent / "output"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 HEADER = "youtube_title,podcast_title\n"
 

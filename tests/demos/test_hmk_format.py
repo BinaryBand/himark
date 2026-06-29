@@ -9,10 +9,10 @@ template interiors: an inline `=>`, odd spacing, or an escaped quote inside a
 
 from pathlib import Path
 
-from himark import engine
+from himark import engine, parser
 
 FMT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "format_hmk.hmk"
-_PIPELINE = engine.load_script(str(FMT))
+_PIPELINE = parser.load_script(str(FMT))
 
 
 def tidy(src: str) -> str:

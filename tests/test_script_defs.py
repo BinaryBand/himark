@@ -1,17 +1,17 @@
 """Script-local definitions: a `.hmk` line `@name = <body>` binds `@name` to a
 pattern fragment, scoped to that file and expanded textually before tokenizing
-(see `engine.compile_script`). These pin the loader's classification,
+(see `parser.compile_script`). These pin the loader's classification,
 scope/collision rules, and the invariant that a definition leaves no trace in the
 compiled pipeline."""
 
 import pytest
 
-from himark import engine
+from himark import engine, parser
 from himark.models.exceptions import CompileError
 
 
 def _run(source: str, text: str) -> str:
-    return engine.run_pipeline(engine.compile_script(source), text)
+    return engine.run_pipeline(parser.compile_script(source), text)
 
 
 def test_definition_expands_and_runs():
@@ -28,8 +28,8 @@ def test_definition_expands_and_runs():
 def test_definition_leaves_no_trace():
     # A defined script and the hand-inlined statement compile to identical pipelines
     # — definitions are a source convenience, invisible downstream.
-    defined = engine.compile_script('@n = {@d}[1..]\n@n{\\,}@n => "{{$0}}+{{$1}}"\n')
-    inlined = engine.compile_pipeline(['{@d}[1..]{\\,}{@d}[1..] => "{{$0}}+{{$1}}"'])
+    defined = parser.compile_script('@n = {@d}[1..]\n@n{\\,}@n => "{{$0}}+{{$1}}"\n')
+    inlined = parser.compile_pipeline(['{@d}[1..]{\\,}{@d}[1..] => "{{$0}}+{{$1}}"'])
     assert defined == inlined
 
 
@@ -48,17 +48,17 @@ def test_definition_can_reference_earlier_definition_and_prelude():
 
 def test_definition_shadowing_prelude_variable_errors():
     with pytest.raises(CompileError, match="shadows a prelude variable"):
-        engine.compile_script("@d = {x}")
+        parser.compile_script("@d = {x}")
 
 
 def test_definition_redefinition_errors():
     with pytest.raises(CompileError, match="already defined"):
-        engine.compile_script("@x = {a}\n@x = {b}")
+        parser.compile_script("@x = {a}\n@x = {b}")
 
 
 def test_fixed_point_arrow_still_flagged_with_defs():
     # A `<=>` statement keeps its fixed-point flag when its head comes from a def.
     src = '@paren = {(}!{(,)}[..]{)}\n@paren <=> "{{$1}}"'
-    pipeline = engine.compile_script(src)
+    pipeline = parser.compile_script(src)
     assert pipeline[0][0].fixed_point is True
     assert _run(src, "a(b(c)d)e") == "abcde"

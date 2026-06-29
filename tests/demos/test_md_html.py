@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-from himark import engine
+from himark import engine, parser
 
 SCRIPT = Path(__file__).resolve().parents[2] / "himark" / "scripts" / "md_html.hmk"
 RESOURCES = Path(__file__).resolve().parent / "resources"
-_PIPELINE = engine.load_script(str(SCRIPT))
+_PIPELINE = parser.load_script(str(SCRIPT))
 
 
 def md(source: str) -> str:

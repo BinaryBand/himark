@@ -62,6 +62,10 @@ def _parse_snippet_tree(src: str):
     return _make_parser(src).snippet()
 
 
+def _parse_script_tree(src: str):
+    return _make_parser(src).script()
+
+
 def _all_literal(pattern: GRAMMARParser.PatternContext) -> bool:
     """A brace-free pattern step (every factor a bare `literalRun`) — the same proxy
     the old all-leaf AST check applied: such a step is a template (it emits its
@@ -70,16 +74,19 @@ def _all_literal(pattern: GRAMMARParser.PatternContext) -> bool:
 
 
 def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
-    """Parse and **compile** `text` straight into the product the engine VM consumes:
-    a `Program` per query step, a `Template` per template step. The compile walks the
-    CST and emits opcodes from the visitor — the structural AST is never built here
-    not built here."""
+    """Parse and **compile** one statement into the product the engine VM consumes:
+    a `Program` per query step, a `Template` per template step. The compiler builds a
+    transient semantic IR (`models.nodes_typed`) per construct and lowers it to
+    opcodes; the engine never sees an AST node. A `<=>` (fixed-point) statement is
+    flagged on its first step from the `FIXARROW` token, so no caller rewrites arrows."""
     from himark.prelude import VARIABLES
 
     builder = _AstBuilder({**VARIABLES, **(variables or {})})
     steps: list[Step] = []
     text = strip_insignificant_ws(text)
-    for step in _parse_snippet_tree(text).statement().step():
+    statement = _parse_snippet_tree(text).statement()
+    fixed_point = any(a.FIXARROW() is not None for a in statement.arrow())
+    for step in statement.step():
         template = step.template()
         if template is not None:
             steps.append(compile_template_text(unescape(template.getText()[1:-1])))
@@ -100,4 +107,16 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
             steps.append(compile_template_text(literal))
         else:
             steps.append(builder.compile_pattern(pattern))
+    if fixed_point and steps:
+        steps[0].fixed_point = True
     return steps
+
+
+# Whole-file compilation (statements + definitions). Imported at the bottom so
+# `parse` and `_parse_script_tree` above are already defined when `_script` (which
+# imports them) loads.
+from himark.parser._script import (  # noqa: E402
+    compile_pipeline,
+    compile_script,
+    load_script,
+)
