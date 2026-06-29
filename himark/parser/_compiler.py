@@ -17,8 +17,17 @@ from __future__ import annotations
 
 import re
 
-from himark.models.compiled import Moustache, Template
-from himark.parser._expr import parse_expr
+from himark.models.compiled import (
+    ExConcat,
+    ExCurrent,
+    ExFilter,
+    ExLit,
+    ExRef,
+    Expr,
+    Moustache,
+    Template,
+)
+from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
 from himark.models.opcodes import (
     ANCHOR,
     BACK_REF,
@@ -400,6 +409,81 @@ def _emit_value_range(
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 
 
+class _ExprVisitor(GRAMMARVisitor):
+    """Lower a `moustacheExpression` CST into an `Expr` tree — the moustache compiler,
+    a thin walk over the grammar's own parse rather than a hand-rolled tokenizer and
+    recursive descent. The leaf-value semantics the grammar can't state (a `#` needs
+    a capture index; a dotted path is a tuple of ints) live in `visitAccessor`."""
+
+    def visitMoustacheExpression(self, ctx: GRAMMARVisitor) -> Expr:
+        return self.visit(ctx.pipeExpr())
+
+    def visitPipeExpr(self, ctx: GRAMMARVisitor) -> Expr:
+        value = self.visit(ctx.primary())
+        for f in ctx.filter_():  # `| name` pipes, left-associative
+            value = ExFilter(value, f.NAME().getText())
+        return value
+
+    def visitPrimary(self, ctx: GRAMMARVisitor) -> Expr:
+        if ctx.LPAREN() is not None:
+            parts = [self.visit(e) for e in ctx.pipeExpr()]
+            return parts[0] if len(parts) == 1 else ExConcat(parts)
+        if ctx.accessor() is not None:
+            return self.visit(ctx.accessor())
+        if ctx.INT() is not None:
+            return ExLit(ctx.INT().getText())
+        return ExLit(ctx.STRING().getText()[1:-1])  # strip the quotes
+
+    def visitAccessor(self, ctx: GRAMMARVisitor) -> Expr:
+        sigil = ctx.DOLLAR() or ctx.HASH()
+        if sigil is None:
+            return ExCurrent()  # the lone `.`
+        # `INT? (DOLLAR|HASH) (INT (DOT INT)*)?`: an INT before the sigil is the
+        # cross-stage index; INTs after it are the dotted capture path.
+        sigil_pos = sigil.getSymbol().tokenIndex
+        ints = ctx.INT()
+        stage = next(
+            (int(i.getText()) for i in ints if i.getSymbol().tokenIndex < sigil_pos),
+            None,
+        )
+        path = tuple(
+            int(i.getText()) for i in ints if i.getSymbol().tokenIndex > sigil_pos
+        )
+        is_count = ctx.HASH() is not None
+        if not path:
+            if is_count:
+                raise CompileError("A '#' moustache reference needs a capture index")
+            return ExRef(stage=stage, is_count=is_count, path=None)
+        return ExRef(stage=stage, is_count=is_count, path=path)
+
+
+def _compile_moustache(body: str) -> Expr:
+    """Parse one `{{ … }}` body into an `Expr`. The moustache is whitespace-
+    insensitive but the shared lexer treats a space as a token, so insignificant
+    whitespace is stripped first (the mirror of `strip_insignificant_ws`); then the
+    grammar's `moustacheExpression` rule parses it and `_ExprVisitor` lowers it."""
+    from himark.parser import _make_parser  # deferred: __init__ imports this module
+
+    tree = _make_parser(_strip_moustache_ws(body)).moustacheExpression()
+    return _ExprVisitor().visit(tree)
+
+
+def _strip_moustache_ws(body: str) -> str:
+    """Drop whitespace insignificant to a moustache expression — every space, tab,
+    or newline except inside a `"…"` string literal, where it is literal content.
+    A `"` always toggles the literal (no escaped-quote form), matching the grammar's
+    STRING and the old hand-rolled tokenizer."""
+    out: list[str] = []
+    inq = False
+    for ch in body:
+        if ch == '"':
+            inq = not inq
+            out.append(ch)
+        elif inq or not ch.isspace():
+            out.append(ch)
+    return "".join(out)
+
+
 def compile_template_text(text: str) -> Template:
     """Lower a template body (the already-unescaped literal text of a `"…"` template,
     or of a brace-free pattern step) into a ``Template``.
@@ -412,7 +496,7 @@ def compile_template_text(text: str) -> Template:
     for mo in _MOUSTACHE_RE.finditer(text):
         if mo.start() > last:
             parts.append(text[last : mo.start()])
-        parts.append(Moustache(expr=parse_expr(mo.group(1).strip())))
+        parts.append(Moustache(expr=_compile_moustache(mo.group(1))))
         last = mo.end()
     if last < len(text):
         parts.append(text[last:])

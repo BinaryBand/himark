@@ -14,17 +14,18 @@
  *
  * Layering:
  *   • Comments and statement-splitting are a stateful pre-pass.
- *   • A `"…"` template is one opaque STRING token. The interior of a `{{ … }}`
- *     moustache is a *whitespace-insensitive* mini-language with dotted capture
- *     paths (`2$0.1`); it is compiled by `himark.parser._expr`, not by this
- *     grammar, since it cannot share this lexer (here whitespace is significant
- *     and a `.` is a token).
+ *   • A `"…"` template is one opaque STRING token; its `{{ … }}` interiors are
+ *     extracted by `_compiler` and each parsed by the `moustacheExpression` entry
+ *     rule. The moustache is whitespace-insensitive, so `_compiler` strips the
+ *     body's insignificant whitespace before this lexer (where a space is a token)
+ *     sees it — the same pre-pass discipline queries use.
  *
  * Entry rules:
  *   script    — a whole comment-stripped `.hmk` pipeline file
  *   prelude   — a whole comment-stripped `std.hmk`
  *   statement — one `=>` / `<=>` chain (a snippet)
  *   pattern   — one query (a snippet, no arrows)
+ *   moustacheExpression — the interior of one `{{ … }}` (second layer)
  */
 grammar GRAMMAR;
 
@@ -120,6 +121,23 @@ macro     : AT NAME ;
 
 declaration : macroDecl ;
 macroDecl   : AT NAME EQ band ;
+
+// The interior of one `{{ … }}` moustache (a second-layer entry rule). A tiny
+// whitespace-insensitive expression: accessors (`.`, `$i`, `#i`, `2$0.1` a
+// cross-stage dotted sub-capture), string/int literals, parenthesised
+// `,`-concatenation, and `|` filter pipes. `_compiler` extracts the body and
+// strips insignificant whitespace before this lexer sees it.
+moustacheExpression : pipeExpr EOF ;
+pipeExpr  : primary (PIPE filter)* ;
+primary   : LPAREN pipeExpr (COMMA pipeExpr)* RPAREN
+          | accessor
+          | INT
+          | STRING
+          ;
+accessor  : INT? (DOLLAR | HASH) (INT (DOT INT)*)?
+          | DOT
+          ;
+filter    : NAME ;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Lexer
