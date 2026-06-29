@@ -15,6 +15,8 @@ from antlr4.tree.Tree import TerminalNode
 
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
+from himark.models.opcodes import LIT, Instruction, Program
+from himark.parser._compiler import _emit_semantic, _reps_tuple
 from himark.parser._helpers import ESCAPES, _resolve_leaf_escapes, unescape
 from himark.parser._generated.GRAMMARParser import GRAMMARParser
 from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
@@ -313,6 +315,34 @@ class _AstBuilder(GRAMMARVisitor):
                 )
 
         return t.RootNode(children=children or [t.LeafNode(content="")])
+
+    # ── Entry: pattern → Program (CST → opcodes, no structural AST) ───────────
+
+    def compile_pattern(self, pattern: GRAMMARParser.PatternContext) -> Program:
+        """Compile a pattern CST **straight to an opcode `Program`** — the parse
+        path. It walks the factors and emits opcodes from the visitor, never
+        building the structural AST (`RootNode`/`BraceGroupNode`/`LeafNode`) that
+        `resolve_pattern` assembles only for `parse_ast` introspection. The hard
+        part — classifying each universe (`self.visit`) — and the lowering
+        (`_emit_semantic`) are shared with the AST path, so they cannot drift."""
+        elements: list[Instruction] = []
+        for factor in pattern.factor():
+            count_ctx = factor.count()
+            reps = _reps_tuple(_resolve_count(count_ctx) if count_ctx else None)
+            if factor.braceGroup() is not None:
+                _emit_semantic(elements, self.visit(factor.braceGroup().band()), reps)
+            elif factor.complement() is not None:
+                band = factor.complement().braceGroup().band()
+                _emit_semantic(
+                    elements, t.ComplementNode(inner=self.visit(band)), reps
+                )
+            else:  # literalRun
+                if count_ctx is not None:
+                    raise NotImplementedError("counted bare literal run not in slice")
+                content = _resolve_leaf_escapes(factor.literalRun().getText())
+                if content:
+                    elements.append((LIT, content))
+        return Program(elements=tuple(elements))
 
     # ── Band alternatives → SemanticNode ─────────────────────────────────────
     # (These replace the isinstance chains in _Resolver.resolve_brace_body)

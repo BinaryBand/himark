@@ -308,145 +308,114 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
     )
 
 
-# ── Main compilation entry ────────────────────────────────────────────────────
+# ── Per-construct lowering ────────────────────────────────────────────────────
+# The single map from a resolved universe to opcodes. `_emit_semantic` is shared by
+# both compile entry points — the CST compiler (`_AstBuilder.compile_pattern`, one
+# call per factor) and the AST compiler (`compile_pattern`, via `_emit_child`) — so
+# the two paths cannot drift in meaning; only how they reach a `sem` differs.
+
+_ANCHOR_KIND = {"line_start": 0, "line_end": 1, "doc_start": 2, "doc_end": 3}
 
 
-def _is_complement(node: t.SemanticNode) -> bool:
-    """Check if this node (possibly wrapped in BraceGroupNode) is a complement."""
-    return isinstance(node, t.ComplementNode)
+def _emit_semantic(
+    elements: list[Instruction], sem: t.SemanticNode, reps: tuple
+) -> None:
+    """Emit the opcode(s) for one resolved universe `sem`, repeated `reps`."""
+    if isinstance(sem, t.AnchorNode):
+        elements.append((ANCHOR, _ANCHOR_KIND[sem.at]))  # zero-width: no reps
+        return
+    if isinstance(sem, t.BackRefNode):
+        elements.append((BACK_REF, sem.group, reps))
+        return
+    if isinstance(sem, t.CountRefNode):
+        elements.append((COUNT_REF, sem.group, reps))
+        return
+    if isinstance(sem, t.StageRefNode):
+        elements.append((STAGE_REF, sem.stage, list(sem.path), reps))
+        return
+    if isinstance(sem, t.SequenceNode):  # grouping brace → one capture, sub-elements
+        sub: list[Instruction] = []
+        for child in sem.children:
+            _emit_child(sub, child)
+        elements.append((SEQ_GROUP, sub, reps))
+        return
+    if isinstance(sem, t.ValueRangeNode):
+        _emit_value_range(elements, sem, reps)
+        return
+    if isinstance(sem, t.ComplementNode):  # match one char NOT in the inner alphabet
+        inner_groups, _ = _lower_to_groups(sem.inner)
+        elements.append((COMPLEMENT, inner_groups, reps))
+        return
+    # Group (LiteralNode, CharRangeNode, UnionNode, GroupClassNode)
+    groups, het = _lower_to_groups(sem)
+    elements.append((GROUP, groups, het, reps))
+
+
+def _emit_value_range(
+    elements: list[Instruction], sem: t.ValueRangeNode, reps: tuple
+) -> None:
+    """Emit a value-range band: `DYN_RANGE` (a reference endpoint), the single-code-
+    point `@uni` `CHAR` fast path, or a static `VALUE_RANGE`."""
+    lo_ref = _dynamic_ref(sem.lower)
+    hi_ref = _dynamic_ref(sem.upper)
+    if lo_ref or hi_ref:
+        alph = _value_alphabet(sem.alpha)
+        alphabet_desc = (
+            ("range", alph.lo, alph.hi)
+            if isinstance(alph, RangeAlphabet)
+            else ("groups", alph.groups)
+        )
+        elements.append(
+            (
+                DYN_RANGE,
+                alphabet_desc,
+                _static_str(sem.lower),
+                _static_str(sem.upper),
+                _ref_descriptor(lo_ref) if lo_ref else None,
+                _ref_descriptor(hi_ref) if hi_ref else None,
+                sem.exclusions,
+                reps,
+            )
+        )
+        return
+    # Fast path: single-code-point @uni band → CHAR
+    if (
+        isinstance(sem.alpha, t.CharRangeNode)
+        and (low_s := _static_str(sem.lower)) is not None
+        and len(low_s) == 1
+        and (high_s := _static_str(sem.upper)) is not None
+        and len(high_s) == 1
+    ):
+        elements.append((CHAR, ord(low_s), ord(high_s), sem.exclusions, reps))
+        return
+    # General static value band → VALUE_RANGE
+    alphabet_desc, lo_val, hi_val, wmin, wmax, excl = _value_view(sem)
+    elements.append((VALUE_RANGE, alphabet_desc, lo_val, hi_val, wmin, wmax, excl, reps))
+
+
+def _emit_child(elements: list[Instruction], child: t.Node) -> None:
+    """Emit the opcode(s) for one AST child: a literal leaf (`LIT`), a counted brace
+    group, or a bare semantic node (a grouping brace's interior, repeated once)."""
+    if isinstance(child, t.LeafNode):
+        if child.content:  # skip empty leaf nodes
+            elements.append((LIT, child.content))
+        return
+    if isinstance(child, t.BraceGroupNode):
+        if child.semantic is None:
+            raise CompileError(f"Unresolved brace group: {{{child.content}}}")
+        _emit_semantic(elements, child.semantic, _reps_tuple(child.count))
+        return
+    _emit_semantic(elements, child, (1, 1))
 
 
 def compile_pattern(root: t.RootNode) -> Program:
-    """Compile a resolved pattern tree into an opcode ``Program``."""
+    """Compile a resolved pattern **AST** into an opcode ``Program`` — the mirror of
+    the CST compiler (`_AstBuilder.compile_pattern`), both sharing `_emit_*`. `parse`
+    uses the CST path; this stays as the canonical AST→opcode map (and parity check),
+    and `_emit_child` is the recursion `SEQ_GROUP` interiors reuse."""
     elements: list[Instruction] = []
     for child in root.children:
-        if isinstance(child, t.LeafNode):
-            if child.content:  # skip empty leaf nodes
-                elements.append((LIT, child.content))
-        elif isinstance(child, t.BraceGroupNode):
-            if child.semantic is None:
-                raise CompileError(
-                    f"Unresolved brace group: {{{child.content}}}"
-                )
-            reps = _reps_tuple(child.count)
-
-            sem = child.semantic
-
-            # Anchor
-            if isinstance(sem, t.AnchorNode):
-                kind_map = {
-                    "line_start": 0,
-                    "line_end": 1,
-                    "doc_start": 2,
-                    "doc_end": 3,
-                }
-                elements.append((ANCHOR, kind_map[sem.at]))
-                continue
-
-            # Back-reference
-            if isinstance(sem, t.BackRefNode):
-                elements.append((BACK_REF, sem.group, reps))
-                continue
-
-            # Count-reference
-            if isinstance(sem, t.CountRefNode):
-                elements.append((COUNT_REF, sem.group, reps))
-                continue
-
-            # Stage-reference
-            if isinstance(sem, t.StageRefNode):
-                elements.append((STAGE_REF, sem.stage, list(sem.path), reps))
-                continue
-
-            # Sequence (grouping brace)
-            if isinstance(sem, t.SequenceNode):
-                sub = compile_pattern(
-                    t.RootNode(children=sem.children)
-                )
-                elements.append((SEQ_GROUP, list(sub.elements), reps))
-                continue
-
-            # Value range
-            if isinstance(sem, t.ValueRangeNode):
-                # Check for dynamic endpoints
-                lo_ref = _dynamic_ref(sem.lower)
-                hi_ref = _dynamic_ref(sem.upper)
-                if lo_ref or hi_ref:
-                    alph = _value_alphabet(sem.alpha)
-                    alphabet_desc = (
-                        ("range", alph.lo, alph.hi)
-                        if isinstance(alph, RangeAlphabet)
-                        else ("groups", alph.groups)
-                    )
-                    lo_static = _static_str(sem.lower)
-                    hi_static = _static_str(sem.upper)
-                    lo_desc = _ref_descriptor(lo_ref) if lo_ref else None
-                    hi_desc = _ref_descriptor(hi_ref) if hi_ref else None
-                    elements.append(
-                        (
-                            DYN_RANGE,
-                            alphabet_desc,
-                            lo_static,
-                            hi_static,
-                            lo_desc,
-                            hi_desc,
-                            sem.exclusions,
-                            reps,
-                        )
-                    )
-                    continue
-
-                # Fast path: single-code-point @uni band → CHAR
-                if (
-                    isinstance(sem.alpha, t.CharRangeNode)
-                    and (low_s := _static_str(sem.lower)) is not None
-                    and len(low_s) == 1
-                    and (high_s := _static_str(sem.upper)) is not None
-                    and len(high_s) == 1
-                ):
-                    elements.append(
-                        (CHAR, ord(low_s), ord(high_s), sem.exclusions, reps)
-                    )
-                    continue
-
-                # General static value band → VALUE_RANGE
-                alphabet_desc, lo_val, hi_val, wmin, wmax, excl = _value_view(sem)
-                elements.append(
-                    (VALUE_RANGE, alphabet_desc, lo_val, hi_val, wmin, wmax, excl, reps)
-                )
-                continue
-
-            # Complement — match anything NOT in the inner alphabet
-            if isinstance(sem, t.ComplementNode):
-                inner_groups, _ = _lower_to_groups(sem.inner)
-                elements.append((COMPLEMENT, inner_groups, reps))
-                continue
-
-            # Group (LiteralNode, CharRangeNode, UnionNode, GroupClassNode)
-            groups, het = _lower_to_groups(sem)
-            elements.append((GROUP, groups, het, reps))
-
-        elif isinstance(child, t.SequenceNode):
-            # Bare sequence node inside a grouping brace (single-child scope)
-            sub = compile_pattern(t.RootNode(children=child.children))
-            elements.append((SEQ_GROUP, list(sub.elements), (1, 1)))
-
-        elif isinstance(child, t.BackRefNode):
-            elements.append((BACK_REF, child.group, (1, 1)))
-
-        elif isinstance(child, t.CountRefNode):
-            elements.append((COUNT_REF, child.group, (1, 1)))
-
-        elif isinstance(child, t.StageRefNode):
-            elements.append(
-                (STAGE_REF, child.stage, list(child.path), (1, 1))
-            )
-
-        else:
-            # Remaining bare semantic nodes → GROUP
-            groups, het = _lower_to_groups(child)
-            elements.append((GROUP, groups, het, (1, 1)))
-
+        _emit_child(elements, child)
     return Program(elements=tuple(elements), fixed_point=root.fixed_point)
 
 
@@ -458,15 +427,13 @@ def compile_pattern(root: t.RootNode) -> Program:
 _MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 
 
-def compile_template(root: t.RootNode) -> Template:
-    """Lower a template step (an all-leaf ``RootNode``) into a ``Template``.
+def compile_template_text(text: str) -> Template:
+    """Lower a template body (the already-unescaped literal text of a `"…"` template,
+    or of a brace-free pattern step) into a ``Template``.
 
-    The leaf text is the literal template body; this splits it into an ordered
-    list of literal strings and ``Moustache`` references — the structure the
-    renderer used to recompute by regex on every render."""
-    text = "".join(
-        c.content for c in root.children if isinstance(c, t.LeafNode)
-    )
+    Splits the text into an ordered list of literal strings and ``Moustache``
+    references — the structure the renderer used to recompute by regex on every
+    render. Works straight off text, so it needs no AST node."""
     parts: list[str | Moustache] = []
     last = 0
     for mo in _MOUSTACHE_RE.finditer(text):

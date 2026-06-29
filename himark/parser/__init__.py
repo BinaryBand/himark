@@ -21,16 +21,22 @@ from __future__ import annotations
 from antlr4 import CommonTokenStream, InputStream
 from antlr4.error.ErrorListener import ErrorListener
 
+from typing import TYPE_CHECKING
+
 from himark.models import nodes_typed as t
 from himark.models.compiled import Step
 from himark.models.exceptions import CompileError
 from himark.parser._builder import _AstBuilder
-from himark.parser._compiler import compile_pattern, compile_template
+from himark.parser._compiler import compile_template_text
 from himark.parser._helpers import (
+    _resolve_leaf_escapes,
     strip_insignificant_ws,
     text_expand_variables,
     unescape,
 )
+
+if TYPE_CHECKING:
+    from himark.parser._generated.GRAMMARParser import GRAMMARParser
 
 
 class _RaiseOnError(ErrorListener):
@@ -89,16 +95,42 @@ def parse_ast(
     return roots
 
 
-def _is_template_root(root: t.RootNode) -> bool:
-    """A step is a template when its AST is nothing but literal leaves — the same
-    proxy the engine used to apply at run time, decided once here at compile time."""
-    return all(isinstance(n, t.LeafNode) for n in root.children)
+def _all_literal(pattern: GRAMMARParser.PatternContext) -> bool:
+    """A brace-free pattern step (every factor a bare `literalRun`) — the same proxy
+    the old all-leaf AST check applied: such a step is a template (it emits its
+    literal text), not a query. A counted literal run is out of slice (see below)."""
+    return all(f.literalRun() is not None for f in pattern.factor())
 
 
 def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
-    """Parse and **compile** `text` into the product the engine VM consumes: a
-    `Program` per query step, a `Template` per template step."""
-    return [
-        compile_template(root) if _is_template_root(root) else compile_pattern(root)
-        for root in parse_ast(text, variables)
-    ]
+    """Parse and **compile** `text` straight into the product the engine VM consumes:
+    a `Program` per query step, a `Template` per template step. The compile walks the
+    CST and emits opcodes from the visitor — the structural AST is never built here
+    (that is `parse_ast`'s job, for introspection)."""
+    from himark.prelude import VARIABLES
+
+    builder = _AstBuilder({**VARIABLES, **(variables or {})})
+    steps: list[Step] = []
+    text = strip_insignificant_ws(text)
+    for step in _parse_snippet_tree(text).statement().step():
+        template = step.template()
+        if template is not None:
+            steps.append(compile_template_text(unescape(template.getText()[1:-1])))
+            continue
+        pattern = step.pattern()
+        if variables:
+            src = text[step.start.start : step.stop.stop + 1]
+            pattern = _parse_pattern_tree(
+                text_expand_variables(src, variables)
+            ).pattern()
+        if _all_literal(pattern):
+            if any(f.count() is not None for f in pattern.factor()):
+                raise NotImplementedError("counted bare literal run not in slice")
+            literal = "".join(
+                _resolve_leaf_escapes(f.literalRun().getText())
+                for f in pattern.factor()
+            )
+            steps.append(compile_template_text(literal))
+        else:
+            steps.append(builder.compile_pattern(pattern))
+    return steps

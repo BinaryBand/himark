@@ -46,6 +46,8 @@ import pytest
 
 from himark import parser
 from himark.models.exceptions import CompileError
+from himark.models.nodes_typed import LeafNode
+from himark.parser._compiler import compile_pattern, compile_template_text
 from himark.prelude import VARIABLES
 from himark.tools import precompiled
 
@@ -255,6 +257,26 @@ def test_pattern_ast_golden():
     _check_golden(
         _build_pattern_asts(parser.parse_ast), GOLDEN / "patterns.json", "pattern"
     )
+
+
+def _compile_via_ast(src: str) -> list:
+    """Compile `src` the long way — build the structural AST (`parse_ast`) then lower
+    it (`compile_pattern` / `compile_template_text`). The old `parse` path."""
+    out: list = []
+    for root in parser.parse_ast(src):
+        if all(isinstance(n, LeafNode) for n in root.children):
+            out.append(compile_template_text("".join(n.content for n in root.children)))
+        else:
+            out.append(compile_pattern(root))
+    return out
+
+
+def test_compile_parity():
+    """`parse` (CST → opcodes, no structural AST) must produce exactly what the AST
+    path produces over the corpus — so folding the AST out of `parse` changed no
+    compiled output, only how it is reached."""
+    for pid, src in PATTERNS:
+        assert parser.parse(src) == _compile_via_ast(src), pid
 
 
 def test_script_ast_golden():

@@ -12,7 +12,7 @@ Adding a construct:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeAlias
 
 # ── Opcode constants ───────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ def reps_from_tuple(r: Any) -> Reps:
 # ── Instruction type (for typing convenience) ──────────────────────────────────
 
 # An instruction is ``(int, *operands)`` where operands are primitives.
-Instruction: "type" = tuple
+Instruction: TypeAlias = tuple
 
 
 # ── Compiled program ───────────────────────────────────────────────────────────
