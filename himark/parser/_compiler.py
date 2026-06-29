@@ -308,12 +308,9 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
         f"Cannot lower {type(node).__name__} as a group alphabet"
     )
 
-
-# ── Per-construct lowering ────────────────────────────────────────────────────
-# The single map from a resolved universe to opcodes. `_emit_semantic` is shared by
-# both compile entry points — the CST compiler (`_AstBuilder.compile_pattern`, one
-# call per factor) and the AST compiler (`compile_pattern`, via `_emit_child`) — so
-# the two paths cannot drift in meaning; only how they reach a `sem` differs.
+# ── Per-construct lowering ────────────────────────────────────────────────────────────
+# The single map from a resolved SemanticNode to opcodes. Called by the CST
+# compiler (`_AstBuilder.compile_pattern`) — one call per factor.
 
 _ANCHOR_KIND = {"line_start": 0, "line_end": 1, "doc_start": 2, "doc_end": 3}
 
@@ -334,10 +331,17 @@ def _emit_semantic(
     if isinstance(sem, t.StageRefNode):
         elements.append((STAGE_REF, sem.stage, list(sem.path), reps))
         return
-    if isinstance(sem, t.SequenceNode):  # grouping brace → one capture, sub-elements
+    if isinstance(sem, t.SequenceNode):  # grouping brace -> one capture, sub-elements
         sub: list[Instruction] = []
-        for child in sem.children:
-            _emit_child(sub, child)
+        mask = getattr(sem, '_literal_mask', ()) or ()
+        child_counts = getattr(sem, '_child_counts', ()) or ()
+        for idx, child in enumerate(sem.children):
+            is_literal = idx < len(mask) and mask[idx]
+            child_reps = child_counts[idx] if idx < len(child_counts) else (1, 1)
+            if is_literal and isinstance(child, t.LiteralNode) and child.content:
+                sub.append((LIT, child.content))
+            else:
+                _emit_semantic(sub, child, child_reps)
         elements.append((SEQ_GROUP, sub, reps))
         return
     if isinstance(sem, t.ValueRangeNode):
@@ -392,33 +396,6 @@ def _emit_value_range(
     # General static value band → VALUE_RANGE
     alphabet_desc, lo_val, hi_val, wmin, wmax, excl = _value_view(sem)
     elements.append((VALUE_RANGE, alphabet_desc, lo_val, hi_val, wmin, wmax, excl, reps))
-
-
-def _emit_child(elements: list[Instruction], child: t.Node) -> None:
-    """Emit the opcode(s) for one AST child: a literal leaf (`LIT`), a counted brace
-    group, or a bare semantic node (a grouping brace's interior, repeated once)."""
-    if isinstance(child, t.LeafNode):
-        if child.content:  # skip empty leaf nodes
-            elements.append((LIT, child.content))
-        return
-    if isinstance(child, t.BraceGroupNode):
-        if child.semantic is None:
-            raise CompileError(f"Unresolved brace group: {{{child.content}}}")
-        _emit_semantic(elements, child.semantic, _reps_tuple(child.count))
-        return
-    _emit_semantic(elements, child, (1, 1))
-
-
-def compile_pattern(root: t.RootNode) -> Program:
-    """Compile a resolved pattern **AST** into an opcode ``Program`` — the mirror of
-    the CST compiler (`_AstBuilder.compile_pattern`), both sharing `_emit_*`. `parse`
-    uses the CST path; this stays as the canonical AST→opcode map (and parity check),
-    and `_emit_child` is the recursion `SEQ_GROUP` interiors reuse."""
-    elements: list[Instruction] = []
-    for child in root.children:
-        _emit_child(elements, child)
-    return Program(elements=tuple(elements), fixed_point=root.fixed_point)
-
 
 # ── Template compilation ──────────────────────────────────────────────────────
 

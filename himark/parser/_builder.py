@@ -281,50 +281,13 @@ class _AstBuilder(GRAMMARVisitor):
         finally:
             self._resolving.discard(name)
 
-    # ── Entry: pattern → RootNode ────────────────────────────────────────────
-
-    def resolve_pattern(self, pattern: GRAMMARParser.PatternContext) -> t.RootNode:
-        children: list[t.Node] = []
-        for factor in pattern.factor():
-            count_ctx = factor.count()
-            count = _resolve_count(count_ctx) if count_ctx else None
-
-            if factor.braceGroup() is not None:
-                band = factor.braceGroup().band()
-                children.append(
-                    t.BraceGroupNode(
-                        content=band.getText(),
-                        semantic=self.visit(band),
-                        count=count,
-                    )
-                )
-            elif factor.complement() is not None:
-                band = factor.complement().braceGroup().band()
-                children.append(
-                    t.BraceGroupNode(
-                        content="!" + band.getText(),
-                        semantic=t.ComplementNode(inner=self.visit(band)),
-                        count=count,
-                    )
-                )
-            else:  # literalRun
-                if count is not None:
-                    raise NotImplementedError("counted bare literal run not in slice")
-                children.append(
-                    t.LeafNode(content=_resolve_leaf_escapes(factor.literalRun().getText()))
-                )
-
-        return t.RootNode(children=children or [t.LeafNode(content="")])
-
     # ── Entry: pattern → Program (CST → opcodes, no structural AST) ───────────
 
     def compile_pattern(self, pattern: GRAMMARParser.PatternContext) -> Program:
-        """Compile a pattern CST **straight to an opcode `Program`** — the parse
-        path. It walks the factors and emits opcodes from the visitor, never
-        building the structural AST (`RootNode`/`BraceGroupNode`/`LeafNode`) that
-        `resolve_pattern` assembles only for `parse_ast` introspection. The hard
-        part — classifying each universe (`self.visit`) — and the lowering
-        (`_emit_semantic`) are shared with the AST path, so they cannot drift."""
+        """Compile a pattern CST **straight to an opcode `Program`** -- the
+        single compile path. It walks the factors and emits opcodes
+        from the visitor.
+        """
         elements: list[Instruction] = []
         for factor in pattern.factor():
             count_ctx = factor.count()
@@ -365,9 +328,10 @@ class _AstBuilder(GRAMMARVisitor):
         universe = ctx.universe()
         if _is_whole_nested_brace(universe):
             inner = universe.arm()[0].term().atom()[0].braceGroup()
-            return t.SequenceNode(children=[self.visit(inner.band())])
+            return t.SequenceNode(children=[self.visit(inner.band())], _literal_mask=(False,))
         if _cst_is_sequence_brace(universe):
-            return t.SequenceNode(children=self._universe_to_sequence_children(universe))
+            children, mask, child_counts = self._universe_to_sequence_children(universe)
+            return t.SequenceNode(children=children, _literal_mask=tuple(mask), _child_counts=tuple(child_counts))
         return self._resolve_universe(universe)
 
     # ── Band arm resolution (isinstance here is type-matching for parameter
@@ -476,15 +440,28 @@ class _AstBuilder(GRAMMARVisitor):
 
         raise NotImplementedError("grouping/sequence brace not in band slice")
 
-    # ── Sequence flattening (raw tree walk — not visitor-amenable) ───────────
+    # -- Sequence flattening ----------------------------------------------------
 
-    def _universe_to_sequence_children(self, universe: GRAMMARParser.UniverseContext) -> list[t.Node]:
-        children: list[t.Node] = []
+    def _universe_to_sequence_children(
+        self, universe: GRAMMARParser.UniverseContext
+    ) -> tuple[list[t.SemanticNode], list[bool], list[tuple]]:
+        """Walk the CST of a grouping brace interior.
+
+        Returns (children, literal_mask, counts) where:
+        - children: resolved SemanticNode per element
+        - literal_mask[i]: True = plain CST text (emit LIT), False = brace group
+        - counts[i]: serialised reps tuple for this element (None = default (1,1))
+        """
+        children: list[t.SemanticNode] = []
+        literal_mask: list[bool] = []
+        counts: list[tuple] = []
         leaf_buf: list[str] = []
 
         def flush_leaf():
             if leaf_buf:
-                children.append(t.LeafNode(content="".join(leaf_buf)))
+                children.append(t.LiteralNode(content="".join(leaf_buf)))
+                literal_mask.append(True)
+                counts.append(None)
                 leaf_buf.clear()
 
         def walk(ctx):
@@ -495,24 +472,17 @@ class _AstBuilder(GRAMMARVisitor):
                     flush_leaf()
                     count_ctx = ctx.count()
                     count = _resolve_count(count_ctx) if count_ctx else None
+                    from himark.parser._compiler import _reps_tuple
+                    child_reps = _reps_tuple(count) if count else (1, 1)
                     if ctx.braceGroup() is not None:
-                        bband = ctx.braceGroup().band()
-                        children.append(
-                            t.BraceGroupNode(
-                                content=bband.getText(),
-                                semantic=self.visit(bband),
-                                count=count,
-                            )
-                        )
+                        children.append(self.visit(ctx.braceGroup().band()))
                     else:
                         bband = ctx.complement().braceGroup().band()
                         children.append(
-                            t.BraceGroupNode(
-                                content="!" + bband.getText(),
-                                semantic=t.ComplementNode(inner=self.visit(bband)),
-                                count=count,
-                            )
+                            t.ComplementNode(inner=self.visit(bband))
                         )
+                    literal_mask.append(False)
+                    counts.append(child_reps)
                 else:
                     if ctx.ESC() is not None:
                         raw = ctx.getText()
@@ -523,13 +493,23 @@ class _AstBuilder(GRAMMARVisitor):
                             leaf_buf.append(raw)
                     elif ctx.macro() is not None:
                         flush_leaf()
-                        children.append(self._resolve_variable(ctx.macro().NAME().getText()))
+                        children.append(
+                            self._resolve_variable(ctx.macro().NAME().getText())
+                        )
+                        literal_mask.append(False)
+                        counts.append((1, 1))
                     elif ctx.reference() is not None:
                         flush_leaf()
-                        children.append(_resolve_reference_atom(ctx.reference()))
+                        children.append(
+                            _resolve_reference_atom(ctx.reference())
+                        )
+                        literal_mask.append(False)
+                        counts.append((1, 1))
                     elif ctx.anchor() is not None:
                         flush_leaf()
                         children.append(_resolve_anchor_atom(ctx.anchor()))
+                        literal_mask.append(False)
+                        counts.append((1, 1))
                     else:
                         leaf_buf.append(ctx.getText())
             else:
@@ -538,4 +518,5 @@ class _AstBuilder(GRAMMARVisitor):
 
         walk(universe)
         flush_leaf()
-        return children
+        return children, literal_mask, counts
+

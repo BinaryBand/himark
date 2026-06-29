@@ -1,1170 +1,1145 @@
 {
   "literal": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "hello"
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "abc"
+            ]
+          ],
+          false,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "char_range": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "a",
-            "upper": "z",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          97,
+          122,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "char_range_multi": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "aa",
-            "upper": "zz",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "range",
+            0,
+            1114111
+          ],
+          108068986,
+          135921786,
+          2,
+          2,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "value_range_upper": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": {
-              "_t": "FloorNode"
-            },
-            "upper": "255",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
+            ]
+          ],
+          null,
+          255,
+          1,
+          3,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "value_range_lower": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": "128",
-            "upper": {
-              "_t": "InfNode"
-            },
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
+            ]
+          ],
+          0,
+          null,
+          1,
+          null,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "value_range_both": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": "0",
-            "upper": "255",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
+            ]
+          ],
+          0,
+          255,
+          1,
+          3,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "value_range_single": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": "5",
-            "upper": "5",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
-    }
-  ],
-  "value_range_union": [
-    {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "UnionNode",
-            "options": [
-              {
-                "_t": "ValueRangeNode",
-                "alpha": {
-                  "_t": "ValueRangeNode",
-                  "alpha": {
-                    "_t": "CharRangeNode",
-                    "start": "\u0000",
-                    "end": "􏿿",
-                    "exclusions": []
-                  },
-                  "lower": "0",
-                  "upper": "9",
-                  "exclusions": []
-                },
-                "lower": "1",
-                "upper": "5",
-                "exclusions": []
-              },
-              {
-                "_t": "ValueRangeNode",
-                "alpha": {
-                  "_t": "ValueRangeNode",
-                  "alpha": {
-                    "_t": "CharRangeNode",
-                    "start": "\u0000",
-                    "end": "􏿿",
-                    "exclusions": []
-                  },
-                  "lower": "0",
-                  "upper": "9",
-                  "exclusions": []
-                },
-                "lower": "9",
-                "upper": "12",
-                "exclusions": []
-              }
-            ],
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
+            ]
+          ],
+          128,
+          128,
+          3,
+          3,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "value_range_dyn_ref": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "SequenceNode",
-            "children": [
-              {
-                "_t": "ValueRangeNode",
-                "alpha": {
-                  "_t": "CharRangeNode",
-                  "start": "\u0000",
-                  "end": "􏿿",
-                  "exclusions": []
-                },
-                "lower": "0",
-                "upper": "9",
-                "exclusions": []
-              }
+      "_t": "Program",
+      "elements": [
+        [
+          8,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
             ]
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 1,
-            "max": null,
-            "group": null
-          },
-          "count_src": null
-        },
-        {
-          "_t": "LeafNode",
-          "content": "\\,"
-        },
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": "0",
-            "upper": {
-              "_t": "BackRefNode",
-              "group": 0
-            },
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          "0",
+          null,
+          null,
+          [
+            "back",
+            0
+          ],
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "union_strings": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "GroupClassNode",
-            "groups": [
-              [
-                "cat"
-              ],
-              [
-                "dog"
-              ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ],
+            [
+              "b"
+            ],
+            [
+              "c"
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          true,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "group_class_one": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "GroupClassNode",
-            "groups": [
+      "_t": "Program",
+      "elements": [
+        [
+          11,
+          [
+            [
+              3,
               [
-                "a"
+                [
+                  "a"
+                ],
+                [
+                  "A"
+                ]
               ],
+              true,
               [
-                "A"
+                1,
+                1
               ]
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
-    }
-  ],
-  "group_class_alphabet": [
-    {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "GroupClassNode",
-            "groups": [
-              [
-                "a",
-                "A"
-              ],
-              [
-                "b",
-                "B"
-              ]
-            ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "complement": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ComplementNode",
-            "inner": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  "x"
-                ],
-                [
-                  "y"
-                ]
-              ]
-            }
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          10,
+          [
+            [
+              "xyz"
+            ]
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "complement_multichar": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ComplementNode",
-            "inner": {
-              "_t": "LiteralNode",
-              "content": "-->"
-            }
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          10,
+          [
+            [
+              "abc"
+            ],
+            [
+              "def"
+            ],
+            [
+              "ghi"
+            ]
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "heterogeneous": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "SequenceNode",
-            "children": [
-              {
-                "_t": "ValueRangeNode",
-                "alpha": {
-                  "_t": "CharRangeNode",
-                  "start": "\u0000",
-                  "end": "􏿿",
-                  "exclusions": []
-                },
-                "lower": "0",
-                "upper": "9",
-                "exclusions": []
-              }
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a",
+              "A"
+            ],
+            [
+              "b",
+              "B"
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          true,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "anchor_line_start": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "AnchorNode",
-            "at": "line_start"
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          1,
+          0
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "anchor_line_end": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "AnchorNode",
-            "at": "line_end"
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          1,
+          1
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "anchor_doc_start": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "AnchorNode",
-            "at": "doc_start"
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "anchor_doc_end": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "AnchorNode",
-            "at": "doc_end"
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          1,
+          3
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "sequence": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "SequenceNode",
-            "children": [
-              {
-                "_t": "LeafNode",
-                "content": "of "
-              },
-              {
-                "_t": "BraceGroupNode",
-                "semantic": {
-                  "_t": "LiteralNode",
-                  "content": "black"
-                },
-                "count": null,
-                "count_src": null
-              },
-              {
-                "_t": "LeafNode",
-                "content": " "
-              },
-              {
-                "_t": "BraceGroupNode",
-                "semantic": {
-                  "_t": "LiteralNode",
-                  "content": "quartz"
-                },
-                "count": null,
-                "count_src": null
-              }
+      "_t": "Program",
+      "elements": [
+        [
+          11,
+          [
+            [
+              0,
+              "of"
+            ],
+            [
+              3,
+              [
+                [
+                  "black"
+                ]
+              ],
+              false,
+              [
+                1,
+                1
+              ]
+            ],
+            [
+              3,
+              [
+                [
+                  "quartz"
+                ]
+              ],
+              false,
+              [
+                1,
+                1
+              ]
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "back_ref": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "abc"
-          },
-          "count": null,
-          "count_src": null
-        },
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "BackRefNode",
-            "group": 0
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "abc"
+            ]
+          ],
+          false,
+          [
+            1,
+            1
+          ]
+        ],
+        [
+          4,
+          0,
+          [
+            0,
+            -1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_ref_node": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 2,
-            "max": null,
-            "group": null
-          },
-          "count_src": null
-        },
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": " "
-          },
-          "count": null,
-          "count_src": null
-        },
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "CountRefNode",
-            "group": 0
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "abc"
+            ]
+          ],
+          false,
+          [
+            2,
+            9
+          ]
+        ],
+        [
+          5,
+          0,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "stage_ref_whole": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "StageRefNode",
-            "stage": 1,
-            "path": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
-    }
-  ],
-  "stage_ref_indexed": [
-    {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "StageRefNode",
-            "stage": 1,
-            "path": [
-              0
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "abc"
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
-    }
-  ],
-  "exclusion_range": [
+          ],
+          false,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
+    },
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "a",
-            "upper": "z",
-            "exclusions": [
-              "m..p"
-            ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          4,
+          0,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "band_ambient": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "ValueRangeNode",
-              "alpha": {
-                "_t": "CharRangeNode",
-                "start": "\u0000",
-                "end": "􏿿",
-                "exclusions": []
-              },
-              "lower": "0",
-              "upper": "9",
-              "exclusions": []
-            },
-            "lower": "0",
-            "upper": "255",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          7,
+          [
+            "groups",
+            [
+              [
+                "0"
+              ],
+              [
+                "1"
+              ],
+              [
+                "2"
+              ],
+              [
+                "3"
+              ],
+              [
+                "4"
+              ],
+              [
+                "5"
+              ],
+              [
+                "6"
+              ],
+              [
+                "7"
+              ],
+              [
+                "8"
+              ],
+              [
+                "9"
+              ]
+            ]
+          ],
+          0,
+          255,
+          1,
+          3,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_exact": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 3,
-            "max": 3,
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            3,
+            3
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_range": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 1,
-            "max": 6,
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            1,
+            6
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_open_upper": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 2,
-            "max": null,
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            2,
+            -1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_open_lower": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 0,
-            "max": 5,
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            0,
+            5
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_set": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountSet",
-            "values": [
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            "=",
+            [
               1,
               3,
               5
-            ],
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+            ]
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "count_ref_spec": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "a"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 2,
-            "max": null,
-            "group": null
-          },
-          "count_src": null
-        },
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "b"
-          },
-          "count": {
-            "_t": "CountRefSpec",
-            "group": 0
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a"
+            ]
+          ],
+          false,
+          [
+            2,
+            -1
+          ]
+        ],
+        [
+          3,
+          [
+            [
+              "b"
+            ]
+          ],
+          false,
+          [
+            "#",
+            0
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "multi_step_template": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "LiteralNode",
-            "content": "#"
-          },
-          "count": {
-            "_t": "CountRange",
-            "min": 1,
-            "max": null,
-            "group": null
-          },
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "#"
+            ]
+          ],
+          false,
+          [
+            1,
+            -1
+          ]
+        ]
+      ],
+      "fixed_point": false
     },
     {
-      "_t": "RootNode",
-      "children": [
+      "version": 1,
+      "fixed_point": false,
+      "template": [
+        "<h1>",
         {
-          "_t": "LeafNode",
-          "content": "<h1>{{.}}</h1>"
-        }
+          "m": {
+            "cur": true
+          }
+        },
+        "</h1>"
       ]
     }
   ],
   "chained_steps": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "a",
-            "upper": "z",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          97,
+          122,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     },
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "A",
-            "upper": "Z",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          65,
+          90,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     },
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "LeafNode",
-          "content": "upper"
-        }
+      "version": 1,
+      "fixed_point": false,
+      "template": [
+        "upper"
       ]
     }
   ],
   "var_digit": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "0",
-            "upper": "9",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          48,
+          57,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "var_lower": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "a",
-            "upper": "z",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          97,
+          122,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "var_upper": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ValueRangeNode",
-            "alpha": {
-              "_t": "CharRangeNode",
-              "start": "\u0000",
-              "end": "􏿿",
-              "exclusions": []
-            },
-            "lower": "A",
-            "upper": "Z",
-            "exclusions": []
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          2,
+          65,
+          90,
+          [],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "var_word": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "GroupClassNode",
-            "groups": [
-              [
-                "a",
-                "A"
-              ],
-              [
-                "b",
-                "B"
-              ],
-              [
-                "c",
-                "C"
-              ],
-              [
-                "d",
-                "D"
-              ],
-              [
-                "e",
-                "E"
-              ],
-              [
-                "f",
-                "F"
-              ],
-              [
-                "g",
-                "G"
-              ],
-              [
-                "h",
-                "H"
-              ],
-              [
-                "i",
-                "I"
-              ],
-              [
-                "j",
-                "J"
-              ],
-              [
-                "k",
-                "K"
-              ],
-              [
-                "l",
-                "L"
-              ],
-              [
-                "m",
-                "M"
-              ],
-              [
-                "n",
-                "N"
-              ],
-              [
-                "o",
-                "O"
-              ],
-              [
-                "p",
-                "P"
-              ],
-              [
-                "q",
-                "Q"
-              ],
-              [
-                "r",
-                "R"
-              ],
-              [
-                "s",
-                "S"
-              ],
-              [
-                "t",
-                "T"
-              ],
-              [
-                "u",
-                "U"
-              ],
-              [
-                "v",
-                "V"
-              ],
-              [
-                "w",
-                "W"
-              ],
-              [
-                "x",
-                "X"
-              ],
-              [
-                "y",
-                "Y"
-              ],
-              [
-                "z",
-                "Z"
-              ],
-              [
-                "_"
-              ]
+      "_t": "Program",
+      "elements": [
+        [
+          3,
+          [
+            [
+              "a",
+              "A"
+            ],
+            [
+              "b",
+              "B"
+            ],
+            [
+              "c",
+              "C"
+            ],
+            [
+              "d",
+              "D"
+            ],
+            [
+              "e",
+              "E"
+            ],
+            [
+              "f",
+              "F"
+            ],
+            [
+              "g",
+              "G"
+            ],
+            [
+              "h",
+              "H"
+            ],
+            [
+              "i",
+              "I"
+            ],
+            [
+              "j",
+              "J"
+            ],
+            [
+              "k",
+              "K"
+            ],
+            [
+              "l",
+              "L"
+            ],
+            [
+              "m",
+              "M"
+            ],
+            [
+              "n",
+              "N"
+            ],
+            [
+              "o",
+              "O"
+            ],
+            [
+              "p",
+              "P"
+            ],
+            [
+              "q",
+              "Q"
+            ],
+            [
+              "r",
+              "R"
+            ],
+            [
+              "s",
+              "S"
+            ],
+            [
+              "t",
+              "T"
+            ],
+            [
+              "u",
+              "U"
+            ],
+            [
+              "v",
+              "V"
+            ],
+            [
+              "w",
+              "W"
+            ],
+            [
+              "x",
+              "X"
+            ],
+            [
+              "y",
+              "Y"
+            ],
+            [
+              "z",
+              "Z"
+            ],
+            [
+              "_"
             ]
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+          ],
+          true,
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ],
   "var_complement_ws": [
     {
-      "_t": "RootNode",
-      "children": [
-        {
-          "_t": "BraceGroupNode",
-          "semantic": {
-            "_t": "ComplementNode",
-            "inner": {
-              "_t": "GroupClassNode",
-              "groups": [
-                [
-                  "\n"
-                ],
-                [
-                  "\r"
-                ],
-                [
-                  " "
-                ],
-                [
-                  "\t"
-                ]
-              ]
-            }
-          },
-          "count": null,
-          "count_src": null
-        }
-      ]
+      "_t": "Program",
+      "elements": [
+        [
+          10,
+          [
+            [
+              "\n"
+            ],
+            [
+              "\r"
+            ],
+            [
+              " "
+            ],
+            [
+              "\t"
+            ]
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      ],
+      "fixed_point": false
     }
   ]
 }

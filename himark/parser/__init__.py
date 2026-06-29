@@ -12,8 +12,6 @@ Pipeline:
 Entry points:
   • `parse(text, variables=None) -> list[Step]` — the compiled product the engine
     VM consumes (a `Program` per query, a `Template` per template).
-  • `parse_ast(text, variables=None) -> list[RootNode]` — the intermediate typed
-    AST, exposed for introspection and the parser golden harness.
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from antlr4.error.ErrorListener import ErrorListener
 
 from typing import TYPE_CHECKING
 
-from himark.models import nodes_typed as t
 from himark.models.compiled import Step
 from himark.models.exceptions import CompileError
 from himark.parser._builder import _AstBuilder
@@ -65,36 +62,6 @@ def _parse_snippet_tree(src: str):
     return _make_parser(src).snippet()
 
 
-def parse_ast(
-    text: str, variables: dict[str, str] | None = None
-) -> list[t.RootNode]:
-    """Parse `text` into its ordered step ASTs (`RootNode`s). A template step is a
-    single-leaf root carrying the unescaped template text; a query step is the
-    resolved pattern tree. This is the intermediate representation — `parse`
-    compiles it — kept public for introspection and the parser golden harness."""
-    from himark.prelude import VARIABLES
-
-    builder = _AstBuilder({**VARIABLES, **(variables or {})})
-    roots: list[t.RootNode] = []
-    text = strip_insignificant_ws(text)
-    for step in _parse_snippet_tree(text).statement().step():
-        template = step.template()
-        if template is not None:
-            quoted = template.getText()
-            roots.append(
-                t.RootNode(children=[t.LeafNode(content=unescape(quoted[1:-1]))])
-            )
-            continue
-        pattern = step.pattern()
-        if variables:
-            src = text[step.start.start : step.stop.stop + 1]
-            pattern = _parse_pattern_tree(
-                text_expand_variables(src, variables)
-            ).pattern()
-        roots.append(builder.resolve_pattern(pattern))
-    return roots
-
-
 def _all_literal(pattern: GRAMMARParser.PatternContext) -> bool:
     """A brace-free pattern step (every factor a bare `literalRun`) — the same proxy
     the old all-leaf AST check applied: such a step is a template (it emits its
@@ -106,7 +73,7 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
     """Parse and **compile** `text` straight into the product the engine VM consumes:
     a `Program` per query step, a `Template` per template step. The compile walks the
     CST and emits opcodes from the visitor — the structural AST is never built here
-    (that is `parse_ast`'s job, for introspection)."""
+    not built here."""
     from himark.prelude import VARIABLES
 
     builder = _AstBuilder({**VARIABLES, **(variables or {})})

@@ -42,43 +42,9 @@ class CountRefSpec:
 
 CountSpec: TypeAlias = CountRange | CountSet | CountRefSpec
 
-
 # -----------------------------
-# Structural nodes (phase2/raw)
-# -----------------------------
-
-
-# `weakref_slot` lets the engine's `Runtime` hold this node as a weak cache key:
-# the lowered-program cache lives off the AST now (see himark/engine/runtime.py),
-# so a node is purely data — no engine state rides on it.
-@dataclass(slots=True, weakref_slot=True)
-class RootNode:
-    type: Literal["root"] = "root"
-    children: list[Node] = field(default_factory=list)
-    # Set by the pipeline compiler on a statement's first step when the statement
-    # uses the `<=>` fixed-point arrow: the runner re-splices it until the document
-    # settles. A plain `=>` statement leaves it False. Excluded from equality (it
-    # is a runner directive, not part of the matched shape).
-    fixed_point: bool = field(default=False, compare=False)
-
-
-@dataclass(slots=True)
-class LeafNode:
-    type: Literal["leaf"] = "leaf"
-    content: str = ""
-
-
-@dataclass(slots=True)
-class BraceGroupNode:
-    type: Literal["brace_group"] = "brace_group"
-    content: str = ""
-    semantic: SemanticNode | None = None
-    count: CountSpec | None = None
-    count_src: str | None = None
-
-
-# -----------------------------
-# Semantic nodes (phase3)
+# Semantic nodes — the live IR produced by the ANTLR visitor and lowered
+# directly to opcodes by _emit_semantic.
 # -----------------------------
 
 
@@ -234,13 +200,17 @@ class GroupClassNode:
 
 @dataclass(slots=True)
 class SequenceNode:
+    # Internal: which children were plain CST text (LIT) vs brace-groups (GROUP).
+    _literal_mask: tuple[bool, ...] = field(default=(), repr=False, compare=False)
+    _child_counts: tuple[tuple, ...] = field(default=(), repr=False, compare=False)
+
     """A grouping brace: a `{...}` whose interior is a concatenation of constructs
     (`{of{black}{quartz}}`) rather than one alphabet expression. It is a single
     capture group whose nested brace children become its sub-captures.
     `children` are the resolved phase-3 nodes of the interior."""
 
     type: Literal["sequence"] = "sequence"
-    children: list[Node] = field(default_factory=list)
+    children: list[SemanticNode] = field(default_factory=list)
 
 
 @pydantic_dataclass(slots=True)
@@ -333,4 +303,5 @@ SemanticNode: TypeAlias = (
     | InfNode
 )
 
-Node: TypeAlias = RootNode | LeafNode | BraceGroupNode | SemanticNode
+# Node is now just SemanticNode — the structural wrapper layer was removed.
+Node: TypeAlias = SemanticNode
