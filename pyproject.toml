@@ -22,6 +22,23 @@ addopts = "-v --tb=short"
 # each other — they communicate only through the `models` AST. `macros` lives
 # inside `parser` (it is parser-only preprocessing), so it needs no own entry.
 
+[tool.importlinter]
+root_package = "himark"
+
+[[tool.importlinter.contracts]]
+id    = "parser-engine-independence"
+name  = "Parser and engine are independent siblings"
+type  = "independence"
+modules = [
+    "himark.parser",
+    "himark.engine",
+]
+
+[tool.vulture]
+exclude = ["_generated/", ".venv/", "tests/", "regenerate.py"]
+ignore_names = ["recognizer", "offendingSymbol"]
+min_confidence = 80
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
