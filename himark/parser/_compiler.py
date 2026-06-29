@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 
 from himark.models.compiled import Moustache, Template
+from himark.parser._expr import parse_expr
 from himark.models.opcodes import (
     ANCHOR,
     BACK_REF,
@@ -439,7 +440,7 @@ def compile_template_text(text: str) -> Template:
     for mo in _MOUSTACHE_RE.finditer(text):
         if mo.start() > last:
             parts.append(text[last : mo.start()])
-        parts.append(Moustache(body=mo.group(1).strip()))
+        parts.append(Moustache(expr=parse_expr(mo.group(1).strip())))
         last = mo.end()
     if last < len(text):
         parts.append(text[last:])

@@ -6,13 +6,15 @@ forms:
   * a **query** is a `Program` (the flat opcode IR in `opcodes.py`) — the VM scans
     it against text to produce matches;
   * a **template** is a `Template` — a pre-split sequence of literal text and
-    `Moustache` expressions the renderer fills in.
+    `Moustache` references, each holding a parsed expression (`Expr`) the renderer
+    only has to *evaluate*.
 
 `Step` is the union. The parser owns *both* parse and compile (ANTLR is the
 parser and the compiler), so it hands the engine these compiled steps directly —
-the engine never sees the intermediate AST (`nodes_typed`). Both forms are plain
-dataclasses over primitives, so a pipeline of them serialises (JSON via the
-`to_json` pair, or pickle) without any engine or AST objects riding along.
+the engine never sees the intermediate AST (`nodes_typed`), and never parses a
+moustache expression at render time. Both forms are plain dataclasses over
+primitives, so a pipeline of them serialises (JSON via the `to_json` pair, or
+pickle) without any engine or AST objects riding along.
 """
 
 from __future__ import annotations
@@ -23,13 +25,91 @@ from typing import TypeAlias
 from himark.models.opcodes import Program
 
 
+# ── Moustache expression AST ──────────────────────────────────────────────────
+# A `{{ … }}` body is a tiny expression: accessors (`.`, `$i`, `#i`, `2$0.1`),
+# string/int literals, parenthesised `,`-concatenation, and `|` filter pipes. The
+# parser compiles the body into this `Expr` tree once; the renderer evaluates it.
+
+
+@dataclass(slots=True)
+class ExLit:
+    """A string or integer literal — renders to its own text."""
+
+    text: str
+
+
+@dataclass(slots=True)
+class ExCurrent:
+    """The `.` accessor — the whole text flowing into this step (`{{.}}`)."""
+
+
+@dataclass(slots=True)
+class ExRef:
+    """A capture accessor `[stage]$|#[path]`. `stage` is the pipeline stage index, or
+    None for the current stage; `is_count` is the `#` sigil (a repetition count) vs
+    `$` (text); `path` is the dotted capture path, or None for the stage's whole
+    text (`$`). A `#` always carries a path (enforced at compile)."""
+
+    stage: int | None
+    is_count: bool
+    path: tuple[int, ...] | None
+
+
+@dataclass(slots=True)
+class ExConcat:
+    """A parenthesised comma-concatenation `( a, b, … )` — its parts joined."""
+
+    parts: list[Expr]
+
+
+@dataclass(slots=True)
+class ExFilter:
+    """A filter pipe `src | name` — `src`'s value transformed by the named filter
+    (`trim`, `indent`). The filter set lives in the renderer; this only names one."""
+
+    src: Expr
+    name: str
+
+
+Expr: TypeAlias = ExLit | ExCurrent | ExRef | ExConcat | ExFilter
+
+
+def _expr_to_json(e: Expr) -> dict:
+    if isinstance(e, ExLit):
+        return {"lit": e.text}
+    if isinstance(e, ExCurrent):
+        return {"cur": True}
+    if isinstance(e, ExRef):
+        path = list(e.path) if e.path is not None else None
+        return {"ref": [e.stage, e.is_count, path]}
+    if isinstance(e, ExConcat):
+        return {"cat": [_expr_to_json(p) for p in e.parts]}
+    return {"filter": e.name, "src": _expr_to_json(e.src)}
+
+
+def _expr_from_json(d: dict) -> Expr:
+    if "lit" in d:
+        return ExLit(d["lit"])
+    if "cur" in d:
+        return ExCurrent()
+    if "ref" in d:
+        stage, is_count, path = d["ref"]
+        return ExRef(stage, is_count, tuple(path) if path is not None else None)
+    if "cat" in d:
+        return ExConcat([_expr_from_json(p) for p in d["cat"]])
+    return ExFilter(_expr_from_json(d["src"]), d["filter"])
+
+
+# ── Compiled steps ────────────────────────────────────────────────────────────
+
+
 @dataclass(slots=True)
 class Moustache:
-    """One `{{ … }}` reference in a template — its expression body (the text
-    between the braces, already trimmed). The renderer evaluates it against the
-    pipeline stages at run time; compiling only locates and isolates it."""
+    """One `{{ … }}` reference in a template, holding its compiled `Expr`. The
+    renderer evaluates it against the pipeline stages at run time; the parser did
+    the parsing, so rendering never re-lexes the body."""
 
-    body: str
+    expr: Expr
 
 
 @dataclass(slots=True)
@@ -48,19 +128,20 @@ class Template:
 
     def to_json(self) -> dict:
         """Serialise to a JSON-stable dict — parity with `Program.to_json`. A
-        literal part stays a string; a moustache becomes `{"m": <body>}`."""
+        literal part stays a string; a moustache becomes `{"m": <expr-json>}`."""
         return {
             "version": 1,
             "fixed_point": self.fixed_point,
             "template": [
-                p if isinstance(p, str) else {"m": p.body} for p in self.parts
+                p if isinstance(p, str) else {"m": _expr_to_json(p.expr)}
+                for p in self.parts
             ],
         }
 
     @classmethod
     def from_json(cls, data: dict) -> "Template":
         parts: list[str | Moustache] = [
-            p if isinstance(p, str) else Moustache(body=p["m"])
+            p if isinstance(p, str) else Moustache(expr=_expr_from_json(p["m"]))
             for p in data["template"]
         ]
         return cls(parts=parts, fixed_point=data["fixed_point"])

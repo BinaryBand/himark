@@ -19,24 +19,18 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 (everything outside `{{ }}`) is constant.
 """
 
-import re
-from dataclasses import dataclass
-
 from himark.engine.backend import Match
-from himark.models.compiled import Moustache, Template
+from himark.models.compiled import (
+    ExConcat,
+    ExCurrent,
+    ExFilter,
+    ExLit,
+    ExRef,
+    Expr,
+    Moustache,
+    Template,
+)
 from himark.models.exceptions import CompileError
-
-_ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")
-_FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
-
-
-@dataclass(slots=True)
-class _Value:
-    """A moustache value flowing through an expression and its filter chain -- a
-    surface string. (The matcher carries the value model; the template layer only
-    ever moves text now that byte filters and arithmetic are gone.)"""
-
-    text: str
 
 
 def _indent(s: str) -> str:
@@ -47,13 +41,12 @@ def _indent(s: str) -> str:
     return "" if s == "" else "\t" + s.replace("\n", "\n\t")
 
 
-# The native filter set — closed and string-only: each maps a `_Value` to a raw
-# string. `trim` strips surrounding whitespace; `indent` tabs every line. Byte
-# projections and arithmetic were removed (no live consumer), so a filter takes no
-# arguments and the template layer only ever moves text.
+# The native filter set — closed and string-only: `trim` strips surrounding
+# whitespace; `indent` tabs every line. Filters take no arguments (the parser
+# enforces that); the template layer only ever moves text.
 _FILTERS = {
-    "trim": lambda v: v.text.strip(),
-    "indent": lambda v: _indent(v.text),
+    "trim": str.strip,
+    "indent": _indent,
 }
 
 
@@ -68,14 +61,15 @@ def render(
     A template with **no** moustaches has nothing to single out, so its whole render
     flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`.
 
-    The literal/moustache split was done at compile time (`compile_template`); this
-    only fills each moustache's value in against the pipeline stages."""
+    The literal/moustache split and the moustache expressions were both compiled
+    up front (`compile_template`/`parse_expr`); this only *evaluates* each `Expr`
+    against the pipeline stages — no lexing, no parsing."""
     out: list[str] = []
     length = 0
     spans: list[tuple[int, int]] = []
     for part in template.parts:
         if isinstance(part, Moustache):
-            value = _eval(part.body, current, stages)
+            value = _eval(part.expr, current, stages)
             start = length
             out.append(value)
             length += len(value)
@@ -87,144 +81,43 @@ def render(
     return full, (spans or None)
 
 
-# One expression token. Order matters: a string and an accessor (`0$0`, `$`, `.`)
-# are tried before a bare integer or filter name so they are not mis-split.
-_EXPR_TOKEN_RE = re.compile(
-    r"""
-      (?P<ws>\s+)
-    | (?P<string>"[^"]*")
-    | (?P<accessor>\d*[$#]\d+(?:\.\d+)*|\d*[$#]|\.)
-    | (?P<filter>[A-Za-z_]\w*\s*\([^)]*\)|[A-Za-z_]\w*)
-    | (?P<int>\d+)
-    | (?P<lparen>\()
-    | (?P<rparen>\))
-    | (?P<pipe>\|)
-    | (?P<comma>,)
-    """,
-    re.X,
-)
+# ── Expression evaluation (the parser already built the `Expr`) ────────────────
 
 
-def _tokenize(s: str) -> list[tuple[str, str]]:
-    """Lex a moustache expression into `(kind, text)` tokens, dropping whitespace."""
-    toks: list[tuple[str, str]] = []
-    pos = 0
-    while pos < len(s):
-        m = _EXPR_TOKEN_RE.match(s, pos)
-        if m is None:
-            raise CompileError(
-                f"Unexpected character {s[pos]!r} in moustache expression {{{{{s}}}}}"
-            )
-        pos = m.end()
-        if m.lastgroup != "ws":
-            toks.append((m.lastgroup, m.group()))
-    return toks
+def _eval(expr: Expr, current: str, stages: list[Match]) -> str:
+    """Evaluate a compiled moustache `Expr` to text against the pipeline stages."""
+    if isinstance(expr, ExLit):
+        return expr.text
+    if isinstance(expr, ExCurrent):
+        return current  # `{{.}}` — the whole flowing text
+    if isinstance(expr, ExRef):
+        return _eval_ref(expr, stages)
+    if isinstance(expr, ExConcat):
+        return "".join(_eval(p, current, stages) for p in expr.parts)
+    if isinstance(expr, ExFilter):
+        return _apply_filter(expr.name, _eval(expr.src, current, stages))
+    raise CompileError(f"Unknown moustache expression: {type(expr).__name__}")
 
 
-class _ExprParser:
-    """Recursive descent over a moustache expression: an operand (accessor, int or
-    string literal, or a parenthesized group) followed by zero or more `| filter`
-    pipes; inside parens, `,` concatenates surface text. Each rule returns a
-    `_Value` (raw text)."""
-
-    def __init__(self, toks: list[tuple[str, str]], current: str, stages):
-        self.toks = toks
-        self.i = 0
-        self.current = current
-        self.stages = stages
-
-    def _peek(self) -> str:
-        return self.toks[self.i][0] if self.i < len(self.toks) else ""
-
-    def parse(self) -> _Value:
-        value = self._pipe()
-        if self.i != len(self.toks):
-            raise CompileError(
-                f"Unexpected '{self.toks[self.i][1]}' in moustache expression"
-            )
-        return value
-
-    def _pipe(self) -> _Value:
-        value = self._atom()
-        while self._peek() == "pipe":
-            self.i += 1
-            if self._peek() != "filter":
-                raise CompileError("'|' must be followed by a filter")
-            value = _apply_filter(self.toks[self.i][1], value)
-            self.i += 1
-        return value
-
-    def _atom(self) -> _Value:
-        kind, text = self.toks[self.i] if self.i < len(self.toks) else ("", "")
-        if kind == "lparen":
-            return self._parens()
-        self.i += 1
-        if kind == "string":
-            return _Value(text[1:-1])  # a raw string
-        if kind == "int":
-            return _Value(text)
-        if kind == "accessor":
-            if text == ".":
-                return _Value(self.current)
-            return _resolve(text, self.stages)
-        raise CompileError(f"Expected a value in moustache expression, got {text!r}")
-
-    def _parens(self) -> _Value:
-        self.i += 1  # consume '('
-        members = [self._pipe()]
-        while self._peek() == "comma":
-            self.i += 1
-            members.append(self._pipe())
-        if self._peek() != "rparen":
-            raise CompileError("Unclosed '(' in moustache expression")
-        self.i += 1  # consume ')'
-        if len(members) == 1:
-            return members[0]  # plain grouping
-        return _Value("".join(m.text for m in members))  # concatenation
-
-
-def _eval(inner: str, current: str, stages: list[Match]) -> str:
-    """Evaluate a moustache body — accessors, integer/string literals, `,`
-    concatenation, and `|` filters — to text."""
-    return _ExprParser(_tokenize(inner), current, stages).parse().text
-
-
-def _apply_filter(token: str, value: _Value) -> _Value:
-    """Apply one named filter, returning a raw-string `_Value`. The filter set is
-    closed and native (`trim`, `indent`); an unknown name or any argument is a
-    compile error."""
-    m = _FILTER_RE.fullmatch(token)
-    if m is None:
-        raise CompileError(f"Malformed template filter: '{token.strip()}'")
-    name, arg_src = m.group(1), m.group(2)
-    fn = _FILTERS.get(name)
-    if fn is None:
-        raise CompileError(f"Unknown template filter: '{name}'")
-    if arg_src:
-        raise CompileError(f"Filter '{name}' takes no arguments")
-    return _Value(fn(value))
-
-
-def _resolve(expr: str, stages: list[Match]) -> _Value:
-    m = _ACCESSOR_RE.fullmatch(expr)
-    if m is None:
-        raise CompileError(f"Unsupported moustache reference: {{{{{expr}}}}}")
-    pipe_src, sigil, path_src = m.groups()
-
-    pipe_idx = int(pipe_src) if pipe_src else len(stages) - 1
+def _eval_ref(ref: ExRef, stages: list[Match]) -> str:
+    """Resolve a capture accessor against the stages — the one part that genuinely
+    needs run-time data (the stages), so it stays here, not in the parser."""
+    pipe_idx = ref.stage if ref.stage is not None else len(stages) - 1
     if not 0 <= pipe_idx < len(stages):
         raise CompileError(f"Moustache stage {pipe_idx} is out of range")
     stage = stages[pipe_idx]
-
-    if sigil == "$" and not path_src:
-        return _Value(stage.text)  # whole match — a raw string, no alphabet
-    if not path_src:
-        raise CompileError("A '#' moustache reference needs a capture index")
-
-    path = tuple(int(i) for i in path_src.split("."))
-    capture = stage.capture_at(path)
+    if ref.path is None:
+        return stage.text  # `$` / `N$` — the stage's whole text
+    capture = stage.capture_at(ref.path)
     if capture is None:
-        raise CompileError(f"Moustache index out of range in {{{{{expr}}}}}")
-    if sigil == "#":
-        return _Value(str(len(capture.reps)))  # repetition count
-    return _Value(capture.text)
+        raise CompileError(f"Moustache capture {ref.path} is out of range")
+    return str(len(capture.reps)) if ref.is_count else capture.text
+
+
+def _apply_filter(name: str, text: str) -> str:
+    """Apply one named filter. The set is closed and native (`trim`, `indent`); an
+    unknown name is an error (the parser already rejected arguments)."""
+    fn = _FILTERS.get(name)
+    if fn is None:
+        raise CompileError(f"Unknown template filter: '{name}'")
+    return fn(text)

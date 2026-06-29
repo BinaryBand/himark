@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from himark.engine.backend._types import Match
 from himark.engine.backend._vm import find_matches as _run_find_matches
+from himark.engine.backend._vm import prepare as _prepare
 from himark.engine.backend.interface import Engine
 from himark.models.opcodes import Program
 
@@ -21,12 +22,13 @@ __all__ = ["Engine", "PythonEngine"]
 
 
 class PythonEngine:
-    """The built-in pure-Python backend: the `Program` runs directly on the VM."""
+    """The built-in pure-Python backend: `prepare` the `Program` into VM-ready
+    instructions once, then run them on the VM."""
 
     name = "python"
 
     def compile(self, program: Program) -> object:
-        return program
+        return _prepare(program)
 
     def run(
         self,
