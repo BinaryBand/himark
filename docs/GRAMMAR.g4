@@ -14,14 +14,17 @@
  *
  * Layering:
  *   • Comments and statement-splitting are a stateful pre-pass.
- *   • A `"…"` template is one opaque STRING token.
+ *   • A `"…"` template is one opaque STRING token. The interior of a `{{ … }}`
+ *     moustache is a *whitespace-insensitive* mini-language with dotted capture
+ *     paths (`2$0.1`); it is compiled by `himark.parser._expr`, not by this
+ *     grammar, since it cannot share this lexer (here whitespace is significant
+ *     and a `.` is a token).
  *
  * Entry rules:
  *   script    — a whole comment-stripped `.hmk` pipeline file
  *   prelude   — a whole comment-stripped `std.hmk`
  *   statement — one `=>` / `<=>` chain (a snippet)
  *   pattern   — one query (a snippet, no arrows)
- *   moustacheExpression — the interior of one `{{ … }}` (second layer)
  */
 grammar GRAMMAR;
 
@@ -117,19 +120,6 @@ macro     : AT NAME ;
 
 declaration : macroDecl ;
 macroDecl   : AT NAME EQ band ;
-
-moustacheExpression : moustacheExpr EOF ;
-moustacheExpr : pipeExpr ;
-pipeExpr  : primary (PIPE filter)* ;
-primary   : LPAREN moustacheExpr (COMMA moustacheExpr)* RPAREN
-          | accessor
-          | INT
-          | STRING
-          ;
-accessor  : INT? (DOLLAR | HASH) INT?
-          | DOT
-          ;
-filter    : NAME ;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Lexer
