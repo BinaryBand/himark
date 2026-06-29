@@ -1,29 +1,16 @@
 # Himark Payload Wire Format
 
-This is the contract between the Himark **compiler** and any **executor**. The compiler
-(`himark/parser`) turns `.hmk` source into a tree of plain primitives; an executor — the
-bundled Python VM, or an independent reimplementation (e.g. Rust) — consumes that tree and
-runs it. The payload carries **no Python objects**: every value is a string, integer,
-boolean, `null`, or array, so it round-trips through JSON / MessagePack / CBOR unchanged.
+This is the contract between the Himark **compiler** and any **executor**. The compiler (`himark/parser`) turns `.hmk` source into a tree of plain primitives; an executor — the bundled Python VM, or an independent reimplementation (e.g. Rust) — consumes that tree and runs it. The payload carries **no Python objects**: every value is a string, integer, boolean, `null`, or array, so it round-trips through JSON / MessagePack / CBOR unchanged.
 
-A consumer needs **only** this document plus the language semantics in
-[HMK.md](HMK.md). It does not import or know about this codebase. Prelude variables
-(`@d`, `@hex`, …) are already expanded at compile time and baked into the payload, so no
-external alphabet definitions are required at run time.
+A consumer needs **only** this document plus the language semantics in [HMK.md](HMK.md). It does not import or know about this codebase. Prelude variables (`@d`, `@hex`, …) are already expanded at compile time and baked into the payload, so no external alphabet definitions are required at run time.
 
-> **Status.** The in-memory shapes below are emitted today by `himark/parser/_compiler.py`.
-> The canonical JSON *envelope* (`version` / `statements` / per-step `kind`) and the
-> `to_json` / `from_json` pair are the target described in [TODO.md](TODO.md) ("Portable
-> payload"); `Template.to_json` already exists and should be aligned to the envelope here.
-> JSON has no tuple type, so every tuple below is encoded as an **array**; an executor must
-> read arrays **positionally**.
+> **Status.** The in-memory shapes below are emitted today by `himark/parser/_compiler.py`. The canonical JSON *envelope* (`version` / `statements` / per-step `kind`) and the `to_json` / `from_json` pair are the target described in [TODO.md](TODO.md) ("Portable payload"); `Template.to_json` already exists and should be aligned to the envelope here. JSON has no tuple type, so every tuple below is encoded as an **array**; an executor must read arrays **positionally**.
 
 ---
 
 ## 1. Document envelope
 
-A compiled `.hmk` file is a **pipeline**: an ordered list of **statements**, each an ordered
-list of **steps**.
+A compiled `.hmk` file is a **pipeline**: an ordered list of **statements**, each an ordered list of **steps**.
 
 ```json
 {
@@ -35,17 +22,13 @@ list of **steps**.
 }
 ```
 
-- `version` — payload schema version. Bump on any breaking change to an opcode, a
-  sub-encoding, the filter set, or the envelope.
+- `version` — payload schema version. Bump on any breaking change to an opcode, a sub-encoding, the filter set, or the envelope.
 - `statements` — run in order; each is spliced over the document before the next begins.
-- A statement's `fixed_point` flag (the `<=>` arrow) is carried on its **first step**. When
-  set, the executor re-splices that statement until the document stops changing; otherwise it
-  splices once. See [HMK.md](HMK.md) and `himark/engine/__init__.py` for the branch/splice model.
+- A statement's `fixed_point` flag (the `<=>` arrow) is carried on its **first step**. When set, the executor re-splices that statement until the document stops changing; otherwise it splices once. See [HMK.md](HMK.md) and `himark/engine/__init__.py` for the branch/splice model.
 
 ## 2. Step
 
-Each step is either a **query** (a matcher `Program`) or a **template** (a renderer). The
-`kind` field discriminates them.
+Each step is either a **query** (a matcher `Program`) or a **template** (a renderer). The `kind` field discriminates them.
 
 ### 2.1 Query step
 
@@ -68,16 +51,11 @@ Each step is either a **query** (a matcher `Program`) or a **template** (a rende
 }
 ```
 
-A literal part is emitted verbatim. A `{"m": <expr>}` part is an interpolated moustache
-(`{{ … }}`); the executor evaluates `<expr>` (§7) and records where its value lands so it can
-flow downstream as its own branch.
+A literal part is emitted verbatim. A `{"m": <expr>}` part is an interpolated moustache (`{{ … }}`); the executor evaluates `<expr>` (§7) and records where its value lands so it can flow downstream as its own branch.
 
 ## 3. Instruction
 
-An instruction is an array `[opcode, <operand>, ...]`. The first element is the integer
-opcode (§4); the remaining elements are its operands in the fixed order given below. Most
-opcodes end with a **reps** operand (§5); `LIT` and `ANCHOR` are zero-width/uncounted and
-carry none.
+An instruction is an array `[opcode, <operand>, ...]`. The first element is the integer opcode (§4); the remaining elements are its operands in the fixed order given below. Most opcodes end with a **reps** operand (§5); `LIT` and `ANCHOR` are zero-width/uncounted and carry none.
 
 ## 4. Opcodes
 
@@ -96,11 +74,7 @@ carry none.
 | 10 | `COMPLEMENT` | `inner_groups` (§9), `reps` — one position whose value is **not** in the inner alphabet. |
 | 11 | `SEQ_GROUP` | `children: [<instruction>, ...]`, `reps` — a grouping brace: a sub-program that is one capture group whose inner instructions become sub-captures. |
 
-`VALUE_RANGE` bounds: `lo_val` / `hi_val` are positional values in `alph` (`null` = open on
-that side); `wmin` / `wmax` are the inclusive width window in symbols (`wmax` `null` =
-unbounded). `DYN_RANGE`: for each side, use the static endpoint string when its `*_ref` is
-`null`, otherwise resolve the reference descriptor; recompute width/value bounds from the
-resolved endpoint.
+`VALUE_RANGE` bounds: `lo_val` / `hi_val` are positional values in `alph` (`null` = open on that side); `wmin` / `wmax` are the inclusive width window in symbols (`wmax` `null` = unbounded). `DYN_RANGE`: for each side, use the static endpoint string when its `*_ref` is `null`, otherwise resolve the reference descriptor; recompute width/value bounds from the resolved endpoint.
 
 ## 5. Reps (repetition)
 
@@ -137,13 +111,11 @@ A `{{ … }}` body compiles to a small expression tree. Each node is a JSON obje
 | concat | `{"cat": [<expr>, ...]}` | parenthesised comma-concatenation `( a, b, … )` — parts joined. |
 | filter | `{"filter": "<name>", "src": <expr>}` | a filter pipe `src \| name`. |
 
-Filter names are a closed set: **`trim`**, **`indent`**. An executor must implement exactly
-these; an unknown filter is a payload it cannot run (treat as a version mismatch).
+Filter names are a closed set: **`trim`**, **`indent`**. An executor must implement exactly these; an unknown filter is a payload it cannot run (treat as a version mismatch).
 
 ## 8. Exclusions (`excl`)
 
-Exclusions are pre-normalised at compile time into a triple of buckets so the executor only
-tests, never parses:
+Exclusions are pre-normalised at compile time into a triple of buckets so the executor only tests, never parses:
 
 ```json
 [ [<single>, ...], [[<lo>, <hi>], ...], [<literal>, ...] ]
@@ -151,18 +123,13 @@ tests, never parses:
 
 - **singles** — 1-character strings; a candidate char is excluded if it equals one.
 - **ranges** — `[lo, hi]` pairs of single chars; excluded if `lo <= ch <= hi` (ordinal compare).
-- **literals** — multi-character strings; excluded if the text at the current position
-  *starts with* one.
+- **literals** — multi-character strings; excluded if the text at the current position *starts with* one.
 
 An empty bucket is `[]`. All three buckets empty means "no exclusions".
 
 ## 9. Group list (`groups` / `inner_groups`)
 
-An ordered list of **symbol groups**: `[[str, ...], ...]`. Each inner array is one group of
-congruent surface forms that share a position/value (e.g. `{f,F}` → `["f", "F"]`); a plain
-member is a singleton group (`["a"]`). For a `GROUP`, `het` (heterogeneous) is `true` when the
-groups come from a congruence class whose members may differ across repetitions, and `false`
-when each repetition re-matches the same surface form. Members may be multi-character.
+An ordered list of **symbol groups**: `[[str, ...], ...]`. Each inner array is one group of congruent surface forms that share a position/value (e.g. `{f,F}` → `["f", "F"]`); a plain member is a singleton group (`["a"]`). For a `GROUP`, `het` (heterogeneous) is `true` when the groups come from a congruence class whose members may differ across repetitions, and `false` when each repetition re-matches the same surface form. Members may be multi-character.
 
 ## 10. Alphabet descriptor (`alph`)
 
@@ -187,8 +154,7 @@ A dynamic band endpoint resolves against earlier match state:
 
 ## 12. Worked example
 
-Source: `@<{a,b} => "[{{.}}]"` — at a line start, match one `a` or `b`, then wrap it in
-brackets.
+Source: `@<{a,b} => "[{{.}}]"` — at a line start, match one `a` or `b`, then wrap it in brackets.
 
 ```json
 {
@@ -222,15 +188,8 @@ brackets.
 
 ## 13. Notes for implementers
 
-- **Positional arrays.** Operands are read by position, not by key. Adding an operand to an
-  opcode is a breaking change — bump `version`.
-- **Tuples become arrays.** Any value the source calls a tuple (`path`, descriptors, reps)
-  is a JSON array. Equality/round-trip must treat `(a, b)` and `[a, b]` as the same.
-- **Unicode.** Symbol strings carry raw characters; serialise with `ensure_ascii=False` (or
-  the binary format's native string type). Code points in `CHAR` / `["range", …]` are integer
-  ordinals.
-- **No prelude dependency.** Named alphabets are already lowered to `groups` / `range`
-  descriptors; the executor needs nothing from `std.hmk`.
-- **Conformance.** The reference oracle is the bundled Python VM (`himark/engine`). A new
-  executor should match its output over the `tests/golden`, `tests/north_star`, and
-  `tests/demos` corpora.
+- **Positional arrays.** Operands are read by position, not by key. Adding an operand to an opcode is a breaking change — bump `version`.
+- **Tuples become arrays.** Any value the source calls a tuple (`path`, descriptors, reps) is a JSON array. Equality/round-trip must treat `(a, b)` and `[a, b]` as the same.
+- **Unicode.** Symbol strings carry raw characters; serialise with `ensure_ascii=False` (or the binary format's native string type). Code points in `CHAR` / `["range", …]` are integer ordinals.
+- **No prelude dependency.** Named alphabets are already lowered to `groups` / `range` descriptors; the executor needs nothing from `std.hmk`.
+- **Conformance.** The reference oracle is the bundled Python VM (`himark/engine`). A new executor should match its output over the `tests/golden`, `tests/north_star`, and `tests/demos` corpora.
