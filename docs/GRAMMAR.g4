@@ -22,7 +22,6 @@
  *
  * Entry rules:
  *   script    — a whole comment-stripped `.hmk` pipeline file
- *   prelude   — a whole comment-stripped `std.hmk`
  *   statement — one `=>` / `<=>` chain (a snippet)
  *   pattern   — one query (a snippet, no arrows)
  *   moustacheExpression — the interior of one `{{ … }}` (second layer)
@@ -34,7 +33,6 @@ grammar GRAMMAR;
 // ═════════════════════════════════════════════════════════════════════════════
 
 script   : sp (scriptItem (sp scriptItem)*)? sp EOF ;
-prelude  : sp (declaration (sp declaration)*)? sp EOF ;
 snippet  : sp statement sp EOF ;
 patternOnly : sp pattern sp EOF ;
 
@@ -118,9 +116,6 @@ reference : INT (DOLLAR | HASH) INT?
           ;
 anchor    : AT (LT LT? | GT GT?) ;
 macro     : AT NAME ;
-
-declaration : macroDecl ;
-macroDecl   : AT NAME EQ band ;
 
 // The interior of one `{{ … }}` moustache (a second-layer entry rule). A tiny
 // whitespace-insensitive expression: accessors (`.`, `$i`, `#i`, `2$0.1` a

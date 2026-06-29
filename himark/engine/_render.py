@@ -62,7 +62,7 @@ def render(
     flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`.
 
     The literal/moustache split and the moustache expressions were both compiled
-    up front (`compile_template`/`parse_expr`); this only *evaluates* each `Expr`
+    up front (`compile_template_text`); this only *evaluates* each `Expr`
     against the pipeline stages — no lexing, no parsing."""
     out: list[str] = []
     length = 0
