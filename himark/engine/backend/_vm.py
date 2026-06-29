@@ -35,6 +35,7 @@ from himark.models.opcodes import (
 )
 from himark.engine.backend._types import Capture, Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
+from himark.models.exceptions import CompileError
 
 # A continuation: "match the rest of the program from this position", or None.
 Cont = Callable[[int], "int | None"]
@@ -666,7 +667,3 @@ def _finalize(text: str, start: int, end: int, state: _State) -> Match:
     for c in state.captures:
         settle(c)
     return Match(text[start:end], start, end, state.captures)
-
-
-class CompileError(Exception):
-    pass
