@@ -17,16 +17,19 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 from himark.models.compiled import Step, Template
 
 _ENGINE: list[str] = [
-    sys.executable,
     str(
-        Path(__file__).parents[2] / "sandbox" / "engine.py"
-    ),  # swap for Rust binary here
+        Path(__file__).parents[2]
+        / "sandbox"
+        / "rust"
+        / "target"
+        / "release"
+        / "himark-engine"
+    ),
 ]
 
 

@@ -1,0 +1,151 @@
+use std::collections::{HashMap, HashSet};
+
+// ── Reps ─────────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub struct Reps {
+    pub min: usize,
+    pub max: Option<usize>,
+    pub allowed: Option<HashSet<usize>>,
+    pub count_ref: Option<usize>,
+}
+
+impl Reps {
+    pub fn exact(n: usize) -> Self {
+        Reps { min: n, max: Some(n), allowed: None, count_ref: None }
+    }
+
+    pub fn accepts(&self, k: usize) -> bool {
+        if let Some(ref set) = self.allowed {
+            return set.contains(&k);
+        }
+        k >= self.min && self.max.map_or(true, |m| k <= m)
+    }
+}
+
+impl Default for Reps {
+    fn default() -> Self {
+        Reps::exact(1)
+    }
+}
+
+// ── Capture ───────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub struct Capture {
+    pub text: String,
+    pub span: (usize, usize),
+    pub reps: Vec<String>,
+    pub subs: Vec<Capture>,
+    pub count: i64, // -1 = use reps.len()
+}
+
+impl Capture {
+    pub fn rep_count(&self) -> usize {
+        if self.count >= 0 { self.count as usize } else { self.reps.len() }
+    }
+}
+
+// ── Match ─────────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub struct HMatch {
+    pub text: String,
+    pub start: usize,
+    pub end: usize,
+    pub captures: Vec<Capture>,
+}
+
+impl HMatch {
+    pub fn capture_at(&self, path: &[usize]) -> Option<&Capture> {
+        let mut caps = &self.captures;
+        let mut cap = None;
+        for &idx in path {
+            if idx >= caps.len() {
+                return None;
+            }
+            cap = Some(&caps[idx]);
+            caps = &caps[idx].subs;
+        }
+        cap
+    }
+}
+
+// ── Alphabet ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub enum Alphabet {
+    Range { lo: u32, hi: u32, base: usize },
+    Groups { index: HashMap<String, usize>, base: usize },
+}
+
+impl Alphabet {
+    pub fn from_range(lo: u32, hi: u32) -> Self {
+        Alphabet::Range { lo, hi, base: (hi - lo + 1) as usize }
+    }
+
+    pub fn from_groups(groups: Vec<Vec<String>>) -> Self {
+        let mut index = HashMap::new();
+        let base = groups.len();
+        for (i, grp) in groups.into_iter().enumerate() {
+            for m in grp {
+                index.insert(m, i);
+            }
+        }
+        Alphabet::Groups { index, base }
+    }
+
+    pub fn base(&self) -> usize {
+        match self {
+            Alphabet::Range { base, .. } => *base,
+            Alphabet::Groups { base, .. } => *base,
+        }
+    }
+
+    pub fn contains_char(&self, ch: char) -> bool {
+        match self {
+            Alphabet::Range { lo, hi, .. } => *lo <= ch as u32 && ch as u32 <= *hi,
+            Alphabet::Groups { index, .. } => index.contains_key(&ch.to_string()),
+        }
+    }
+
+    // Returns the numeric value of string `s` over this alphabet.
+    // Uses f64 to handle base^n values that overflow i64/u128 (e.g. base58^33).
+    // Precision is approximate for very large values, but sufficient for range checks.
+    pub fn value(&self, s: &str) -> Option<f64> {
+        let mut v: f64 = 0.0;
+        match self {
+            Alphabet::Range { lo, base, .. } => {
+                let hi = lo + *base as u32 - 1;
+                for ch in s.chars() {
+                    let cp = ch as u32;
+                    if cp < *lo || cp > hi {
+                        return None;
+                    }
+                    v = v * (*base as f64) + (cp - lo) as f64;
+                }
+            }
+            Alphabet::Groups { index, base } => {
+                for ch in s.chars() {
+                    let idx = index.get(&ch.to_string())?;
+                    v = v * (*base as f64) + *idx as f64;
+                }
+            }
+        }
+        Some(v)
+    }
+}
+
+// ── VM State ──────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub struct State {
+    pub captures: Vec<Capture>,
+    pub stages: Vec<HMatch>,
+}
+
+impl State {
+    pub fn new(stages: Vec<HMatch>) -> Self {
+        State { captures: Vec::new(), stages }
+    }
+}

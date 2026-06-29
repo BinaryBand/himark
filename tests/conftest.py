@@ -49,3 +49,5 @@ def pytest_sessionstart(session: object) -> None:
     _run_tool([str(_BIN / "ruff"), "format", str(ROOT)], "ruff format")
     _run_tool([str(_BIN / "ruff"), "check", "--fix", str(ROOT)], "ruff check --fix")
     _run_tool([str(_BIN / "ty"), "check", "--fix"], "ty check --fix")
+    rust_dir = ROOT / "sandbox" / "rust"
+    subprocess.run(["cargo", "build", "--release"], cwd=rust_dir, check=True)
