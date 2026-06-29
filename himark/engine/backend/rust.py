@@ -22,8 +22,7 @@ from typing import Any, cast
 from himark.engine.backend._translate import Unsupported, to_json
 from himark.engine.backend._types import Capture, Match
 from himark.engine.backend.python import PythonEngine
-from himark.models import nodes_typed as t
-from himark.engine.backend._compiler import compile_pattern
+from himark.models.opcodes import Program
 
 # The native module is built separately and has no type stubs, so it is held as
 # `Any`. Absent (not built) → `RUST_AVAILABLE` is False and `RustEngine` raises.
@@ -57,12 +56,11 @@ class RustEngine:
             )
         self._fallback = PythonEngine()
 
-    def compile(self, tree: t.RootNode) -> object:
-        program = compile_pattern(tree)
+    def compile(self, program: Program) -> object:
         try:
             program_json = to_json(program.elements)
         except Unsupported:
-            return ("py", self._fallback.compile(tree))
+            return ("py", self._fallback.compile(program))
         return ("rs", _rs.compile(program_json))
 
     def run(

@@ -1,20 +1,20 @@
 """Pre-compile a pipeline of HMK statements into a portable artifact.
 
 A *pipeline* is an ordered list of HMK statements (e.g. a Markdown → HTML
-conversion), each spliced over the document in turn. Parsing those statements is
-the dominant one-time cost — about 180 µs per statement, versus ~7 µs to lower
-the AST and microseconds for the backend seam. The match loop (`engine/_run`) is
-the only per-document cost that remains, and that is irreducible work.
+conversion), each spliced over the document in turn. Parsing **and compiling**
+those statements is the dominant one-time cost; the match loop (`engine`) is the
+only per-document cost that remains, and that is irreducible work.
 
 So for a fixed pipeline run over many documents (or re-launched processes): parse
-once with `compile_pipeline`, `dump` the parsed steps to a file, and `load` it
+once with `compile_pipeline`, `dump` the compiled steps to a file, and `load` it
 back to skip parsing entirely. `apply` runs the pipeline over a document.
 
-Portability note: the artifact is a pickle of the typed AST, so it is portable as
-a data file *alongside the himark library* — loading it needs `himark` importable
-and broadly version-compatible. It is not a language-agnostic format. The lowered
-matcher program is **not** stored (it recompiles lazily on first use, ~7 µs), so
-the file stays small and free of engine objects.
+Portability note: the artifact is a pickle of the compiled product — a
+`Program`/`Template` per step — so it is portable as a data file *alongside the
+himark library* (loading it needs `himark` importable and broadly version-
+compatible). It is not a language-agnostic format, though each step also has a
+`to_json` for that. No backend handle is stored: the engine produces (and caches)
+that lazily on first use, so the file stays small and free of engine objects.
 
 Run:  python -m himark.tools.precompiled dump out.hmkc "<stmt>" ["<stmt>" …]
 """
@@ -29,19 +29,22 @@ import typer
 
 from himark import parser
 from himark.engine import run_pipeline
-from himark.models import nodes_typed as t
+from himark.models.compiled import Step
 from himark.models.exceptions import CompileError
 from himark.prelude import VARIABLES
 
 _MAGIC = b"HMKC\x00"
-_VERSION = 1
+# v2: the artifact now pickles the compiled product (`Program`/`Template`) instead
+# of the typed AST (`RootNode`). An older v1 file is rejected by `load`.
+_VERSION = 2
 
-Pipeline = list[list[t.RootNode]]
+Pipeline = list[list[Step]]
 
 
 def compile_pipeline(statements: list[str]) -> Pipeline:
-    """Parse each HMK statement into its ordered step trees — the costly one-time
-    work this module exists to cache. The result runs with `apply`.
+    """Parse and compile each HMK statement into its ordered steps (`Program` /
+    `Template`) — the costly one-time work this module exists to cache. The result
+    runs with `apply`.
 
     A statement whose arrow is `<=>` (fixed-point) is parsed like its `=>` form,
     and its first step is flagged so `apply` re-splices it until the document
@@ -256,9 +259,10 @@ def apply(pipeline: Pipeline, text: str) -> str:
 def dump(pipeline: Pipeline, path: str | Path) -> None:
     """Write `pipeline` to a portable artifact at `path`.
 
-    The AST carries no engine state — the lowered-program cache lives in the
-    engine's `Runtime`, not on the nodes — so the file holds only the AST (no
-    matchers, no backend objects), stays small, and recompiles lazily on load."""
+    The compiled steps carry no engine state — the per-backend handle cache lives
+    in the engine's `Runtime`, not on the `Program` — so the file holds only the
+    compiled product (no backend objects), stays small, and the handle is rebuilt
+    lazily on load."""
     body = pickle.dumps(pipeline, protocol=pickle.HIGHEST_PROTOCOL)
     Path(path).write_bytes(_MAGIC + bytes([_VERSION]) + body)
 

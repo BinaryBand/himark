@@ -111,7 +111,11 @@ Instruction: "type" = tuple
 
 # ── Compiled program ───────────────────────────────────────────────────────────
 
-@dataclass(frozen=True, slots=True)
+# `weakref_slot` lets the engine's `Runtime` cache the per-backend handle off the
+# Program (keyed by identity, evicted when the Program dies). It is not frozen
+# because the pipeline runner sets `fixed_point` on a statement's first step after
+# the parser has compiled it (the `<=>` flag is a runner directive, not shape).
+@dataclass(slots=True, weakref_slot=True)
 class Program:
     """The lowered, executable form of a pattern — a flat list of opcode
     tuples.  This is the single named boundary between compilation and

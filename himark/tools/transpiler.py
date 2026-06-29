@@ -25,15 +25,18 @@ DEFAULT_INPUT = ROOT / "docs" / "HMK.md"
 
 def _pipeline(script: Path) -> precompiled.Pipeline:
     """The compiled `script` pipeline, loaded from a cached `.hmkc` artifact in
-    downloads/. Rebuilt when the artifact is missing or older than the script
-    (a make-style freshness check)."""
+    downloads/. Rebuilt when the artifact is missing, older than the script (a
+    make-style freshness check), or written by an incompatible older version."""
     artifact = DOWNLOADS / f"{script.stem}.hmkc"
-    if not artifact.exists() or artifact.stat().st_mtime < script.stat().st_mtime:
-        DOWNLOADS.mkdir(parents=True, exist_ok=True)
-        pipeline = precompiled.compile_script(script.read_text("utf-8"))
-        precompiled.dump(pipeline, artifact)
-        return pipeline
-    return precompiled.load(artifact)
+    if artifact.exists() and artifact.stat().st_mtime >= script.stat().st_mtime:
+        try:
+            return precompiled.load(artifact)
+        except ValueError:
+            pass  # stale/incompatible artifact — fall through and rebuild
+    DOWNLOADS.mkdir(parents=True, exist_ok=True)
+    pipeline = precompiled.compile_script(script.read_text("utf-8"))
+    precompiled.dump(pipeline, artifact)
+    return pipeline
 
 
 def transpile(text: str, script: Path = DEFAULT_SCRIPT) -> str:

@@ -1,15 +1,23 @@
-"""AST → opcode compiler.
+"""AST → compiled-step lowering — the *compiler* half of the parser.
 
-Converts ``RootNode`` ASTs (produced by ``_builder.py``) into flat opcode
-``Program``\s consumable by ``himark.engine.backend._vm``.
+The parser front-end (``__init__.py`` + ``_builder.py``) turns source into the
+typed AST (``nodes_typed``); this module lowers that AST into the **compiled
+product** the engine VM consumes:
 
-This replaces the lowering half of ``himark.engine.backend._compile``
-(``_compile_elements`` + all ``Element`` types + ``Matcher`` protocol) with
-a single pass that emits ``(opcode, *operands)`` tuples.
+  * a **query** AST → a flat opcode ``Program`` (``compile_pattern``);
+  * a **template** AST → a ``Template`` of literal + moustache parts
+    (``compile_template``).
+
+Keeping both passes in the parser package is what makes "ANTLR is the parser and
+the compiler" literally true: the engine is handed ``Program``/``Template`` and
+never sees an AST node.
 """
 
 from __future__ import annotations
 
+import re
+
+from himark.models.compiled import Moustache, Template
 from himark.models.opcodes import (
     ANCHOR,
     BACK_REF,
@@ -440,3 +448,32 @@ def compile_pattern(root: t.RootNode) -> Program:
             elements.append((GROUP, groups, het, (1, 1)))
 
     return Program(elements=tuple(elements), fixed_point=root.fixed_point)
+
+
+# ── Template compilation ──────────────────────────────────────────────────────
+
+# A `{{ … }}` moustache. Recognised only inside a template; a query never reads
+# it (and a literal `\{{` in a template is unescaped before this runs, so it does
+# not match here — same split the renderer used to do at run time).
+_MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
+
+
+def compile_template(root: t.RootNode) -> Template:
+    """Lower a template step (an all-leaf ``RootNode``) into a ``Template``.
+
+    The leaf text is the literal template body; this splits it into an ordered
+    list of literal strings and ``Moustache`` references — the structure the
+    renderer used to recompute by regex on every render."""
+    text = "".join(
+        c.content for c in root.children if isinstance(c, t.LeafNode)
+    )
+    parts: list[str | Moustache] = []
+    last = 0
+    for mo in _MOUSTACHE_RE.finditer(text):
+        if mo.start() > last:
+            parts.append(text[last : mo.start()])
+        parts.append(Moustache(body=mo.group(1).strip()))
+        last = mo.end()
+    if last < len(text):
+        parts.append(text[last:])
+    return Template(parts=parts)

@@ -28,7 +28,6 @@ The branches render two ways, neither privileged:
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from himark.engine._render import is_template as _is_template
 from himark.engine._render import render as _render
 from himark.engine.backend import (
     RUST_AVAILABLE,
@@ -38,8 +37,12 @@ from himark.engine.backend import (
     RustEngine,
 )
 from himark.engine.runtime import Runtime
-from himark.models import nodes_typed as t
+from himark.models.compiled import Program, Step, Template
 from himark.models.exceptions import CompileError
+
+# A step is a template (rendered) when it is a `Template`, else a query `Program`
+# (matched). `isinstance(step, Template)` is used inline at the dispatch sites so
+# the type checker narrows `Step` to the right arm in each branch.
 
 __all__ = [
     "execute",
@@ -60,7 +63,7 @@ __all__ = [
     "using_backend",
 ]
 
-# The default runtime owns the active matching backend and the per-tree compile
+# The default runtime owns the active matching backend and the per-program handle
 # cache. Swap the backend via set_backend / using_backend; orchestration below is
 # backend-agnostic. (Construct a fresh `Runtime` for an isolated backend + cache.)
 _runtime = Runtime()
@@ -89,31 +92,32 @@ def using_backend(engine: Engine) -> Iterator[Engine]:
 
 
 def find_matches(
-    tree: t.RootNode,
+    program: Program,
     target: str,
     stages: tuple[Match, ...] = (),
     start: int = 0,
     stop: int | None = None,
 ) -> list[Match]:
-    """Compile a pattern tree and return all its matches in target. `stages` are
+    """Return all matches of a compiled query `program` in target. `stages` are
     the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve;
     `start`/`stop` bound the positions a match may begin at."""
-    return _runtime.find_matches(tree, target, stages, start, stop)
+    return _runtime.find_matches(program, target, stages, start, stop)
 
 
-def find(steps: list[t.RootNode], target: str) -> list[tuple[int, int]]:
+def find(steps: list[Step], target: str) -> list[tuple[int, int]]:
     """Return (start, end) positions of all matches of steps[0] in target. A leading
     template is the whole-document branch, so its span is the whole input."""
-    if steps and _is_template(steps[0]):
+    head = steps[0]
+    if isinstance(head, Template):
         return [(0, len(target))]
-    return [(m.start, m.end) for m in find_matches(steps[0], target)]
+    return [(m.start, m.end) for m in find_matches(head, target)]
 
 
 # ── Branch building ───────────────────────────────────────────────────────────
 
 
 def _transform(
-    steps: list[t.RootNode],
+    steps: list[Step],
     text: str,
     ancestors: tuple[Match, ...],
     committed: bool = False,
@@ -130,7 +134,7 @@ def _transform(
         return text
     head, rest = steps[0], steps[1:]
 
-    if _is_template(head):
+    if isinstance(head, Template):
         full, spans = _render(head, text, list(ancestors))
         if spans is None:  # no moustaches — the whole render flows on as one branch
             stage = Match(full, 0, len(full), [])
@@ -172,7 +176,7 @@ def _transform(
 
 
 def deltas(
-    steps: list[t.RootNode], target: str, stop: int | None = None
+    steps: list[Step], target: str, stop: int | None = None
 ) -> list[tuple[int, int, str]]:
     """The branches as (start, end, text): each surviving first-query match's
     source span and its transformed result. `execute` lists the texts; `splice`
@@ -180,12 +184,13 @@ def deltas(
     `splice_to_fixed_point` to skip the already-settled tail)."""
     if not steps:
         return []
-    if _is_template(steps[0]):
+    head = steps[0]
+    if isinstance(head, Template):
         # A leading template has no query to locate matches: the whole document is
         # one branch, with `{{.}}` the entire input. Render the chain over it.
         text = _transform(steps, target, ())
         return [] if text is None else [(0, len(target), text)]
-    head, rest = steps[0], steps[1:]
+    rest = steps[1:]
     result: list[tuple[int, int, str]] = []
     for m in find_matches(head, target, stop=stop):
         text = _transform(rest, m.text, (m,))
@@ -197,12 +202,12 @@ def deltas(
 # ── Renderings ────────────────────────────────────────────────────────────────
 
 
-def execute(steps: list[t.RootNode], target: str) -> list[str]:
+def execute(steps: list[Step], target: str) -> list[str]:
     """The list of rendered matches — one entry per surviving leaf branch."""
     return [text for _, _, text in deltas(steps, target)]
 
 
-def splice(steps: list[t.RootNode], target: str) -> str:
+def splice(steps: list[Step], target: str) -> str:
     """The source with each leaf branch's span replaced by its render, the text
     between branches kept verbatim (in-place transform)."""
     out: list[str] = []
@@ -218,7 +223,7 @@ def splice(steps: list[t.RootNode], target: str) -> str:
 # ── Pipelines ─────────────────────────────────────────────────────────────────
 
 
-def splice_to_fixed_point(steps: list[t.RootNode], target: str) -> str:
+def splice_to_fixed_point(steps: list[Step], target: str) -> str:
     """Re-splice `steps` over `target` until a pass changes nothing (the fixed
     point) — the in-place form of a `while` loop, for a `<=` statement. A
     contracting rule settles in a few passes per unit of input, so the guards only
@@ -266,7 +271,7 @@ def splice_to_fixed_point(steps: list[t.RootNode], target: str) -> str:
     )
 
 
-def run_pipeline(pipeline: list[list[t.RootNode]], target: str) -> str:
+def run_pipeline(pipeline: list[list[Step]], target: str) -> str:
     """Run a pipeline of statements over `target`, each spliced in turn, returning
     the transformed document. A `<=` (fixed-point) statement — flagged on its first
     step — is re-spliced until the text stops changing (`splice_to_fixed_point`)."""

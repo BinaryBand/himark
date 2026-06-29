@@ -248,16 +248,24 @@ def _check_golden(built: dict[str, Any], path: Path, label: str) -> None:
 
 
 def test_pattern_ast_golden():
-    """The reference parser's AST over the pattern corpus matches its pin."""
+    """The reference parser's AST over the pattern corpus matches its pin.
+
+    `parser.parse` now returns the *compiled* product (`Program`/`Template`); the
+    intermediate AST this harness pins is reached via `parse_ast`."""
     _check_golden(
-        _build_pattern_asts(parser.parse), GOLDEN / "patterns.json", "pattern"
+        _build_pattern_asts(parser.parse_ast), GOLDEN / "patterns.json", "pattern"
     )
 
 
 def test_script_ast_golden():
-    """The reference parser's AST over every shipped `.hmk` matches its pin."""
+    """The reference parser's AST over every shipped `.hmk` matches its pin.
+
+    Uses the parser-agnostic `compile_script_with` (the real precompiled splitter)
+    over `parse_ast`, so the script tier pins the AST, not the compiled steps."""
     _check_golden(
-        _build_script_asts(precompiled.compile_script),
+        _build_script_asts(
+            lambda source: compile_script_with(source, parser.parse_ast)
+        ),
         GOLDEN / "scripts.json",
         "script",
     )

@@ -23,10 +23,9 @@ import re
 from dataclasses import dataclass
 
 from himark.engine.backend import Match
-from himark.models import nodes_typed as t
+from himark.models.compiled import Moustache, Template
 from himark.models.exceptions import CompileError
 
-_MOUSTACHE_RE = re.compile(r"\{\{(.*?)\}\}")
 _ACCESSOR_RE = re.compile(r"\s*(\d*)([$#])(\d+(?:\.\d+)*)?\s*")
 _FILTER_RE = re.compile(r"\s*(\w+)\s*(?:\(\s*(.*?)\s*\))?\s*")
 
@@ -58,43 +57,32 @@ _FILTERS = {
 }
 
 
-def is_template(tree: t.RootNode) -> bool:
-    """True if `tree` is a template step (literal text, possibly with moustache
-    references) rather than a matcher — i.e. nothing but literal leaves."""
-    return all(isinstance(n, t.LeafNode) for n in tree.children)
-
-
 def render(
-    template_tree: t.RootNode, current: str, stages: list[Match]
+    template: Template, current: str, stages: list[Match]
 ) -> tuple[str, list[tuple[int, int]] | None]:
-    """Render a template into `(full, spans)`. `full` is the whole render -- what
+    """Render a `Template` into `(full, spans)`. `full` is the whole render -- what
     **lands** in the document. `spans` are the `(start, end)` of each moustache's
     value within `full`: each is a **branch** that flows downstream independently,
     spliced back over its own span, with the literal text between (decoration) kept
     -- the same splice a query runs, with each moustache playing the part of a match.
     A template with **no** moustaches has nothing to single out, so its whole render
-    flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`."""
+    flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`.
+
+    The literal/moustache split was done at compile time (`compile_template`); this
+    only fills each moustache's value in against the pipeline stages."""
     out: list[str] = []
     length = 0
     spans: list[tuple[int, int]] = []
-    for n in template_tree.children:
-        if not isinstance(n, t.LeafNode):
-            continue
-        text = n.content
-        last = 0
-        for mo in _MOUSTACHE_RE.finditer(text):
-            literal = text[last : mo.start()]
-            out.append(literal)
-            length += len(literal)
-            value = _eval(mo.group(1).strip(), current, stages)
+    for part in template.parts:
+        if isinstance(part, Moustache):
+            value = _eval(part.body, current, stages)
             start = length
             out.append(value)
             length += len(value)
             spans.append((start, length))
-            last = mo.end()
-        tail = text[last:]
-        out.append(tail)
-        length += len(tail)
+        else:
+            out.append(part)
+            length += len(part)
     full = "".join(out)
     return full, (spans or None)
 
