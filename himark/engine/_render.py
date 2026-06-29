@@ -19,7 +19,7 @@ and the capture path may be omitted with `$` to mean the whole match. Literal te
 (everything outside `{{ }}`) is constant.
 """
 
-from himark.engine.backend import Match
+from himark.engine._types import Match
 from himark.models.compiled import (
     ExConcat,
     ExCurrent,

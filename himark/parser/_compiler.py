@@ -97,6 +97,26 @@ def _drop_excluded(
     return [grp for grp in kept if grp]
 
 
+def _normalize_exclusions(
+    exclusions: list[str],
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...], tuple[str, ...]]:
+    """Lower a raw exclusion list into a canonical structure the VM can test against
+    without re-parsing: singles for membership tests, ranges for interval tests,
+    and multi-char literals for startswith checks.  All JSON-serialisable."""
+    singles: list[str] = []
+    ranges: list[tuple[str, str]] = []
+    literals: list[str] = []
+    for e in exclusions:
+        if len(e) == 1:
+            singles.append(e)
+        elif ".." in e:
+            lo, sep, hi = e.partition("..")
+            ranges.append((lo, hi))
+        else:
+            literals.append(e)
+    return (tuple(singles), tuple(ranges), tuple(literals))
+
+
 def _codepoint_span(node: t.SemanticNode) -> tuple[int, int] | None:
     """The ``(lo, hi)`` code-point span, or None."""
     if isinstance(node, t.CharRangeNode):
@@ -214,7 +234,7 @@ def _value_view(node: t.ValueRangeNode) -> tuple:
         wmin, wmax = 1, wc
 
     alphabet_desc = ("range", alph.lo, alph.hi) if isinstance(alph, RangeAlphabet) else ("groups", alph.groups)
-    return alphabet_desc, lo, hi, wmin, wmax, node.exclusions
+    return alphabet_desc, lo, hi, wmin, wmax, _normalize_exclusions(node.exclusions)
 
 
 # ── Dynamic reference endpoint descriptor ─────────────────────────────────────
@@ -382,7 +402,7 @@ def _emit_value_range(
                 _static_str(sem.upper),
                 _ref_descriptor(lo_ref) if lo_ref else None,
                 _ref_descriptor(hi_ref) if hi_ref else None,
-                sem.exclusions,
+                _normalize_exclusions(sem.exclusions),
                 reps,
             )
         )
@@ -395,7 +415,7 @@ def _emit_value_range(
         and (high_s := _static_str(sem.upper)) is not None
         and len(high_s) == 1
     ):
-        elements.append((CHAR, ord(low_s), ord(high_s), sem.exclusions, reps))
+        elements.append((CHAR, ord(low_s), ord(high_s), _normalize_exclusions(sem.exclusions), reps))
         return
     # General static value band → VALUE_RANGE
     alphabet_desc, lo_val, hi_val, wmin, wmax, excl = _value_view(sem)

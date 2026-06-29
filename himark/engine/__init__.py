@@ -27,8 +27,8 @@ The branches render two ways, neither privileged:
 
 
 from himark.engine._render import render as _render
-from himark.engine.backend import Match
-from himark.engine.runtime import Runtime
+from himark.engine._types import Match
+from himark.engine._vm import find_matches as _vm_find_matches, prepare
 from himark.models.compiled import Program, Step, Template
 from himark.models.exceptions import CompileError
 
@@ -47,22 +47,18 @@ __all__ = [
     "Match",
 ]
 
-# The default runtime owns the active matching backend and the per-program handle
-# The default runtime — holds the per-Program instruction cache.
-_runtime = Runtime()
-
 
 def find_matches(
     program: Program,
     target: str,
     stages: tuple[Match, ...] = (),
-    start: int = 0,
-    stop: int | None = None,
 ) -> list[Match]:
     """Return all matches of a compiled query `program` in target. `stages` are
-    the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve;
-    `start`/`stop` bound the positions a match may begin at."""
-    return _runtime.find_matches(program, target, stages, start, stop)
+    the earlier pipeline matches a cross-stage reference (`{N$M}`) can resolve.
+
+    Preparation runs per call (no cache) — the simplicity-over-speed trade this
+    branch wants."""
+    return _vm_find_matches(prepare(program), target, stages)
 
 
 def find(steps: list[Step], target: str) -> list[tuple[int, int]]:
@@ -137,12 +133,11 @@ def _transform(
 
 
 def deltas(
-    steps: list[Step], target: str, stop: int | None = None
+    steps: list[Step], target: str,
 ) -> list[tuple[int, int, str]]:
     """The branches as (start, end, text): each surviving first-query match's
     source span and its transformed result. `execute` lists the texts; `splice`
-    lays them back over the source. `stop` caps where a branch may begin (used by
-    `splice_to_fixed_point` to skip the already-settled tail)."""
+    lays them back over the source."""
     if not steps:
         return []
     head = steps[0]
@@ -153,7 +148,7 @@ def deltas(
         return [] if text is None else [(0, len(target), text)]
     rest = steps[1:]
     result: list[tuple[int, int, str]] = []
-    for m in find_matches(head, target, stop=stop):
+    for m in find_matches(head, target):
         text = _transform(rest, m.text, (m,))
         if text is not None:
             result.append((m.start, m.end, text))
@@ -191,39 +186,16 @@ def splice_to_fixed_point(steps: list[Step], target: str) -> str:
     trip on a rule that does not converge (a `CompileError`): a pass count (catches
     oscillators) and a size bound (catches a grower like `{a} <= "aa"`).
 
-    Incremental (safe but not a left-skip): each pass remembers where its last
-    change ended and the next pass only *begins* matches before that point.
-    Matching reads forward, so a match that differs this pass must read a byte the
-    last pass rewrote — and one can begin no later than the last such byte.
-    Everything beyond it is byte-identical to a tail the previous pass already
-    scanned and found settled, so re-scanning it for new starts is waste. The dual
-    (skipping the *prefix* before the first change) is **unsafe**: a forward-reading
-    rule can begin a match before the change and read into it (bubble_sort mis-sorts
-    `2,3,1` that way), so only the tail is pruned. The win grows with input size —
-    near 1× on a small input, but ~1.4-1.6× on the full dedup file as the tail the
-    fixed point has settled grows over its many passes. It is backend-agnostic (the
-    native backend honours the same `stop` bound)."""
+    Each pass scans the whole document — the simplest correct loop with no
+    tail-pruning. The simplicity-over-speed trade this branch wants."""
     text = target
     cap = 8 * len(target) + 1024
     size_limit = 64 * len(target) + 65536
-    stop = None  # the first pass scans the whole document
     for _ in range(cap):
-        out: list[str] = []
-        last = 0
-        length = 0  # running length of `out` == offset into the new document
-        dirty: int | None = None  # end (new coords) of the right-most real change
-        for s, e, repl in deltas(steps, text, stop=stop):
-            out.append(text[last:s])
-            out.append(repl)
-            length += (s - last) + len(repl)
-            if repl != text[s:e]:  # an identity rewrite changes nothing, so skip it
-                dirty = length
-            last = e
-        if dirty is None:
-            return text  # nothing changed — the fixed point
-        out.append(text[last:])
-        text = "".join(out)
-        stop = dirty  # next pass: no new match can begin past the last change
+        result = splice(steps, text)
+        if result == text:  # nothing changed — the fixed point
+            return text
+        text = result
         if len(text) > size_limit:
             break
     raise CompileError(

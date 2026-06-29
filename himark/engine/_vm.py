@@ -33,7 +33,7 @@ from himark.models.opcodes import (
     Reps,
     reps_from_tuple,
 )
-from himark.engine.backend._types import Capture, Match
+from himark.engine._types import Capture, Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.exceptions import CompileError
 
@@ -59,14 +59,12 @@ def find_matches(
     prepared: list[Instruction],
     text: str,
     stages: tuple[Match, ...] = (),
-    start: int = 0,
-    stop: int | None = None,
 ) -> list[Match]:
     """All matches in ``text`` of a program already lowered by ``prepare``."""
     matches: list[Match] = []
     n = len(text)
-    limit = n if stop is None else min(stop, n)
-    pos = start
+    limit = n
+    pos = 0
     while pos < limit:
         state = _State(stages=stages)
         end = _run_program(prepared, 0, text, pos, state)
@@ -197,8 +195,8 @@ def _run_program(
         reps = _resolve_reps(reps_spec, state)
         if reps is None:
             return None
-        desc = ("value", alph, lo_val, hi_val, wmin, wmax, excl_list)
-        return _run_matcher(desc, reps, state, text, pos, cont, alphabet=alph)
+        matcher = _ValueMatcher(alph, lo_val, hi_val, wmin, wmax, excl_list)
+        return _run_matcher(matcher, reps, state, text, pos, cont, alphabet=alph)
 
     if opcode == DYN_RANGE:
         (
@@ -212,10 +210,10 @@ def _run_program(
         upper = hi_static if hi_ref is None else _endpoint_text(hi_ref, state, text)
         if (lo_ref is not None and lower is None) or (hi_ref is not None and upper is None):
             return None
-        matcher_desc = _build_dyn_matcher_desc(alph, lower, upper, excl_list)
-        if matcher_desc is None:
+        matcher = _build_dyn_matcher(alph, lower, upper, excl_list)
+        if matcher is None:
             return None
-        return _run_matcher(matcher_desc, reps, state, text, pos, cont)
+        return _run_matcher(matcher, reps, state, text, pos, cont)
 
     if opcode == SEQ_GROUP:
         children, reps_spec = args
@@ -243,31 +241,31 @@ def _check_anchor(kind: int, text: str, pos: int) -> bool:
 # ── Char range ─────────────────────────────────────────────────────────────────
 
 
-def _char_match(text: str, pos: int, lo: int, hi: int, excl: list[str]) -> int | None:
+def _char_match(text: str, pos: int, lo: int, hi: int, excl) -> int | None:
     if pos >= len(text):
         return None
     ch = text[pos]
     if not (lo <= ord(ch) <= hi):
         return None
-    for e in excl:
-        if len(e) == 1:
-            if e == ch:
-                return None
-        elif ".." in e:
-            lo2, hi2 = e.split("..", 1)
+    if excl:
+        singles, ranges, literals = excl
+        if ch in singles:
+            return None
+        for lo2, hi2 in ranges:
             if lo2 <= ch <= hi2:
                 return None
-        elif text.startswith(e, pos):
-            return None
+        for lit in literals:
+            if text.startswith(lit, pos):
+                return None
     return pos + 1
 
 
 def _match_char_range(
-    text: str, pos: int, lo: int, hi: int, excl: list[str],
+    text: str, pos: int, lo: int, hi: int, excl,
     reps: Reps, state: _State, cont: Cont,
 ) -> int | None:
     return _run_matcher(
-        ("char_range", lo, hi, excl), reps, state, text, pos, cont, alphabet=None
+        _CharMatcher(lo, hi, excl), reps, state, text, pos, cont, alphabet=None
     )
 
 
@@ -286,6 +284,81 @@ class _GroupMatcher:
         members.sort(key=lambda x: len(x[0]), reverse=True)
         self.members = members
         self.accept_set = frozenset(m for m, _ in members)
+
+    def match(self, text: str, pos: int) -> int | None:
+        r = _group_unit(text, pos, self)
+        return r[0] if r else None
+
+    def accepts(self, s: str) -> bool:
+        return s in self.accept_set
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        return _group_equal_unit(text, pos, first, self)
+
+
+class _CharMatcher:
+    __slots__ = ("lo", "hi", "excl")
+
+    def __init__(self, lo: int, hi: int, excl):
+        self.lo = lo
+        self.hi = hi
+        self.excl = excl
+
+    def match(self, text: str, pos: int) -> int | None:
+        return _char_match(text, pos, self.lo, self.hi, self.excl)
+
+    def accepts(self, s: str) -> bool:
+        if len(s) != 1 or not (self.lo <= ord(s) <= self.hi):
+            return False
+        if self.excl:
+            singles, _ranges, _literals = self.excl
+            return s not in singles
+        return True
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        if text.startswith(first, pos):
+            return pos + len(first)
+        return None
+
+
+class _ComplementMatcher:
+    __slots__ = ("inner_groups",)
+
+    def __init__(self, inner_groups: list[list[str]]):
+        self.inner_groups = inner_groups
+
+    def match(self, text: str, pos: int) -> int | None:
+        return _complement_match(text, pos, self.inner_groups)
+
+    def accepts(self, s: str) -> bool:
+        return _complement_match(s, 0, self.inner_groups) == len(s)
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        return _complement_match(text, pos, self.inner_groups)
+
+
+class _ValueMatcher:
+    __slots__ = ("alph", "lo_val", "hi_val", "wmin", "wmax", "excl")
+
+    def __init__(self, alph, lo_val, hi_val, wmin, wmax, excl):
+        self.alph = alph
+        self.lo_val = lo_val
+        self.hi_val = hi_val
+        self.wmin = wmin
+        self.wmax = wmax
+        self.excl = excl
+
+    def match(self, text: str, pos: int) -> int | None:
+        return _match_value(text, pos, self.alph, self.lo_val, self.hi_val,
+                            self.wmin, self.wmax, self.excl)
+
+    def accepts(self, s: str) -> bool:
+        return self.match(s, 0) == len(s)
+
+    def equal_unit(self, text: str, pos: int, first: str) -> int | None:
+        if text.startswith(first, pos):
+            return pos + len(first)
+        return None
 
 
 def _group_unit(text: str, pos: int, gm: _GroupMatcher) -> tuple[int, int] | None:
@@ -327,8 +400,7 @@ def _match_group(
     reps: Reps, state: _State, cont: Cont,
 ) -> int | None:
     # GROUP captures never carry a value alphabet — only VALUE_RANGE ops do.
-    desc = ("group", gm, het)
-    return _run_matcher(desc, reps, state, text, pos, cont, alphabet=None)
+    return _run_matcher(gm, reps, state, text, pos, cont, alphabet=None)
 
 
 # ── Complement matcher ─────────────────────────────────────────────────────────
@@ -352,15 +424,16 @@ def _match_complement(
     text: str, pos: int, inner_groups: list[list[str]],
     reps: Reps, state: _State, cont: Cont,
 ) -> int | None:
-    desc = ("complement", inner_groups)
-    return _run_matcher(desc, reps, state, text, pos, cont, alphabet=None)
+    return _run_matcher(
+        _ComplementMatcher(inner_groups), reps, state, text, pos, cont, alphabet=None
+    )
 
 
 # ── Value-range matcher ────────────────────────────────────────────────────────
 
 
 def _match_value(
-    text: str, pos: int, alphabet, lo_val, hi_val, wmin, wmax, excl: list[str],
+    text: str, pos: int, alphabet, lo_val, hi_val, wmin, wmax, excl,
 ) -> int | None:
     if isinstance(alphabet, RangeAlphabet):
         end = pos
@@ -378,20 +451,28 @@ def _match_value(
     avail = end - pos
     top = avail if wmax is None else min(wmax, avail)
     for width in range(top, wmin - 1, -1):
-        val = alphabet.value(text[pos : pos + width])
+        candidate = text[pos : pos + width]
+        if excl:
+            singles, ranges, literals = excl
+            if candidate in singles:
+                continue
+            # Check ranges: width must be 1
+            if width == 1 and any(lo2 <= candidate <= hi2 for lo2, hi2 in ranges):
+                continue
+            # Check literals
+            if any(candidate.startswith(lit) and len(candidate) == len(lit) for lit in literals):
+                continue
+        val = alphabet.value(candidate)
         if (lo_val is not None and val < lo_val) or (hi_val is not None and val > hi_val):
             continue
-        if excl:
-            # Simple exclusion check — multi-char excluded values ignored for now
-            pass
         return pos + width
     return None
 
 
-def _build_dyn_matcher_desc(
+def _build_dyn_matcher(
     alph: "Alphabet | RangeAlphabet", lower: str | None, upper: str | None,
-    excl: list[str],
-) -> tuple | None:
+    excl,
+) -> "_ValueMatcher | None":
     # `alph` is baked by `prepare`; only the endpoint *values* vary per match (the
     # references resolve at match time), so just the bounds are recomputed here.
     try:
@@ -407,14 +488,14 @@ def _build_dyn_matcher_desc(
         wmin, wmax = wf, None
     else:
         wmin, wmax = 1, wc
-    return ("value", alph, lo_val, hi_val, wmin, wmax, excl)
+    return _ValueMatcher(alph, lo_val, hi_val, wmin, wmax, excl)
 
 
 # ── Shared matcher runner ──────────────────────────────────────────────────────
 
 
 def _run_matcher(
-    desc: tuple, reps: Reps, state: _State, text: str, pos: int,
+    matcher, reps: Reps, state: _State, text: str, pos: int,
     cont: Cont, alphabet=None,
 ) -> int | None:
     caps = state.captures
@@ -428,19 +509,19 @@ def _run_matcher(
         del caps[mark:]
         return None
 
-    first_end = _matcher_match(desc, text, pos)
+    first_end = matcher.match(text, pos)
     if first_end is None or first_end == pos:
         return attempt(pos, [], 0) if reps.accepts(0) else None
 
     for unit_len in range(first_end - pos, 0, -1):
         first = text[pos : pos + unit_len]
-        if not _matcher_accepts(desc, first):
+        if not matcher.accepts(first):
             continue
         rep_list = [first]
         ends = [pos + unit_len]
         current = pos + unit_len
         while reps.max is None or len(rep_list) < reps.max:
-            nxt = _matcher_equal_unit(desc, text, current, first)
+            nxt = matcher.equal_unit(text, current, first)
             if nxt is None:
                 break
             rep_list.append(text[current:nxt])
@@ -454,66 +535,7 @@ def _run_matcher(
     return attempt(pos, [], 0) if reps.accepts(0) else None
 
 
-def _matcher_match(desc: tuple, text: str, pos: int) -> int | None:
-    kind = desc[0]
-    if kind == "char_range":
-        _, lo, hi, excl = desc
-        return _char_match(text, pos, lo, hi, excl)
-    if kind == "group":
-        _, gm, _het = desc
-        r = _group_unit(text, pos, gm)
-        return r[0] if r else None
-    if kind == "complement":
-        _, inner = desc
-        return _complement_match(text, pos, inner)
-    if kind == "value":
-        _, alph, lo_val, hi_val, wmin, wmax, excl = desc
-        return _match_value(text, pos, alph, lo_val, hi_val, wmin, wmax, excl)
-    return None
 
-
-def _matcher_accepts(desc: tuple, s: str) -> bool:
-    kind = desc[0]
-    if kind == "char_range":
-        _, lo, hi, excl = desc
-        return (len(s) == 1 and lo <= ord(s) <= hi
-                and not any(e == s for e in excl if len(e) == 1))
-    if kind == "group":
-        _, gm, _het = desc
-        return _group_accepts(s, gm)
-    if kind == "complement":
-        _, inner = desc
-        return _complement_match(s, 0, inner) == len(s)
-    if kind == "value":
-        return _matcher_match(desc, s, 0) == len(s)
-    return False
-
-
-def _matcher_equal_unit(desc: tuple, text: str, pos: int, first: str) -> int | None:
-    kind = desc[0]
-    if kind == "char_range":
-        if text.startswith(first, pos):
-            return pos + len(first)
-        return None
-    if kind == "group":
-        _, gm, het = desc
-        if het:
-            # Heterogeneous: stay within the SAME group-index sequence as first.
-            # A congruence class `{{a,A}}` picks group 0 but may switch faces.
-            # A complement picks any non-inner char.
-            return _group_equal_unit(text, pos, first, gm)
-        # Homogeneous: re-match the exact same string
-        if text.startswith(first, pos):
-            return pos + len(first)
-        return None
-    if kind == "complement":
-        # Heterogeneous — any non-inner char
-        return _complement_match(text, pos, desc[1])
-    if kind == "value":
-        if text.startswith(first, pos):
-            return pos + len(first)
-        return None
-    return None
 
 
 # ── Self-references ────────────────────────────────────────────────────────────
