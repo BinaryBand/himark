@@ -9,7 +9,7 @@ from typing import Optional
 
 import typer
 
-from himark.models.compiled import Template
+from himark.models.compiled import Step, Template
 
 app = typer.Typer(
     name="himark",
@@ -41,8 +41,8 @@ def _die(msg: str) -> None:
     raise typer.Exit(1)
 
 
-def _step_to_json(step: object) -> dict:
-    d = step.to_json()  # type: ignore[union-attr]
+def _step_to_json(step: Step) -> dict:
+    d = step.to_json()
     if isinstance(step, Template):
         d["kind"] = "template"
     return d

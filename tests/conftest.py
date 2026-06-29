@@ -50,4 +50,7 @@ def pytest_sessionstart(session: object) -> None:
     _run_tool([str(_BIN / "ruff"), "check", "--fix", str(ROOT)], "ruff check --fix")
     _run_tool([str(_BIN / "ty"), "check", "--fix"], "ty check --fix")
     rust_dir = ROOT / "sandbox" / "rust"
-    subprocess.run(["cargo", "build", "--release"], cwd=rust_dir, check=True)
+    cargo = Path.home() / ".cargo" / "bin" / "cargo"
+    if not cargo.exists():
+        cargo = Path("cargo")
+    subprocess.run([str(cargo), "build", "--release"], cwd=rust_dir, check=True)
