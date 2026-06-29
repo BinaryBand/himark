@@ -174,18 +174,28 @@ class GroupClassNode:
 
 
 @dataclass(slots=True)
-class SequenceNode:
-    # Internal: which children were plain CST text (LIT) vs brace-groups (GROUP).
-    _literal_mask: tuple[bool, ...] = field(default=(), repr=False, compare=False)
-    _child_counts: tuple[tuple, ...] = field(default=(), repr=False, compare=False)
+class SeqItem:
+    """One element of a grouping/sequence brace: a resolved child plus its reps.
+    `literal` marks a raw text run (emitted as a `LIT`) as opposed to an alphabet or
+    nested construct (emitted via `_emit_semantic`). Replaces the parallel
+    `_literal_mask`/`_child_counts` arrays the `SequenceNode` used to carry — the
+    grammar's `sequence` production now separates text runs from constructs, so each
+    item is self-describing."""
 
+    node: SemanticNode
+    reps: tuple = (1, 1)
+    literal: bool = False
+
+
+@dataclass(slots=True)
+class SequenceNode:
     """A grouping brace: a `{...}` whose interior is a concatenation of constructs
-    (`{of{black}{quartz}}`) rather than one alphabet expression. It is a single
-    capture group whose nested brace children become its sub-captures.
-    `children` are the resolved phase-3 nodes of the interior."""
+    (`{of{black}{quartz}}`, `{{a,A}}`) rather than one alphabet expression. It is a
+    single capture group whose nested brace children become its sub-captures. `items`
+    are the resolved interior elements in document order."""
 
     type: Literal["sequence"] = "sequence"
-    children: list[SemanticNode] = field(default_factory=list)
+    items: list[SeqItem] = field(default_factory=list)
 
 
 @dataclass(slots=True)

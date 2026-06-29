@@ -3,6 +3,7 @@ from himark.models.nodes_typed import (
     CountRange,
     GroupClassNode,
     LiteralNode,
+    SeqItem,
     SequenceNode,
     UnionNode,
     ValueRangeNode,
@@ -30,9 +31,14 @@ def test_typed_count_and_group_class():
 
 
 def test_sequence_node():
-    seq = SequenceNode(children=[LiteralNode(content="a"), LiteralNode(content="b")])
-    assert len(seq.children) == 2
-    assert seq.children[0].content == "a"
+    seq = SequenceNode(
+        items=[
+            SeqItem(node=LiteralNode(content="a"), literal=True),
+            SeqItem(node=LiteralNode(content="b"), literal=True),
+        ]
+    )
+    assert len(seq.items) == 2
+    assert seq.items[0].node.content == "a"
 
 
 def test_semantic_payload_fields():

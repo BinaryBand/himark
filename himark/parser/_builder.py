@@ -11,13 +11,11 @@ The free helpers (escapes, whitespace, variables) live in `_helpers.py`.
 
 from __future__ import annotations
 
-from antlr4.tree.Tree import TerminalNode
-
 from himark.models import nodes_typed as t
 from himark.models.exceptions import CompileError
 from himark.models.opcodes import LIT, Instruction, Program
 from himark.parser._compiler import _emit_semantic, _reps_tuple
-from himark.parser._helpers import ESCAPES, _resolve_leaf_escapes, unescape
+from himark.parser._helpers import _resolve_leaf_escapes, unescape
 from himark.parser._generated.GRAMMARParser import GRAMMARParser
 from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
 
@@ -81,8 +79,8 @@ def _term_singleton(term: GRAMMARParser.TermContext) -> str | None:
 
 def _brace_singleton(bg: GRAMMARParser.BraceGroupContext) -> str | None:
     band = bg.band()
-    if isinstance(band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)):
-        return None
+    if not isinstance(band, GRAMMARParser.BareAlphabetContext):
+        return None  # a band or a grouping/sequence brace is never a literal singleton
     arms = band.universe().arm()
     if len(arms) != 1:
         return None
@@ -100,51 +98,12 @@ def _arm_as_exclusion(arm: GRAMMARParser.ArmContext) -> list[str] | None:
     if len(atoms) != 1 or atoms[0].complement() is None:
         return None
     operand_band = atoms[0].complement().braceGroup().band()
-    if isinstance(operand_band, (GRAMMARParser.ValueBandContext, GRAMMARParser.AmbientBandContext)):
+    if not isinstance(operand_band, GRAMMARParser.BareAlphabetContext):
         raise CompileError("an exclusion operand must be a simple alphabet, not a band")
     return [a.getText().strip() for a in operand_band.universe().arm()]
 
 
-def _is_whole_nested_brace(universe: GRAMMARParser.UniverseContext) -> bool:
-    arms = universe.arm()
-    if len(arms) != 1 or not isinstance(arms[0], GRAMMARParser.SingleContext):
-        return False
-    term = arms[0].term()
-    atoms = term.atom()
-    return len(atoms) == 1 and atoms[0].braceGroup() is not None and atoms[0].count() is None
-
-
-def _term_is_sequence(term: GRAMMARParser.TermContext) -> bool:
-    atoms = term.atom()
-    constructs = [
-        a for a in atoms
-        if a.braceGroup() is not None or a.complement() is not None or a.macro() is not None
-    ]
-    if not constructs:
-        return False
-    return len(atoms) > 1
-
-
-def _cst_is_sequence_brace(universe: GRAMMARParser.UniverseContext) -> bool:
-    if _is_whole_nested_brace(universe):
-        return True
-    for arm in universe.arm():
-        if isinstance(arm, GRAMMARParser.SingleContext):
-            if _term_is_sequence(arm.term()):
-                return True
-        elif isinstance(arm, GRAMMARParser.ClosedRangeContext):
-            if _term_is_sequence(arm.term(0)) or _term_is_sequence(arm.term(1)):
-                return True
-        elif isinstance(arm, GRAMMARParser.OpenUpperContext):
-            if _term_is_sequence(arm.term()):
-                return True
-        elif isinstance(arm, GRAMMARParser.OpenLowerContext):
-            if _term_is_sequence(arm.term()):
-                return True
-    return False
-
-
-# Ã¢â€â‚¬Ã¢â€â‚¬ Reference / Anchor resolution (unchanged from original) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+#Ã¢â€â‚¬Ã¢â€â‚¬ Reference / Anchor resolution (unchanged from original) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 
 def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNode:
@@ -295,14 +254,57 @@ class _AstBuilder(GRAMMARVisitor):
         return options[0] if len(options) == 1 else t.UnionNode(options=options)
 
     def visitBareAlphabet(self, ctx: GRAMMARParser.BareAlphabetContext) -> t.SemanticNode:
-        universe = ctx.universe()
-        if _is_whole_nested_brace(universe):
-            inner = universe.arm()[0].term().atom()[0].braceGroup()
-            return t.SequenceNode(children=[self.visit(inner.band())], _literal_mask=(False,))
-        if _cst_is_sequence_brace(universe):
-            children, mask, child_counts = self._universe_to_sequence_children(universe)
-            return t.SequenceNode(children=children, _literal_mask=tuple(mask), _child_counts=tuple(child_counts))
-        return self._resolve_universe(universe)
+        return self._resolve_universe(ctx.universe())
+
+    def visitSequenceBrace(self, ctx: GRAMMARParser.SequenceBraceContext) -> t.SemanticNode:
+        """Build a grouping/sequence brace from its structurally-typed children.
+
+        The grammar's `sequence` rule already separates literal text runs (`seqText`)
+        from nested constructs (`seqUnit`), so each interior element is read directly,
+        in document order — no terminal re-walking and no literal/construct mask."""
+        items: list[t.SeqItem] = []
+        for child in ctx.sequence().getChildren():
+            if isinstance(child, GRAMMARParser.SeqUnitContext):
+                items.append(self._seq_unit(child))
+            else:  # SeqTextContext
+                self._seq_text(child, items)
+        return t.SequenceNode(items=items)
+
+    def _seq_unit(self, ctx: GRAMMARParser.SeqUnitContext) -> t.SeqItem:
+        """A nested `braceGroup`/`complement` element of a sequence, with its count."""
+        count_ctx = ctx.count()
+        reps = _reps_tuple(_resolve_count(count_ctx)) if count_ctx else (1, 1)
+        if ctx.braceGroup() is not None:
+            node: t.SemanticNode = self.visit(ctx.braceGroup().band())
+        else:
+            inner = ctx.complement().braceGroup().band()
+            node = t.ComplementNode(inner=self.visit(inner))
+        return t.SeqItem(node=node, reps=reps)
+
+    def _seq_text(self, ctx: GRAMMARParser.SeqTextContext, items: list[t.SeqItem]) -> None:
+        """A run of `seqAtom`s: literal text folds into one `LIT` item, while a macro,
+        reference, or anchor breaks the run into its own resolved item."""
+        buf: list[str] = []
+
+        def flush() -> None:
+            if buf:
+                content = _resolve_leaf_escapes("".join(buf))
+                items.append(t.SeqItem(node=t.LiteralNode(content=content), literal=True))
+                buf.clear()
+
+        for atom in ctx.seqAtom():
+            if atom.macro() is not None:
+                flush()
+                items.append(t.SeqItem(node=self._resolve_variable(atom.macro().NAME().getText())))
+            elif atom.reference() is not None:
+                flush()
+                items.append(t.SeqItem(node=_resolve_reference_atom(atom.reference())))
+            elif atom.anchor() is not None:
+                flush()
+                items.append(t.SeqItem(node=_resolve_anchor_atom(atom.anchor())))
+            else:  # seqLit / ESC / HEX_ESC — literal text
+                buf.append(atom.getText())
+        flush()
 
     # Ã¢â€â‚¬Ã¢â€â‚¬ Band arm resolution (isinstance here is type-matching for parameter
     #     shapes, not dispatch routing Ã¢â‚¬â€ universe arms and band arms share the
@@ -411,85 +413,5 @@ class _AstBuilder(GRAMMARVisitor):
             return t.LiteralNode(content=unescape(term.getText()))
 
         raise CompileError("a grouping brace is not allowed inside a band or range here")
-
-    # -- Sequence flattening ----------------------------------------------------
-
-    def _universe_to_sequence_children(
-        self, universe: GRAMMARParser.UniverseContext
-    ) -> tuple[list[t.SemanticNode], list[bool], list[tuple]]:
-        """Walk the CST of a grouping brace interior.
-
-        Returns (children, literal_mask, counts) where:
-        - children: resolved SemanticNode per element
-        - literal_mask[i]: True = plain CST text (emit LIT), False = brace group
-        - counts[i]: serialised reps tuple for this element (None = default (1,1))
-        """
-        children: list[t.SemanticNode] = []
-        literal_mask: list[bool] = []
-        counts: list[tuple] = []
-        leaf_buf: list[str] = []
-
-        def flush_leaf():
-            if leaf_buf:
-                children.append(t.LiteralNode(content="".join(leaf_buf)))
-                literal_mask.append(True)
-                counts.append(None)
-                leaf_buf.clear()
-
-        def walk(ctx):
-            if isinstance(ctx, TerminalNode):
-                leaf_buf.append(ctx.getText())
-            elif isinstance(ctx, GRAMMARParser.AtomContext):
-                if ctx.braceGroup() is not None or ctx.complement() is not None:
-                    flush_leaf()
-                    count_ctx = ctx.count()
-                    count = _resolve_count(count_ctx) if count_ctx else None
-                    from himark.parser._compiler import _reps_tuple
-                    child_reps = _reps_tuple(count) if count else (1, 1)
-                    if ctx.braceGroup() is not None:
-                        children.append(self.visit(ctx.braceGroup().band()))
-                    else:
-                        bband = ctx.complement().braceGroup().band()
-                        children.append(
-                            t.ComplementNode(inner=self.visit(bband))
-                        )
-                    literal_mask.append(False)
-                    counts.append(child_reps)
-                else:
-                    if ctx.ESC() is not None:
-                        raw = ctx.getText()
-                        esc = raw[1]
-                        if esc in ESCAPES:
-                            leaf_buf.append(ESCAPES[esc])
-                        else:
-                            leaf_buf.append(raw)
-                    elif ctx.macro() is not None:
-                        flush_leaf()
-                        children.append(
-                            self._resolve_variable(ctx.macro().NAME().getText())
-                        )
-                        literal_mask.append(False)
-                        counts.append((1, 1))
-                    elif ctx.reference() is not None:
-                        flush_leaf()
-                        children.append(
-                            _resolve_reference_atom(ctx.reference())
-                        )
-                        literal_mask.append(False)
-                        counts.append((1, 1))
-                    elif ctx.anchor() is not None:
-                        flush_leaf()
-                        children.append(_resolve_anchor_atom(ctx.anchor()))
-                        literal_mask.append(False)
-                        counts.append((1, 1))
-                    else:
-                        leaf_buf.append(ctx.getText())
-            else:
-                for i in range(ctx.getChildCount()):
-                    walk(ctx.getChild(i))
-
-        walk(universe)
-        flush_leaf()
-        return children, literal_mask, counts
 
 

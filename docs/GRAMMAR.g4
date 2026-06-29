@@ -67,8 +67,25 @@ countRef  : HASH INT ;
 
 band      : universe BAND universe           # valueBand
           | BAND universe                   # ambientBand
+          | sequence                        # sequenceBrace
           | universe                        # bareAlphabet
           ;
+
+// A grouping/sequence brace: a concatenation containing at least one nested
+// construct (`{of{black}{quartz}}`, `{{a,A}}`, `{!{x}!{y}[..]}`). seqText excludes
+// top-level ',' '..' '::', so a real alphabet/band fails this alternative and falls
+// through to bareAlphabet/valueBand. Listed before bareAlphabet so an input both
+// could match (e.g. `{a{b}}`) resolves to a sequence.
+sequence  : seqText? seqUnit (seqText | seqUnit)* ;
+seqUnit   : braceGroup count? | complement count? ;
+seqText   : seqAtom+ ;
+seqAtom   : reference | anchor | macro | HEX_ESC | ESC | seqLit ;
+// BANG is intentionally absent: a `!{…}` in a sequence is always a `complement`
+// (a `seqUnit`), never literal text, matching the bareAlphabet `atom` precedence.
+seqLit    : NAME | INT | TEXT | DOT | LT | GT | EQ
+          | LPAREN | RPAREN | PIPE | AT | DOLLAR | HASH
+          | LBRACK | RBRACK | ARROW | FIXARROW | NL ;
+
 universe  : arm (COMMA arm)* ;
 arm       : term                             # single
           | term RANGE term                 # closedRange

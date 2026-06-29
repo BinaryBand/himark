@@ -32,7 +32,6 @@ from himark.models.opcodes import (
     STAGE_REF,
     VALUE_RANGE,
     Instruction,
-    Program,
 )
 from himark.models.alphabet import MAX_SYMBOLS, Alphabet, RangeAlphabet
 from himark.models import nodes_typed as t
@@ -134,11 +133,11 @@ def _groups(node: t.SemanticNode) -> list[list[str]]:
     if isinstance(node, t.LiteralNode):
         return [[node.content]]
     if isinstance(node, t.SequenceNode):
-        if len(node.children) != 1:
+        if len(node.items) != 1:
             raise CompileError(
                 "A grouping brace with multiple children cannot be used as a value alphabet"
             )
-        return _groups(node.children[0])
+        return _groups(node.items[0].node)
     if isinstance(node, t.GroupClassNode):
         return [list(grp) for grp in node.groups]
     if isinstance(node, t.ValueRangeNode):
@@ -333,15 +332,11 @@ def _emit_semantic(
         return
     if isinstance(sem, t.SequenceNode):  # grouping brace -> one capture, sub-elements
         sub: list[Instruction] = []
-        mask = getattr(sem, '_literal_mask', ()) or ()
-        child_counts = getattr(sem, '_child_counts', ()) or ()
-        for idx, child in enumerate(sem.children):
-            is_literal = idx < len(mask) and mask[idx]
-            child_reps = child_counts[idx] if idx < len(child_counts) else (1, 1)
-            if is_literal and isinstance(child, t.LiteralNode) and child.content:
-                sub.append((LIT, child.content))
+        for item in sem.items:
+            if item.literal and isinstance(item.node, t.LiteralNode) and item.node.content:
+                sub.append((LIT, item.node.content))
             else:
-                _emit_semantic(sub, child, child_reps)
+                _emit_semantic(sub, item.node, item.reps)
         elements.append((SEQ_GROUP, sub, reps))
         return
     if isinstance(sem, t.ValueRangeNode):
