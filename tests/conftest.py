@@ -61,3 +61,16 @@ def pytest_sessionstart(session: object) -> None:
         ["javac", "-d", str(java_build_dir), str(ROOT / "sandbox" / "engine.java")],
         check=True,
     )
+
+    go_build_dir = ROOT / "sandbox" / "build" / "go"
+    go_build_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "go",
+            "build",
+            "-o",
+            str(go_build_dir / "himark-engine"),
+            str(ROOT / "sandbox" / "engine.go"),
+        ],
+        check=True,
+    )

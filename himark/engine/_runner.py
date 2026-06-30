@@ -25,6 +25,14 @@ from himark.models.compiled import Step, Template
 _SANDBOX = Path(__file__).parents[2] / "sandbox"
 
 _JAVA_BUILD_DIR = _SANDBOX / "build" / "java"
+_GO_BUILD_DIR = _SANDBOX / "build" / "go"
+
+
+def _go_command() -> list[str]:
+    binary = _GO_BUILD_DIR / "himark-engine"
+    if binary.exists():
+        return [str(binary)]
+    return ["go", "run", str(_SANDBOX / "engine.go")]
 
 
 def _java_command() -> list[str]:
@@ -34,14 +42,18 @@ def _java_command() -> list[str]:
 
 
 def _engine_command() -> list[str]:
-    name = os.environ.get("HMK_ENGINE", "rust")
+    name = os.environ.get("HMK_ENGINE", "go")
     if name == "rust":
         return [str(_SANDBOX / "rust" / "target" / "release" / "himark-engine")]
     if name == "java":
         return _java_command()
     if name == "python":
         return [sys.executable, str(_SANDBOX / "engine.py")]
-    raise RuntimeError(f"Unknown HMK_ENGINE {name!r}; expected rust, java, or python")
+    if name == "go":
+        return _go_command()
+    raise RuntimeError(
+        f"Unknown HMK_ENGINE {name!r}; expected rust, java, python, or go"
+    )
 
 
 def _step_to_json(step: Step) -> dict:
