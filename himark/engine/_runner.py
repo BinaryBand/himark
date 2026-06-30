@@ -42,7 +42,7 @@ def _java_command() -> list[str]:
 
 
 def _engine_command() -> list[str]:
-    name = os.environ.get("HMK_ENGINE", "go")
+    name = os.environ.get("HMK_ENGINE", "rust")
     if name == "rust":
         return [str(_SANDBOX / "rust" / "target" / "release" / "himark-engine")]
     if name == "java":
