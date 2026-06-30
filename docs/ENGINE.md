@@ -88,7 +88,9 @@ The danger is **greed**. Suppose a pattern is "one-or-more letters, then the let
   try 2 letters -> "ca",  need 't' next -> "t"           [ok]  success!
 ```
 
-The clean way to handle this is **continuation-passing**. Instead of each opcode returning a yes/no, it asks: *"if I consume this much, can the rest of the program still succeed?"* It hands the rest of the program (the **continuation**) the candidate end position. If the rest says no, the opcode tries a smaller bite. This turns backtracking into ordinary function calls and recursion -- no manual stack to manage.
+There are two equivalent shapes for this, and either is correct -- pick by taste and by your language. The one this guide shows is **continuation-passing**: instead of each opcode returning a yes/no, it asks: *"if I consume this much, can the rest of the program still succeed?"* It hands the rest of the program (the **continuation**) the candidate end position. If the rest says no, the opcode tries a smaller bite. This turns backtracking into ordinary function calls and recursion -- no manual stack to manage.
+
+The other shape is a single flat loop over the opcodes with an explicit **backtrack stack**: at each choice point you push the state you might return to -- `(instruction index, text cursor, capture mark)` -- and on failure you `pop()` the most recent and resume from there. It explores the same candidates in the same order; it just makes the stack a data structure you own instead of the language's call stack. CPS reads more clearly and is what the pseudocode below uses; the flat loop avoids deep recursion (and the `StackOverflowError` risk on deeply nested patterns) in languages without tail calls. Both finalise captures the same way (section 5).
 
 ```
   matcher(pos):
@@ -165,7 +167,7 @@ If you're writing one of these from scratch, here's the order that keeps you san
 1. **Wire format first.** Read the payload into your own structs. Get the round-trip right (remember: every tuple is just an array, read positionally) before running anything.
 2. **The splice loop.** Statements, the cursor-based stitch, fixed-point with size/round caps. Test it with a trivial "match everything, replace with itself" stub.
 3. **One matcher abstraction.** Then add opcodes one at a time, easiest first: `LIT`, `ANCHOR`, `CHAR`. Each is a small variation on the matcher.
-4. **Reps + backtracking via continuations.** This is the deep end -- get `[1,1]` working, then `[0,-1]`, then the count-set and count-reference forms.
+4. **Reps + backtracking** (via continuations or an explicit backtrack stack -- see section 4). This is the deep end -- get `[1,1]` working, then `[0,-1]`, then the count-set and count-reference forms.
 5. **Captures**, tentative-then-finalised. Now back-references light up.
 6. **Templates**, then **stages** and moustache branching last.
 
