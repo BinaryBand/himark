@@ -74,3 +74,17 @@ def pytest_sessionstart(session: object) -> None:
         ],
         check=True,
     )
+
+    cpp_build_dir = ROOT / "sandbox" / "build" / "cpp"
+    cpp_build_dir.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "g++",
+            "-std=c++17",
+            "-O2",
+            "-o",
+            str(cpp_build_dir / "himark-engine"),
+            str(ROOT / "sandbox" / "engine.cpp"),
+        ],
+        check=True,
+    )

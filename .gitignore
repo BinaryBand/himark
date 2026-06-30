@@ -225,5 +225,5 @@ himark/parser/_generated/
 docs/**/.*
 editors/
 static/**/.*
-tests/bench/results
+tests/benchmarks/results
 tests/demos/output

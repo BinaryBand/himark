@@ -26,6 +26,7 @@ _SANDBOX = Path(__file__).parents[2] / "sandbox"
 
 _JAVA_BUILD_DIR = _SANDBOX / "build" / "java"
 _GO_BUILD_DIR = _SANDBOX / "build" / "go"
+_CPP_BUILD_DIR = _SANDBOX / "build" / "cpp"
 
 
 def _go_command() -> list[str]:
@@ -33,6 +34,12 @@ def _go_command() -> list[str]:
     if binary.exists():
         return [str(binary)]
     return ["go", "run", str(_SANDBOX / "engine.go")]
+
+
+def _cpp_command() -> list[str]:
+    # C++ has no interpreted fallback -- the binary must be compiled first
+    # (the conftest build hook handles this).
+    return [str(_CPP_BUILD_DIR / "himark-engine")]
 
 
 def _java_command() -> list[str]:
@@ -51,8 +58,10 @@ def _engine_command() -> list[str]:
         return [sys.executable, str(_SANDBOX / "engine.py")]
     if name == "go":
         return _go_command()
+    if name == "cpp":
+        return _cpp_command()
     raise RuntimeError(
-        f"Unknown HMK_ENGINE {name!r}; expected rust, java, python, or go"
+        f"Unknown HMK_ENGINE {name!r}; expected rust, java, python, go, or cpp"
     )
 
 
