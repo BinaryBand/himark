@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use serde_json::Value;
 
 use crate::template::{render_template, template_from_json, Template};
@@ -40,7 +42,7 @@ pub fn step_from_json(d: &Value) -> Result<Step, String> {
 
 // ── _transform ────────────────────────────────────────────────────────────────
 
-fn transform(steps: &[Step], text: &str, ancestors: &[HMatch], committed: bool) -> Option<String> {
+fn transform(steps: &[Step], text: &str, ancestors: &[Rc<HMatch>], committed: bool) -> Option<String> {
     if steps.is_empty() {
         return Some(text.to_string());
     }
@@ -52,12 +54,12 @@ fn transform(steps: &[Step], text: &str, ancestors: &[HMatch], committed: bool) 
             match spans {
                 None => {
                     // No moustache expressions -- treat the whole rendered text as the stage.
-                    let stage = HMatch {
+                    let stage = Rc::new(HMatch {
                         text: full.clone(),
                         start: 0,
                         end: full.len(),
                         captures: vec![],
-                    };
+                    });
                     let mut new_ancestors = ancestors.to_vec();
                     new_ancestors.push(stage);
                     transform(rest, &full, &new_ancestors, true)
@@ -70,12 +72,12 @@ fn transform(steps: &[Step], text: &str, ancestors: &[HMatch], committed: bool) 
                     let mut last = 0;
                     for &(start, end) in span_list {
                         let payload = &full[start..end];
-                        let stage = HMatch {
+                        let stage = Rc::new(HMatch {
                             text: payload.to_string(),
                             start: 0,
                             end: payload.len(),
                             captures: vec![],
-                        };
+                        });
                         let mut new_ancestors = ancestors.to_vec();
                         new_ancestors.push(stage);
                         let sub = transform(rest, payload, &new_ancestors, true)?;
@@ -96,8 +98,9 @@ fn transform(steps: &[Step], text: &str, ancestors: &[HMatch], committed: bool) 
             let mut matched = false;
             for m in find_matches(&prog.elements, text, ancestors) {
                 matched = true;
+                let m = Rc::new(m);
                 let mut new_ancestors = ancestors.to_vec();
-                new_ancestors.push(m.clone());
+                new_ancestors.push(Rc::clone(&m));
                 let sub = transform(rest, &m.text, &new_ancestors, committed)?;
                 pieces.push(text[last..m.start].to_string());
                 pieces.push(sub);
@@ -133,7 +136,8 @@ fn deltas(steps: &[Step], target: &str) -> Vec<(usize, usize, String)> {
             let rest = &steps[1..];
             let mut out = Vec::new();
             for m in find_matches(&prog.elements, target, &[]) {
-                let ancestors = vec![m.clone()];
+                let m = Rc::new(m);
+                let ancestors = vec![Rc::clone(&m)];
                 if let Some(result) = transform(rest, &m.text, &ancestors, false) {
                     out.push((m.start, m.end, result));
                 }

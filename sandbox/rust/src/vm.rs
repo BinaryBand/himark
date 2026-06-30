@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::rc::Rc;
 use serde_json::Value;
 
 use crate::types::{Alphabet, Capture, HMatch, Reps, State};
@@ -552,7 +553,7 @@ fn run_matcher(
         if !matcher.accepts(first) {
             continue;
         }
-        let mut rep_list: Vec<String> = vec![first.to_string()];
+        let mut rep_list: Vec<(usize, usize)> = vec![(pos, end_at)];
         let mut ends: Vec<usize> = vec![end_at];
         let mut current = end_at;
 
@@ -564,7 +565,7 @@ fn run_matcher(
             }
             match matcher.equal_unit(text, current, first) {
                 Some(nxt) if nxt > current => {
-                    rep_list.push(text[current..nxt].to_string());
+                    rep_list.push((current, nxt));
                     ends.push(nxt);
                     current = nxt;
                 }
@@ -617,7 +618,7 @@ fn match_referent(
         state.captures.push(Capture {
             text: String::new(),
             span: (pos, pos),
-            reps: vec![String::new(); reps.min],
+            reps: vec![(pos, pos); reps.min],
             subs: vec![],
             count: -1,
         });
@@ -647,7 +648,9 @@ fn match_referent(
 
     for k in counts(reps, ends.len() - 1) {
         let end = ends[k];
-        let reps_vec: Vec<String> = if k > 0 { vec![ref_str.to_string(); k] } else { vec![] };
+        // Per-rep byte spans (ends[i-1]..ends[i]); only the count is consulted.
+        let reps_vec: Vec<(usize, usize)> =
+            (0..k).map(|i| (ends[i], ends[i + 1])).collect();
         let mark = state.captures.len();
         state.captures.push(Capture {
             text: text[pos..end].to_string(),
@@ -714,10 +717,10 @@ fn match_seq_group(
 
     for k in counts(reps, runs.len()) {
         let end = if k == 0 { pos } else { runs[k - 1].0 };
-        let rep_texts: Vec<String> = (0..k)
+        let rep_texts: Vec<(usize, usize)> = (0..k)
             .map(|i| {
                 let start = if i == 0 { pos } else { runs[i - 1].0 };
-                text[start..runs[i].0].to_string()
+                (start, runs[i].0)
             })
             .collect();
         let subs: Vec<Capture> = (0..k).flat_map(|i| runs[i].1.clone()).collect();
@@ -768,11 +771,13 @@ fn finalize(text: &str, start: usize, end: usize, state: State) -> HMatch {
 
 // ── Public find_matches ───────────────────────────────────────────────────────
 
-pub fn find_matches(elements: &[Element], text: &str, stages: &[HMatch]) -> Vec<HMatch> {
+pub fn find_matches(elements: &[Element], text: &str, stages: &[Rc<HMatch>]) -> Vec<HMatch> {
     let mut matches = Vec::new();
     let n = text.len();
     let mut pos = 0;
     while pos < n {
+        // stages.to_vec() now clones only the Rc pointers (refcount bumps), not
+        // the underlying ancestor text/capture trees -- O(stages), not O(payload).
         let mut state = State::new(stages.to_vec());
         match run_program(elements, 0, text, pos, &mut state) {
             Some(end) if end > pos => {

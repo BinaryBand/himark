@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 // ── Reps ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +36,13 @@ impl Default for Reps {
 pub struct Capture {
     pub text: String,
     pub span: (usize, usize),
-    pub reps: Vec<String>,
+    // Per-repetition byte spans into the source text. Only `reps.len()` is ever
+    // consulted (count refs, `#` moustaches) -- the span contents are never read
+    // -- so these stay cheap Copy tuples instead of owned Strings. Materializing
+    // a `String` per unit here is what made the unbounded-repetition backtracking
+    // (e.g. dedup's `!{...}[..]`) allocate O(n^2) and run ~10x slower than Go,
+    // whose `text[a:b]` substring is a no-copy slice header.
+    pub reps: Vec<(usize, usize)>,
     pub subs: Vec<Capture>,
     pub count: i64, // -1 = use reps.len()
 }
@@ -141,14 +148,17 @@ impl Alphabet {
 #[derive(Clone, Debug)]
 pub struct State {
     pub captures: Vec<Capture>,
-    pub stages: Vec<HMatch>,
+    // Stages are shared by reference-counted pointer: find_matches rebuilds a
+    // State per scan position, so cloning this Vec must stay O(stages) pointer
+    // bumps, not a deep clone of every ancestor's text + capture tree.
+    pub stages: Vec<Rc<HMatch>>,
     // Back-refs inside a SEQ_GROUP child see only captures[0..root_len].
     // usize::MAX means "no restriction" (top-level, outside any SEQ_GROUP).
     pub root_len: usize,
 }
 
 impl State {
-    pub fn new(stages: Vec<HMatch>) -> Self {
+    pub fn new(stages: Vec<Rc<HMatch>>) -> Self {
         State { captures: Vec::new(), stages, root_len: usize::MAX }
     }
 }

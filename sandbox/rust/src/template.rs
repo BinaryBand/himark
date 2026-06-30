@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use serde_json::Value;
 use crate::types::HMatch;
 
@@ -15,7 +16,7 @@ pub struct Template {
 
 // ── Expression evaluation ─────────────────────────────────────────────────────
 
-pub fn eval_expr(d: &Value, current: &str, stages: &[HMatch]) -> Result<String, String> {
+pub fn eval_expr(d: &Value, current: &str, stages: &[Rc<HMatch>]) -> Result<String, String> {
     if let Some(lit) = d.get("lit") {
         return Ok(lit.as_str().unwrap_or("").to_string());
     }
@@ -88,7 +89,7 @@ fn indent(s: &str) -> String {
 pub fn render_template(
     template: &Template,
     current: &str,
-    stages: &[HMatch],
+    stages: &[Rc<HMatch>],
 ) -> Result<(String, Option<Vec<(usize, usize)>>), String> {
     let mut out = String::new();
     let mut spans: Vec<(usize, usize)> = Vec::new();
