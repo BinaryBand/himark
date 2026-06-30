@@ -51,7 +51,9 @@ pub fn eval_expr(d: &Value, current: &str, stages: &[Rc<HMatch>]) -> Result<Stri
             .ok_or_else(|| format!("Moustache capture {:?} out of range", path))?;
 
         if is_count {
-            return Ok(cap.reps.len().to_string());
+            // `rep_count` honours the deferred `count` (run_matcher leaves `reps`
+            // empty when it stores the count), falling back to `reps.len()`.
+            return Ok(cap.rep_count().to_string());
         }
         return Ok(cap.text.clone());
     }

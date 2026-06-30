@@ -104,7 +104,7 @@ The other shape is a single flat loop over the opcodes with an explicit **backtr
 
 The closure `continuation(end)` can also be expressed without a closure by passing the full instruction list and an index: call `run(elements, next_idx, end)` instead of `continuation(end)`. This is identical in effect and avoids closure borrow conflicts in languages without garbage collection.
 
-**Tentative writes.** While exploring, an opcode that captures text appends a record, calls the continuation, and -- if the continuation fails -- **removes** that record before trying again. Append, recurse, roll back on failure. Centralise that push/try/rollback dance in one helper; you'll reach for it everywhere.
+**Tentative writes.** While exploring, an opcode that captures text appends a record, calls the continuation, and -- if the continuation fails -- **removes** that record before trying again. Append, recurse, roll back on failure. Centralise that push/try/rollback dance in one helper; you'll reach for it everywhere. One trap lurks here for *repeating* opcodes: each candidate count it tries should cost $O(1)$ to record, not a copy of the repetitions consumed so far -- see section 5 for why a repetition only ever needs its count.
 
 ---
 
@@ -114,13 +114,15 @@ When a pattern matches, you often need to *remember the pieces* -- for back-refe
 
 ```
   capture
-  +-- text:  "cat"
+  +-- text:  "cat"          <- the whole matched span
   +-- span:  (4, 7)
-  +-- reps:  ["cat"]        <- one repetition
+  +-- reps:  count = 1      <- how many times it repeated (only the count is read)
   +-- subs:  [ ... ]        <- nested captures, if this was a group
 ```
 
-Captures form a tree because groups nest. A **path** like `[0, 1]` means "child 0, then its child 1" -- that's how a template or a back-reference points at a specific piece. Keep them tentative during the search (see section 4) and *finalise* them only once the whole match settles: trim repetition lists to the count that actually won, and re-base spans relative to the match start.
+Captures form a tree because groups nest. A **path** like `[0, 1]` means "child 0, then its child 1" -- that's how a template or a back-reference points at a specific piece. Keep them tentative during the search (see section 4) and *finalise* them only once the whole match settles: settle each repetition to the count that actually won, and re-base spans relative to the match start.
+
+**Only the count of a repetition is ever read -- never a single repetition's text.** This is easy to miss and it costs dearly if you do. A repetition is addressed solely by *count*: a `COUNT_REF` opcode and a `#` moustache ask *how many times* the unit repeated. Sub-patterns are addressed by *path* into `subs`; there is no syntax that points at "the third repetition's text," and the whole run's text is already in `span`/`text`. So a capture's repetition field only ever needs to carry a **number**. Do not store a per-repetition list of substrings or spans, and -- the part that bites -- do not rebuild a trimmed prefix of one for each candidate count while backtracking. A repeating opcode that tries counts $k, k-1, \ldots, 0$ and copies a length-$k$ prefix at each step does $O(k^2)$ work per repetition start; with one such start per position that turns an honest pass into a quadratic-per-position one, and a whole-document fixed point into something far worse. Record just the count (defer it -- store the number, materialise nothing), and if you ever truly need the repetition *boundaries*, compute them once, not once per count.
 
 ---
 

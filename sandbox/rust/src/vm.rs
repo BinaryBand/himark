@@ -550,19 +550,24 @@ fn run_matcher(
         if !matcher.accepts(first) {
             continue;
         }
-        let mut rep_list: Vec<(usize, usize)> = vec![(pos, end_at)];
+        // Only the rep *boundaries* (`ends`) and the rep *count* matter -- the
+        // per-rep span contents are never read (count refs and `#` moustaches go
+        // through `count`/`rep_count`, see Capture). So we keep just `ends` and
+        // defer materialization: each backtracked count `k` pushes an empty `reps`
+        // with `count = k`, O(1). Materializing `rep_list[..k]` per count was O(k)
+        // each, i.e. O(built^2) for a single unbounded `[..]` run -- the quadratic
+        // that made whole-file dedup blow up super-linearly per position.
         let mut ends: Vec<usize> = vec![end_at];
         let mut current = end_at;
 
         loop {
             if let Some(max) = reps.max {
-                if rep_list.len() >= max {
+                if ends.len() >= max {
                     break;
                 }
             }
             match matcher.equal_unit(text, current, first) {
                 Some(nxt) if nxt > current => {
-                    rep_list.push((current, nxt));
                     ends.push(nxt);
                     current = nxt;
                 }
@@ -570,14 +575,13 @@ fn run_matcher(
             }
         }
 
-        for k in counts(reps, rep_list.len()) {
+        for k in counts(reps, ends.len()) {
             let end = if k == 0 { pos } else { ends[k - 1] };
-            let reps_slice = rep_list[..k.min(rep_list.len())].to_vec();
             let mark = state.captures.len();
             state.captures.push(Capture {
                 text: String::new(),
                 span: (pos, end),
-                reps: reps_slice,
+                reps: Vec::new(),
                 subs: vec![],
                 count: k as i64,
             });
