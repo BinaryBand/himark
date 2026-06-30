@@ -102,13 +102,6 @@ impl Alphabet {
         Alphabet::Groups { index, base }
     }
 
-    pub fn base(&self) -> usize {
-        match self {
-            Alphabet::Range { base, .. } => *base,
-            Alphabet::Groups { base, .. } => *base,
-        }
-    }
-
     pub fn contains_char(&self, ch: char) -> bool {
         match self {
             Alphabet::Range { lo, hi, .. } => *lo <= ch as u32 && ch as u32 <= *hi,

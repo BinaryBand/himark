@@ -1,0 +1,85 @@
+// ============================================================================
+//  bench_report.hmk -- turn a benchmark results JSON into a readable Markdown
+//  report, written entirely in HMK.
+//
+//  Run it on the latest results file the benchmark harness writes:
+//      python -m himark run himark/scripts/bench_report.hmk \
+//          tests/benchmarks/results/latest.json --output bench.md
+//
+//  The input is the JSON `tests/benchmarks/bench.py` emits (pretty-printed with
+//  `indent=2`, keys in a fixed order):
+//
+//      {
+//        "timestamp": "2026-06-30T16:42:16.467599+00:00",
+//        "n": 3,
+//        "warmup": 1,
+//        "results": [
+//          {
+//            "engine": "cpp",
+//            "workload": "bs/rev-010",
+//            "mean_ms": 3.033,
+//            "min_ms": 2.976,
+//            "max_ms": 3.085,
+//            "stdev_ms": 0.055,
+//            "times_ms": [ 3.085, 3.037, 2.976 ]
+//          },
+//          ...
+//        ]
+//      }
+//
+//  Output: an H1, a short metadata list, and one Markdown table -- one row per
+//  result, the per-iteration `times_ms` array dropped:
+//
+//      # Benchmark Results
+//
+//      - **Generated:** 2026-06-30T16:42:16.467599+00:00
+//      - **Iterations (n):** 3
+//      - **Warmup:** 1
+//
+//      | Engine | Workload | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |
+//      | --- | --- | ---: | ---: | ---: | ---: |
+//      | cpp | bs/rev-010 | 3.033 | 2.976 | 3.085 | 0.055 |
+//      ...
+//
+//  The passes, in order:
+//   1. TITLE    -- the document-opening `{` becomes the H1.
+//   2. META     -- the three scalar header fields become a bullet list.
+//   3. HEADER   -- the `"results": [` line becomes the table header + rule.
+//   4. ROWS     -- each result object collapses to one `| ... |` table row
+//                  (the whole object is matched on one line so its inter-field
+//                  newlines are consumed; `times_ms` is matched but not emitted).
+//   5. CLEANUP  -- drop the closing `]` and `}` JSON scaffolding lines.
+//
+//  SCOPE / LIMITS (honest, like the other demos):
+//   * The reader is **structural**, keyed to the exact `indent=2`, fixed-key
+//     shape `bench.py` writes -- it is a shape transform, not a general JSON
+//     parser. Reordered keys, different indentation, or extra fields would slip
+//     past the field matchers.
+//   * No aggregation. HMK has no arithmetic, so a per-engine mean across
+//     workloads (the `_print_table` summary) cannot be computed here -- the
+//     report is the raw per-cell table; rank/average it downstream if needed.
+// ============================================================================
+
+// -- TITLE -- the document opens with `{\n`; make it the report heading. -------
+{@<<}{\{\n} => "# Benchmark Results\n\n"
+
+// -- META -- the three scalar header fields become a bullet list. --------------
+{@<}{  \"timestamp\": \"}!{\"}[1..]{\"\,\n} => "- **Generated:** {{$1}}\n"
+{@<}{  \"n\": }!{\,,\n}[1..]{\,\n} => "- **Iterations (n):** {{$1}}\n"
+{@<}{  \"warmup\": }!{\,,\n}[1..]{\,\n} => "- **Warmup:** {{$1}}\n"
+
+// -- HEADER -- the `"results": [` opener becomes the table head + alignment rule.
+{@<}{  \"results\": \[\n}
+    => "\n| Engine | Workload | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |\n| --- | --- | ---: | ---: | ---: | ---: |\n"
+
+// -- ROWS -- each result object (matched whole, on one line) becomes one row.
+// The object's inter-field newlines are part of the match, so they are consumed;
+// the trailing `times_ms` array is matched (to drop it) but never emitted. The
+// captured values are: engine $2, workload $5, mean $8, min $11, max $14,
+// stdev $17.
+{@<}{    \{\n}{      \"engine\": \"}!{\"}[1..]{\"\,\n}{      \"workload\": \"}!{\"}[1..]{\"\,\n}{      \"mean_ms\": }!{\,,\n}[1..]{\,\n}{      \"min_ms\": }!{\,,\n}[1..]{\,\n}{      \"max_ms\": }!{\,,\n}[1..]{\,\n}{      \"stdev_ms\": }!{\,,\n}[1..]{\,\n}{      \"times_ms\": \[\n}!{\]}[1..]{\]\n}{    \}}{\,}[0..1]{\n}
+    => "| {{$2}} | {{$5}} | {{$8}} | {{$11}} | {{$14}} | {{$17}} |\n"
+
+// -- CLEANUP -- drop the JSON array/object close lines. ------------------------
+{@<}{  \]\n} => ""
+{\}}{\n}[0..]{@>>} => ""

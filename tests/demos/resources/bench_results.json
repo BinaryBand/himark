@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-06-30T16:42:16.467599+00:00",
+  "n": 3,
+  "warmup": 1,
+  "results": [
+    {
+      "engine": "cpp",
+      "workload": "btc_extract",
+      "mean_ms": 4.32,
+      "min_ms": 3.888,
+      "max_ms": 5.411,
+      "stdev_ms": 0.621,
+      "times_ms": [
+        5.411,
+        3.888,
+        3.66
+      ]
+    },
+    {
+      "engine": "rust",
+      "workload": "bs/rev-200",
+      "mean_ms": 113.336,
+      "min_ms": 107.15,
+      "max_ms": 117.234,
+      "stdev_ms": 5.417,
+      "times_ms": [
+        117.234,
+        107.15,
+        115.624
+      ]
+    }
+  ]
+}

@@ -1,14 +1,14 @@
-"""Engine benchmark suite -- compares wall-clock speed of all four sandbox engines.
+"""Engine benchmark suite -- compares wall-clock speed of all five sandbox engines.
 
 Usage::
 
-    python tests/bench/bench.py                          # all engines, all workloads
-    python tests/bench/bench.py --workload pipelines     # golden pipelines only
-    python tests/bench/bench.py --workload scaling       # bubble_sort + dedup at various sizes
-    python tests/bench/bench.py --engines go,rust        # subset of engines
-    python tests/bench/bench.py --n 3 --warmup 1         # quick smoke check
+    python tests/benchmarks/bench.py                          # all engines, all workloads
+    python tests/benchmarks/bench.py --workload pipelines     # golden pipelines only
+    python tests/benchmarks/bench.py --workload scaling       # bubble_sort + dedup at various sizes
+    python tests/benchmarks/bench.py --engines go,rust        # subset of engines
+    python tests/benchmarks/bench.py --n 3 --warmup 1         # quick smoke check
 
-Results are always written to tests/bench/results/latest.json and a timestamped
+Results are always written to tests/benchmarks/results/latest.json and a timestamped
 copy alongside it.  Use --output to redirect to a different directory.
 
 Engines must be pre-compiled.  Run ``pytest tests/ -q`` first (the conftest
@@ -17,6 +17,7 @@ hook builds all binaries), or build manually:
     cargo build --release  (in sandbox/rust/)
     javac -d sandbox/build/java sandbox/engine.java
     go build -o sandbox/build/go/himark-engine sandbox/engine.go
+    g++ -std=c++17 -O2 -o sandbox/build/cpp/himark-engine sandbox/engine.cpp
 """
 
 from __future__ import annotations
@@ -41,14 +42,15 @@ from himark.engine import _runner  # noqa: E402
 SCRIPTS = ROOT / "himark" / "scripts"
 RESOURCES = ROOT / "tests" / "demos" / "resources"
 SANDBOX = ROOT / "sandbox"
-RESULTS_DIR = ROOT / "tests" / "bench" / "results"
+RESULTS_DIR = ROOT / "tests" / "benchmarks" / "results"
 
-ALL_ENGINES = ["go", "rust", "java", "python"]
+ALL_ENGINES = ["go", "rust", "java", "python", "cpp"]
 
 _BINARIES: dict[str, Path] = {
     "go": SANDBOX / "build" / "go" / "himark-engine",
     "rust": SANDBOX / "rust" / "target" / "release" / "himark-engine",
     "java": SANDBOX / "build" / "java" / "engine.class",
+    "cpp": SANDBOX / "build" / "cpp" / "himark-engine",
 }
 
 # Scaling parameters
