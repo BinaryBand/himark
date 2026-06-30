@@ -1022,9 +1022,12 @@ func runMatcher(m matcher, r reps, elements []*element, nextIdx int, st *state, 
 			if k > 0 {
 				end = ends[k-1]
 			}
-			slice := make([]string, k)
-			copy(slice, repList[:k])
-			cap := &capture{spanStart: pos, spanEnd: end, repsList: slice, count: k}
+			// Only the rep *count* is ever read (count refs and `#` moustaches go
+			// through repCount), so defer materialization: store count=k with no
+			// repsList. Copying repList[:k] per backtracked count was O(k) each,
+			// i.e. O(built^2) for one unbounded run -- the quadratic that made
+			// whole-file dedup blow up super-linearly per position.
+			cap := &capture{spanStart: pos, spanEnd: end, repsList: nil, count: k}
 			if result, ok2 := pushCap(st, cap, end, func(e int) (int, bool) {
 				return runProgram(elements, nextIdx, text, e, st)
 			}); ok2 {
@@ -1161,7 +1164,7 @@ func findMatches(elements []*element, text string, stages []*hmatch) []*hmatch {
 func finalize(text string, start, end int, st *state) *hmatch {
 	var settle func(c *capture)
 	settle = func(c *capture) {
-		if c.count >= 0 {
+		if c.count >= 0 && len(c.repsList) > c.count {
 			c.repsList = c.repsList[:c.count]
 		}
 		c.text = text[c.spanStart:c.spanEnd]
@@ -1222,7 +1225,8 @@ func evalExpr(d map[string]any, current string, stages []*hmatch) (string, error
 			return "", fmt.Errorf("moustache capture %v out of range", path)
 		}
 		if isCount {
-			return fmt.Sprintf("%d", len(cap.repsList)), nil
+			// repCount honours the deferred count (runMatcher leaves repsList nil).
+			return fmt.Sprintf("%d", cap.repCount()), nil
 		}
 		return cap.text, nil
 	}

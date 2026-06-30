@@ -814,9 +814,13 @@ class engine {
 
             for (int k : counts(reps, repList.size())) {
                 int end = k == 0 ? pos : ends.get(k - 1);
-                var repsSlice = new ArrayList<>(repList.subList(0, Math.min(k, repList.size())));
+                // Only the rep count is ever read (count refs and `#` moustaches go
+                // through repCount), so defer materialization: store count=k with an
+                // empty reps list. Copying repList.subList(0,k) per backtracked count
+                // was O(k) each, i.e. O(built^2) for one unbounded run -- the quadratic
+                // that made whole-file dedup blow up super-linearly per position.
                 int mark = state.captures.size();
-                state.captures.add(new Capture(pos, end, repsSlice, new ArrayList<>(), k));
+                state.captures.add(new Capture(pos, end, new ArrayList<>(), new ArrayList<>(), k));
                 Integer result = runProgram(elements, nextIdx, text, end, state);
                 if (result != null) return result;
                 state.captures.subList(mark, state.captures.size()).clear();
@@ -967,7 +971,8 @@ class engine {
             int[] path = ((List<Object>) pathObj).stream().mapToInt(engine::asInt).toArray();
             var cap = sm.captureAt(path);
             if (cap == null) throw new RuntimeException("Moustache capture out of range");
-            return isCount ? String.valueOf(cap.reps.size()) : cap.text;
+            // repCount honours the deferred count (runMatcher leaves reps empty).
+            return isCount ? String.valueOf(cap.repCount()) : cap.text;
         }
         if (m.containsKey("cat")) {
             var sb = new StringBuilder();
