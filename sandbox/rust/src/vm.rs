@@ -24,13 +24,19 @@ const SEQ_GROUP: u8 = 11;
 pub enum Element {
     Lit(String),
     Anchor(u8),
-    Char { lo: u32, hi: u32, excl: Option<Exclusions>, reps: Reps },
+    // Static matchers are baked at prepare time so the hot VM loop borrows them
+    // instead of reconstructing (and deep-cloning excl/alph/inner_groups) on every
+    // opcode evaluation -- a CHAR under unbounded backtracking is hit millions of
+    // times, and Alphabet::Groups clones a whole HashMap. Only DynRange stays
+    // unbaked: its bounds resolve from runtime captures, so its matcher must be
+    // built per call.
+    Char { matcher: CharMatcher, reps: Reps },
     Group { matcher: GroupMatcher, reps: Reps },
-    Complement { inner_groups: Vec<Vec<String>>, reps: Reps },
+    Complement { matcher: ComplementMatcher, reps: Reps },
     BackRef { idx: usize, reps: Reps },
     CountRef { idx: usize, reps: Reps },
     StageRef { stage: usize, path: Vec<usize>, reps: Reps },
-    ValueRange { alph: Alphabet, lo_val: Option<f64>, hi_val: Option<f64>, wmin: usize, wmax: Option<usize>, excl: Option<Exclusions>, reps: Reps },
+    ValueRange { matcher: ValueMatcher, reps: Reps },
     DynRange { alph: Alphabet, lo_static: Option<String>, hi_static: Option<String>, lo_ref: Option<RefDesc>, hi_ref: Option<RefDesc>, excl: Option<Exclusions>, reps: Reps },
     SeqGroup { children: Vec<Element>, reps: Reps },
 }
@@ -201,7 +207,7 @@ pub fn prepare_elements(elements: &Value) -> Vec<Element> {
                 let hi = el_arr[2].as_u64().unwrap_or(0) as u32;
                 let excl = parse_excl(&el_arr[3]);
                 let reps = parse_reps(el_arr.last().unwrap_or(&Value::Null));
-                out.push(Element::Char { lo, hi, excl, reps });
+                out.push(Element::Char { matcher: CharMatcher { lo, hi, excl }, reps });
             }
             GROUP => {
                 let groups = parse_groups(&el_arr[1]);
@@ -237,7 +243,8 @@ pub fn prepare_elements(elements: &Value) -> Vec<Element> {
                 let wmax = if el_arr[5].is_null() { None } else { el_arr[5].as_u64().map(|n| n as usize) };
                 let excl = parse_excl(&el_arr[6]);
                 let reps = parse_reps(el_arr.last().unwrap_or(&Value::Null));
-                out.push(Element::ValueRange { alph, lo_val, hi_val, wmin, wmax, excl, reps });
+                let matcher = ValueMatcher { alph, lo_val, hi_val, wmin, wmax, excl };
+                out.push(Element::ValueRange { matcher, reps });
             }
             DYN_RANGE => {
                 let alph = parse_alphabet(&el_arr[1]);
@@ -252,7 +259,7 @@ pub fn prepare_elements(elements: &Value) -> Vec<Element> {
             COMPLEMENT => {
                 let inner_groups = parse_groups(&el_arr[1]);
                 let reps = parse_reps(el_arr.last().unwrap_or(&Value::Null));
-                out.push(Element::Complement { inner_groups, reps });
+                out.push(Element::Complement { matcher: ComplementMatcher { inner_groups }, reps });
             }
             SEQ_GROUP => {
                 let children = prepare_elements(&el_arr[1]);
@@ -391,10 +398,9 @@ pub fn run_program(elements: &[Element], idx: usize, text: &str, pos: usize, sta
             }
         }
 
-        Element::Char { lo, hi, excl, reps } => {
+        Element::Char { matcher, reps } => {
             let reps = resolve_reps(reps, state)?;
-            let matcher = CharMatcher { lo: *lo, hi: *hi, excl: excl.clone() };
-            run_matcher(&matcher, &reps, elements, idx + 1, state, text, pos)
+            run_matcher(matcher, &reps, elements, idx + 1, state, text, pos)
         }
 
         Element::Group { matcher, reps } => {
@@ -402,10 +408,9 @@ pub fn run_program(elements: &[Element], idx: usize, text: &str, pos: usize, sta
             run_matcher(matcher, &reps, elements, idx + 1, state, text, pos)
         }
 
-        Element::Complement { inner_groups, reps } => {
+        Element::Complement { matcher, reps } => {
             let reps = resolve_reps(reps, state)?;
-            let matcher = ComplementMatcher { inner_groups: inner_groups.clone() };
-            run_matcher(&matcher, &reps, elements, idx + 1, state, text, pos)
+            run_matcher(matcher, &reps, elements, idx + 1, state, text, pos)
         }
 
         Element::BackRef { idx: ref_idx, reps } => {
@@ -426,17 +431,9 @@ pub fn run_program(elements: &[Element], idx: usize, text: &str, pos: usize, sta
             match_referent(referent.as_deref(), &reps, elements, idx + 1, text, pos, state)
         }
 
-        Element::ValueRange { alph, lo_val, hi_val, wmin, wmax, excl, reps } => {
+        Element::ValueRange { matcher, reps } => {
             let reps = resolve_reps(reps, state)?;
-            let matcher = ValueMatcher {
-                alph: alph.clone(),
-                lo_val: *lo_val,
-                hi_val: *hi_val,
-                wmin: *wmin,
-                wmax: *wmax,
-                excl: excl.clone(),
-            };
-            run_matcher(&matcher, &reps, elements, idx + 1, state, text, pos)
+            run_matcher(matcher, &reps, elements, idx + 1, state, text, pos)
         }
 
         Element::DynRange { alph, lo_static, hi_static, lo_ref, hi_ref, excl, reps } => {
