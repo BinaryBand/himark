@@ -31,9 +31,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
+from himark.engine._anchors import AnchorMap
 from himark.engine._types import Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.compiled import (
+    AnchorOp,
     ExBinOp,
     ExConcat,
     ExCurrent,
@@ -83,14 +85,16 @@ class Universe:
 
 def render(
     template: Template, current: str, stages: list[Match]
-) -> tuple[str, list[tuple[int, int]] | None]:
-    """Render a `Template` into `(full, spans)`. `full` is the whole render -- what
-    **lands** in the document. `spans` are the `(start, end)` of each moustache's
-    value within `full`: each is a **branch** that flows downstream independently,
-    spliced back over its own span, with the literal text between (decoration) kept
-    -- the same splice a query runs, with each moustache playing the part of a match.
-    A template with **no** moustaches has nothing to single out, so its whole render
-    flows as one branch -- signalled by `spans` being None. `current` is `{{$}}`.
+) -> tuple[str, list[tuple[int, int]] | None, AnchorMap, frozenset[str]]:
+    """Render a `Template` into `(full, spans, emitted, cleared)`. `full` is the whole
+    render -- what **lands** in the document. `spans` are the `(start, end)` of each
+    moustache's value within `full`: each is a **branch** that flows downstream
+    independently, spliced back over its own span, with the literal text between
+    (decoration) kept -- the same splice a query runs, with each moustache playing the
+    part of a match. A template with **no** moustaches has nothing to single out, so
+    its whole render flows as one branch -- signalled by `spans` being None.
+    `current` is `{{$}}`. `emitted` are the out-of-band marks a `{{@name}}` directive
+    drops (positions in `full`); `cleared` the names a `{{/name}}` directive removes.
 
     The literal/moustache split and the moustache expressions were both compiled
     up front (`compile_template_text`); this only *evaluates* each `Expr`
@@ -98,8 +102,15 @@ def render(
     out: list[str] = []
     length = 0
     spans: list[tuple[int, int]] = []
+    emitted: AnchorMap = {}
+    cleared: set[str] = set()
     for part in template.parts:
-        if isinstance(part, Moustache):
+        if isinstance(part, AnchorOp):  # zero-width mark op -- no text, no branch
+            if part.clear:
+                cleared.add(part.name)
+            else:
+                emitted[part.name] = (*emitted.get(part.name, ()), length)
+        elif isinstance(part, Moustache):
             value = _eval(part.expr, current, stages).render()
             start = length
             out.append(value)
@@ -109,7 +120,7 @@ def render(
             out.append(part)
             length += len(part)
     full = "".join(out)
-    return full, (spans or None)
+    return full, (spans or None), emitted, frozenset(cleared)
 
 
 # ── Expression evaluation (the parser already built the `Expr`) ────────────────

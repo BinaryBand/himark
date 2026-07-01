@@ -20,8 +20,17 @@ from typing import Any, TypeAlias
 # Literal text that must appear verbatim.
 LIT = 0
 
-# Zero-width anchor: line_start(0), line_end(1), doc_start(2), doc_end(3).
-ANCHOR = 1
+# Zero-width lookaround assertion -- the sole boundary primitive. Succeeds without
+# consuming when the adjacent code point (behind or ahead) is (or, when negated, is
+# not) in a `[lo, hi]` range minus `excl`. The four anchor spellings lower to this
+# one primitive, so the engine keeps no dedicated doc/line anchor: doc-start is a
+# negative lookbehind of any char (true only at pos 0); doc-end a negative lookahead
+# of any char (true only at EOF); line-start a negative lookbehind of any *non*-`\n`
+# (pos 0, or right after a `\n`); line-end the ahead form. See docs/PAYLOAD.md.
+# Operands: (direction: int, negate: bool, lo: int, hi: int, excl) -- no reps.
+LOOKAROUND = 1
+LOOK_BEHIND = 0  # inspect the char before the cursor
+LOOK_AHEAD = 1  # inspect the char at the cursor
 
 # A code-point range with exclusions — the compiled form of `{a..z}`, `{\d}`,
 # and value-range bands over ``@uni`` with single-char endpoints.
@@ -56,6 +65,12 @@ VALUE_RANGE = 7
 # Operands: (alphabet_desc, lo_static, hi_static, lo_ref, hi_ref, excl, reps)
 # lo_ref/hi_ref are None for static, or ("back"|"count"|"stage", ...) descriptors.
 DYN_RANGE = 8
+
+# A zero-width out-of-band named-anchor assertion: succeeds without consuming when
+# the current position is (or, when negated, is not) in the document's `AnchorMap`
+# for `name`. Marks live beside the text, not in it; see himark/engine/_anchors.py.
+# Operands: (name: str, negate: bool) -- no reps.
+NAMED_ANCHOR = 9
 
 # A complement ``{^abc}`` — match one position whose value is NOT in the inner
 # alphabet.  Operands: (inner_groups: list[list[str]], reps: Reps)

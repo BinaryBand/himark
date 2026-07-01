@@ -143,30 +143,49 @@ class Moustache:
 
 
 @dataclass(slots=True)
+class AnchorOp:
+    """A `{{@name}}` (emit) or `{{/name}}` (clear) template directive -- an
+    out-of-band named-anchor operation, zero-width and non-rendering. Emit drops a
+    `name` mark at this output position; clear removes `name` marks from the splice's
+    output. The mark lives in a parallel `AnchorMap` beside the text (docs/PAYLOAD.md,
+    docs/HMK.md), never a byte in it, so it cannot be spoofed by input."""
+
+    name: str
+    clear: bool = False
+
+
+@dataclass(slots=True)
 class Template:
-    """A compiled template step: the literal text and `Moustache` references of a
-    `"…"` template, pre-split into ordered `parts` (each a literal `str` or a
-    `Moustache`). The renderer walks `parts`, emitting literals verbatim and the
-    evaluated value of each moustache, recording where each moustache value lands
-    so it can flow downstream as its own branch.
+    """A compiled template step: the literal text, `Moustache` references, and
+    `AnchorOp` directives of a `"…"` template, pre-split into ordered `parts` (each a
+    literal `str`, a `Moustache`, or an `AnchorOp`). The renderer walks `parts`,
+    emitting literals verbatim and the evaluated value of each moustache, recording
+    where each moustache value lands so it can flow downstream as its own branch; an
+    `AnchorOp` emits/clears a mark and no text.
 
     `fixed_point` mirrors `Program.fixed_point`: the pipeline runner sets it on a
     statement's first step when the statement uses the `<=>` arrow."""
 
-    parts: list[str | Moustache] = field(default_factory=list)
+    parts: list[str | Moustache | AnchorOp] = field(default_factory=list)
     fixed_point: bool = False
 
     def to_json(self) -> dict:
         """Serialise to a JSON-stable dict — parity with `Program.to_json`. A
-        literal part stays a string; a moustache becomes `{"m": <expr-json>}`."""
+        literal part stays a string; a moustache becomes `{"m": <expr-json>}`; an
+        anchor directive becomes `{"emit": name}` or `{"clear": name}`."""
         return {
-            "version": 1,
+            "version": 2,
             "fixed_point": self.fixed_point,
-            "template": [
-                p if isinstance(p, str) else {"m": _expr_to_json(p.expr)}
-                for p in self.parts
-            ],
+            "template": [_part_to_json(p) for p in self.parts],
         }
+
+
+def _part_to_json(p: "str | Moustache | AnchorOp") -> "str | dict":
+    if isinstance(p, str):
+        return p
+    if isinstance(p, AnchorOp):
+        return {"clear": p.name} if p.clear else {"emit": p.name}
+    return {"m": _expr_to_json(p.expr)}
 
 
 # A compiled pipeline step: a matcher program or a render template.

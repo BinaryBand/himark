@@ -19,6 +19,17 @@
 //                             document-shaped, run over the subject's text. Filters
 //                             are L2 now, not an engine set (docs/HMK.md).
 
+// ── Anchors ───────────────────────────────────────────────────────────────────
+
+// The four line/doc anchors, declared over the single zero-width lookaround
+// primitive (`!<{X}` = "no X behind me", `!>{X}` = "no X ahead"). The `@<`/`@>`/
+// `@<<`/`@>>` glyphs are sugar that resolve to these names, so `{@<}` and
+// `{@line_start}` are the same match. The engine keeps no dedicated anchor opcode.
+@doc_start = !<{@uni}    // nothing before me  -> position 0
+@doc_end = !>{@uni}      // nothing after me   -> end of document
+@line_start = !<!{\n}    // no non-newline before -> position 0, or just after a \n
+@line_end = !>!{\n}      // no non-newline ahead  -> end of document, or before a \n
+
 // ── Named alphabets ───────────────────────────────────────────────────────────
 
 // Positional alphabets (ordered — usable as value bounds, e.g. {@d::0..255}).

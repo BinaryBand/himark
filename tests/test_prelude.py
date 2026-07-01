@@ -21,7 +21,7 @@ def _load(text, tmp_path, monkeypatch):
     path = tmp_path / "p.hmk"
     path.write_text(text, "utf-8")
     monkeypatch.setattr(prelude, "PRELUDE_PATH", path)
-    variables, _filters = prelude._load()
+    variables, _filters, _anchors = prelude._load()
     return variables
 
 
@@ -64,6 +64,7 @@ def test_pipeline_body_is_classified_as_a_filter(tmp_path, monkeypatch):
         "utf-8",
     )
     monkeypatch.setattr(prelude, "PRELUDE_PATH", path)
-    variables, filter_srcs = prelude._load()
+    variables, filter_srcs, anchors = prelude._load()
     assert variables == {"d": "0..9"}
     assert set(filter_srcs) == {"rstrip", "double"}
+    assert anchors == set()

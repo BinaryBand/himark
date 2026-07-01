@@ -69,18 +69,44 @@ Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single c
 | `@ascii` | `U+0000..U+007F`               |
 | `@uni`   | `U+0000..U+10FFFF`             |
 
+The prelude also declares the four **anchors** (below) as lookarounds -- they are variables too, resolvable directly (`{@line_start}`) as well as through their glyphs:
+
+| Name          | Expands to  |
+| ------------- | ----------- |
+| `@doc_start`  | `!<{@uni}`  |
+| `@doc_end`    | `!>{@uni}`  |
+| `@line_start` | `!<!{\n}`   |
+| `@line_end`   | `!>!{\n}`   |
+
 ---
 
 ## :anchor: Anchors
 
 Zero-width, capture the empty string. A single angle is a **line** edge, a double angle the whole **document** edge; `<` is a start, `>` an end:
 
-| Anchor        | Matches                                    |
-| ------------- | ------------------------------------------ |
-| `@<` / `@>`   | start / end of **line** (pos 0 or by `\n`) |
-| `@<<` / `@>>` | start / end of the **document**            |
+| Anchor        | Matches                                    | Sugar for                   |
+| ------------- | ------------------------------------------ | --------------------------- |
+| `@<` / `@>`   | start / end of **line** (pos 0 or by `\n`) | `@line_start` / `@line_end` |
+| `@<<` / `@>>` | start / end of the **document**            | `@doc_start` / `@doc_end`   |
 
 A whole line is `{@<}!{\n}[1..]{@>}`.
+
+The anchors are not an engine primitive: each is declared in `himark/std.hmk` over the sole zero-width **lookaround** primitive `!<{X}` / `!>{X}` -- a negative assertion that the character _behind_ (`<`) or _ahead_ (`>`) is **not** in the class `X`. So `@doc_start = !<{@uni}` reads "no character before me" (position 0), and `@line_start = !<!{\n}` reads "no non-newline before me" (position 0, or just after a `\n`). The `@<` glyphs are pure sugar resolving to these names.
+
+---
+
+## Named anchors
+
+A `@name = anchor` declaration introduces a **named anchor**: a zero-width, non-rendering **mark** carried _beside_ the document -- in a parallel position map, never a byte in the text. Because a mark is out-of-band, input can never forge one. A named anchor has four moves:
+
+| Form         | Where     | Meaning                                              |
+| ------------ | --------- | ---------------------------------------------------- |
+| `{@name}`    | query     | match (zero-width) where a `name` mark sits          |
+| `!{@name}`   | query     | match where **no** `name` mark sits (not a complement) |
+| `{{@name}}`  | template  | **emit** a `name` mark at this output position       |
+| `{{/name}}`  | template  | **clear** every `name` mark from the pass's output   |
+
+Marks are offset-remapped on every splice, so one a template emits survives -- correctly relocated -- into a later statement that matches or clears it; a mark strictly inside a replaced span is dropped. Because a `{@name}` match is zero-width, pair it with a width-ful construct (`{@name}!{\n}` = a marked line). One caveat: a mark does **not** ride along when its region is captured and re-emitted as text (`{{$0}}`), since the mark lives beside the text, not in it -- so a delimiter that must survive a text copy (like the sentinels in `scripts/dedup.hmk`) stays an in-text character, not a named anchor.
 
 ---
 

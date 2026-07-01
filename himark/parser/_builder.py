@@ -125,13 +125,14 @@ def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNo
     )
 
 
-def _resolve_anchor_atom(anchor: GRAMMARParser.AnchorContext) -> t.AnchorNode:
+def _anchor_glyph_name(anchor: GRAMMARParser.AnchorContext) -> str:
+    """The std.hmk declaration name a `@<`/`@>`/`@<<`/`@>>` glyph is sugar for."""
     lts = anchor.LT()
     is_start = bool(lts)
     is_document = len(lts or anchor.GT()) == 2
     if is_document:
-        return t.AnchorNode(at="doc_start" if is_start else "doc_end")
-    return t.AnchorNode(at="line_start" if is_start else "line_end")
+        return "doc_start" if is_start else "doc_end"
+    return "line_start" if is_start else "line_end"
 
 
 def _count_int(
@@ -182,9 +183,10 @@ class _AstBuilder(GRAMMARVisitor):
     double-dispatch (visitor pattern) instead of manual `isinstance` chains.
     """
 
-    def __init__(self, env: dict[str, str]) -> None:
+    def __init__(self, env: dict[str, str], anchors: set[str] | None = None) -> None:
         super().__init__()
         self._env = env
+        self._anchors = anchors or set()
         self._resolving: set[str] = set()
         self._parsed_env: dict[str, GRAMMARParser.BandContext] = {}
 
@@ -203,7 +205,23 @@ class _AstBuilder(GRAMMARVisitor):
             self._parsed_env[name] = brace.band()
         return self._parsed_env[name]
 
+    def _resolve_lookaround(
+        self, ctx: GRAMMARParser.LookaroundContext
+    ) -> t.LookaroundNode:
+        """`!<{X}` / `!>{X}` -> a negative `LookaroundNode` over the inner class `X`
+        (a `{…}` group or a `!{…}` complement). `LT` is behind, `GT` is ahead."""
+        direction = "behind" if ctx.LT() is not None else "ahead"
+        if ctx.complement() is not None:
+            inner: t.SemanticNode = t.ComplementNode(
+                inner=self.visit(ctx.complement().braceGroup().band())
+            )
+        else:
+            inner = self.visit(ctx.braceGroup().band())
+        return t.LookaroundNode(direction=direction, inner=inner)
+
     def _resolve_variable(self, name: str) -> t.SemanticNode:
+        if name in self._anchors:  # `@name = anchor` -> a zero-width mark match
+            return t.NamedAnchorNode(name=name)
         if name not in self._env:
             return t.LiteralNode(content="@" + name)
         if name in self._resolving:
@@ -325,7 +343,11 @@ class _AstBuilder(GRAMMARVisitor):
                 items.append(t.SeqItem(node=_resolve_reference_atom(atom.reference())))
             elif atom.anchor() is not None:
                 flush()
-                items.append(t.SeqItem(node=_resolve_anchor_atom(atom.anchor())))
+                items.append(
+                    t.SeqItem(
+                        node=self._resolve_variable(_anchor_glyph_name(atom.anchor()))
+                    )
+                )
             else:  # seqLit / ESC / HEX_ESC — literal text
                 buf.append(atom.getText())
         flush()
@@ -431,7 +453,9 @@ class _AstBuilder(GRAMMARVisitor):
         if len(atoms) == 1 and atoms[0].reference() is not None:
             return _resolve_reference_atom(atoms[0].reference())
         if len(atoms) == 1 and atoms[0].anchor() is not None:
-            return _resolve_anchor_atom(atoms[0].anchor())
+            return self._resolve_variable(_anchor_glyph_name(atoms[0].anchor()))
+        if len(atoms) == 1 and atoms[0].lookaround() is not None:
+            return self._resolve_lookaround(atoms[0].lookaround())
         if len(atoms) == 1 and atoms[0].macro() is not None:
             return self._resolve_variable(atoms[0].macro().NAME().getText())
 

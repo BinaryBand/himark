@@ -51,8 +51,16 @@
 //     HMK has no fast (or linear) sort to lean on; its only sort is the O(n²)
 //     bubble_sort.hmk.
 //   * One Y pairs with one P per key; extra copies fall through to CLEANUP.
-//  The sentinels ¤ (key separator), § (skip guard), and ⸴ (masked comma) are
-//  assumed absent from the input.
+//  Two sentinels remain: ¤ (key separator) and ⸴ (masked comma), each assumed
+//  absent from the input. They stay *in-text* characters on purpose -- not the
+//  out-of-band named anchors of docs/TODO.md Step 4 -- because the MATCH merge below
+//  captures the text *between* a Y line and its P twin (the `{{@uni}}[..]` gap, `$4`)
+//  and re-emits it verbatim: a ¤ character rides along inside that captured text,
+//  but a zero-width mark, living beside the text, would be left behind and the
+//  intervening keyed lines would lose it. A delimiter that must survive a text
+//  capture-and-re-emit has to *be* text. (The old § "skip guard" was different -- a
+//  never-emitted stand-in for "any character" -- so `!{§}[..]` is now the honest
+//  heterogeneous wildcard `{{@uni}}[..]`, closing that one assumed-absent hole.)
 // ============================================================================
 
 // ── HEADER ── drop the column-name row ───────────────────────────────────────
@@ -75,8 +83,8 @@
 
 // ── MATCH ── merge any equal-key Y/P pair, anywhere in the file (fixed point,
 // both column orders). The unbounded `[..]` guarantees full recall.
-{@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}!{§}[..]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@<}!{¤,\n}[1..]{¤P\t}{\n}!{§}[..]{@<}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
+{@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}{{@uni}}[..]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
+{@<}!{¤,\n}[1..]{¤P\t}{\n}{{@uni}}[..]{@<}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
 // ── CLEANUP ── each unmatched keyed line becomes a one-cell row ───────────────
 {@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n} => "{{$2}}\,\n"
@@ -86,4 +94,4 @@
 {⸴} => "\,"
 
 // ── HEADER ── re-add the column names ────────────────────────────────────────
-{@<<}!{§}[..] => "youtube_title\,podcast_title\n{{$0}}"
+{@<<}{{@uni}}[..] => "youtube_title\,podcast_title\n{{$0}}"

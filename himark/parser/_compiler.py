@@ -20,6 +20,7 @@ import re
 from typing import cast
 
 from himark.models.compiled import (
+    AnchorOp,
     ExBinOp,
     ExConcat,
     ExCurrent,
@@ -35,7 +36,6 @@ from himark.models.compiled import (
 from himark.parser._generated.GRAMMARParser import GRAMMARParser
 from himark.parser._generated.GRAMMARVisitor import GRAMMARVisitor
 from himark.models.opcodes import (
-    ANCHOR,
     BACK_REF,
     CHAR,
     COMPLEMENT,
@@ -43,6 +43,10 @@ from himark.models.opcodes import (
     DYN_RANGE,
     GROUP,
     LIT,
+    LOOK_AHEAD,
+    LOOK_BEHIND,
+    LOOKAROUND,
+    NAMED_ANCHOR,
     SEQ_GROUP,
     STAGE_REF,
     VALUE_RANGE,
@@ -332,15 +336,43 @@ def _lower_to_groups(node: t.SemanticNode) -> tuple[list[list[str]], bool]:
 # The single map from a resolved SemanticNode to opcodes. Called by the CST
 # compiler (`_AstBuilder.compile_pattern`) — one call per factor.
 
-_ANCHOR_KIND = {"line_start": 0, "line_end": 1, "doc_start": 2, "doc_end": 3}
+
+def _lookaround_operands(inner: t.SemanticNode) -> tuple[int, int, tuple | None]:
+    """Reduce a lookaround's inner class to the `(lo, hi, excl)` a `LOOKAROUND`
+    matcher tests. A `!{X}` complement is "any char except X's members" (full range
+    minus them); a `{@uni}`-style code range is itself. `None` excl is the any-char
+    fast path in `_char_match`."""
+    if isinstance(inner, t.ComplementNode):
+        groups, _ = _lower_to_groups(inner.inner)
+        chars = [m for grp in groups for m in grp]
+        return 0, 0x10FFFF, _normalize_exclusions(chars)
+    cp = _codepoint_span(inner)  # CharRangeNode or a `{@uni}` ValueRangeNode
+    if cp is not None:
+        lo, hi = cp
+        excl_list = getattr(inner, "exclusions", None)
+        return lo, hi, _normalize_exclusions(excl_list) if excl_list else None
+    raise CompileError(
+        "a lookaround operand must be a code-point range (e.g. {@uni}) or a "
+        "complement (e.g. !{\\n})"
+    )
 
 
 def _emit_semantic(
     elements: list[Instruction], sem: t.SemanticNode, reps: tuple
 ) -> None:
     """Emit the opcode(s) for one resolved universe `sem`, repeated `reps`."""
-    if isinstance(sem, t.AnchorNode):
-        elements.append((ANCHOR, _ANCHOR_KIND[sem.at]))  # zero-width: no reps
+    if isinstance(sem, t.LookaroundNode):  # the one zero-width boundary primitive
+        direction = LOOK_BEHIND if sem.direction == "behind" else LOOK_AHEAD
+        lo, hi, excl = _lookaround_operands(sem.inner)
+        elements.append((LOOKAROUND, direction, sem.negate, lo, hi, excl))
+        return
+    if isinstance(sem, t.NamedAnchorNode):  # `{@name}` -> zero-width mark assertion
+        elements.append((NAMED_ANCHOR, sem.name, sem.negate))
+        return
+    if isinstance(sem, t.ComplementNode) and isinstance(sem.inner, t.NamedAnchorNode):
+        # `!{@name}` is a negative zero-width assertion (no mark here), NOT a
+        # character complement -- an out-of-band mark occupies no character.
+        elements.append((NAMED_ANCHOR, sem.inner.name, True))
         return
     if isinstance(sem, t.BackRefNode):
         elements.append((BACK_REF, sem.group, reps))
@@ -568,17 +600,38 @@ def compile_template_text(
     """Lower a template body (the already-unescaped literal text of a `"…"` template,
     or of a brace-free pattern step) into a ``Template``.
 
-    Splits the text into an ordered list of literal strings and ``Moustache``
-    references — the structure the renderer used to recompute by regex on every
-    render. Works straight off text, so it needs no AST node. `filters` is the
-    declared-filter registry a `| name` moustache pipe resolves against."""
-    parts: list[str | Moustache] = []
+    Splits the text into an ordered list of literal strings, ``Moustache``
+    references, and ``AnchorOp`` directives — the structure the renderer used to
+    recompute by regex on every render. Works straight off text, so it needs no AST
+    node. `filters` is the declared-filter registry a `| name` moustache pipe
+    resolves against."""
+    parts: list[str | Moustache | AnchorOp] = []
     last = 0
     for mo in _MOUSTACHE_RE.finditer(text):
         if mo.start() > last:
             parts.append(text[last : mo.start()])
-        parts.append(Moustache(expr=_compile_moustache(mo.group(1), filters)))
+        parts.append(_compile_moustache_part(mo.group(1), filters))
         last = mo.end()
     if last < len(text):
         parts.append(text[last:])
     return Template(parts=parts)
+
+
+# A `{{ ... }}` body that is a bare `@name` is an out-of-band anchor **emit** and
+# `/name` a **clear** — both currently moustache parse-errors (no `@`/leading-`/` in
+# the expression grammar), so repurposing them needs no grammar change.
+_EMIT_RE = re.compile(r"@(\w+)")
+_CLEAR_RE = re.compile(r"/(\w+)")
+
+
+def _compile_moustache_part(
+    body: str, filters: dict[str, object] | None
+) -> "Moustache | AnchorOp":
+    """One `{{ … }}` body -> an anchor emit/clear directive (`{{@g}}` / `{{/g}}`) or,
+    otherwise, a value `Moustache`."""
+    stripped = _strip_moustache_ws(body)
+    if (m := _EMIT_RE.fullmatch(stripped)) is not None:
+        return AnchorOp(name=m.group(1), clear=False)
+    if (m := _CLEAR_RE.fullmatch(stripped)) is not None:
+        return AnchorOp(name=m.group(1), clear=True)
+    return Moustache(expr=_compile_moustache(body, filters))

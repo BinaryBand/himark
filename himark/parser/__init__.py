@@ -77,6 +77,7 @@ def parse(
     text: str,
     variables: dict[str, str] | None = None,
     filters: dict[str, object] | None = None,
+    anchors: set[str] | None = None,
 ) -> list[Step]:
     """Parse and **compile** one statement into the product the engine VM consumes:
     a `Program` per query step, a `Template` per template step. The compiler builds a
@@ -85,15 +86,20 @@ def parse(
     flagged on its first step from the `FIXARROW` token, so no caller rewrites arrows.
 
     `filters` is the declared-filter registry (prelude globals plus any script-local
-    filters) a `| name` moustache pipe resolves against; it defaults to the prelude
-    `FILTERS` so a bare `parse(...)` still sees the standard filters."""
+    filters) a `| name` moustache pipe resolves against; `anchors` is the set of
+    declared named anchors a `{@name}` mark match resolves against. Both default to
+    the prelude registries so a bare `parse(...)` still sees the standard set."""
     from himark.prelude import VARIABLES
 
     if filters is None:
         from himark.prelude import FILTERS  # deferred: prelude compiles its own
 
         filters = FILTERS
-    builder = _AstBuilder({**VARIABLES, **(variables or {})})
+    if anchors is None:
+        from himark.prelude import ANCHORS
+
+        anchors = ANCHORS
+    builder = _AstBuilder({**VARIABLES, **(variables or {})}, anchors=anchors)
     steps: list[Step] = []
     text = strip_insignificant_ws(text)
     statement = _parse_snippet_tree(text).statement()

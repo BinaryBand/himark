@@ -28,30 +28,42 @@ def compile_script(source: str) -> list[list[Step]]:
     shape, exactly as in the prelude. Both leave no trace in the compiled pipeline.
     Shadowing a prelude variable or redefining a local is a `CompileError`."""
     from himark.parser import _parse_script_tree, parse
-    from himark.prelude import FILTERS, VARIABLES, compile_filter_body, _is_filter_body
+    from himark.prelude import (
+        ANCHORS,
+        FILTERS,
+        VARIABLES,
+        compile_filter_body,
+        _is_anchor_body,
+        _is_filter_body,
+    )
 
     source = strip_insignificant_ws(source)
     local: dict[str, str] = {}
     filters: dict[str, object] = dict(FILTERS)
+    anchors: set[str] = set(ANCHORS)
     pipeline: list[list[Step]] = []
     for item in _parse_script_tree(source).scriptItem():
         defn = item.definition()
         if defn is not None:
             name = defn.NAME().getText()
-            if name in VARIABLES or name in FILTERS:
+            if name in VARIABLES or name in FILTERS or name in ANCHORS:
                 raise CompileError(f"definition @{name} shadows a prelude declaration")
-            if name in local or name in filters:
+            if name in local or name in filters or name in anchors:
                 raise CompileError(f"@{name} is already defined")
             body = defn.definitionBody()
             body_src = source[body.start.start : body.stop.stop + 1]
-            if _is_filter_body(body_src):
+            if _is_anchor_body(body_src):
+                anchors.add(name)
+            elif _is_filter_body(body_src):
                 filters[name] = compile_filter_body(body_src, local, filters)
             else:
                 local[name] = body_src
             continue
         stmt = item.statement()
         stmt_src = source[stmt.start.start : stmt.stop.stop + 1]
-        pipeline.append(parse(stmt_src, variables=local or None, filters=filters))
+        pipeline.append(
+            parse(stmt_src, variables=local or None, filters=filters, anchors=anchors)
+        )
     return pipeline
 
 

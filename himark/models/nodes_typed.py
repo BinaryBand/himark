@@ -136,18 +136,31 @@ class ComplementNode:
 
 
 @dataclass(slots=True, kw_only=True)
-class AnchorNode:
-    """A zero-width anchor: `@<`/`@>` match a **line** start/end; `@<<`/`@>>` the
-    whole **document** start/end. Matches a position without consuming or
-    capturing."""
+class LookaroundNode:
+    """A zero-width **negative lookaround** (grammar `lookaround`): `!<{X}` asserts the
+    char *behind* the cursor is not in `inner`; `!>{X}` the char *ahead*. Matches a
+    position without consuming or capturing. This is the sole boundary primitive --
+    the four line/doc anchors are declared in `himark/std.hmk` as lookarounds over it
+    (`@doc_start = !<{@uni}`, `@line_start = !<!{\\n}`, ...), and `@<`/`@>`/`@<<`/`@>>`
+    are glyph sugar resolving to those names. Lowers to the `LOOKAROUND` opcode."""
 
-    at: Literal[
-        "line_start",
-        "line_end",
-        "doc_start",
-        "doc_end",
-    ]
-    type: Literal["anchor"] = "anchor"
+    direction: Literal["behind", "ahead"]
+    inner: "SemanticNode"
+    negate: bool = True
+    type: Literal["lookaround"] = "lookaround"
+
+
+@dataclass(slots=True, kw_only=True)
+class NamedAnchorNode:
+    """A zero-width **out-of-band named anchor** match: `{@name}` asserts a `name`
+    mark sits at the current position; `!{@name}` asserts it does not (`negate`). The
+    marks are carried beside the text in an `AnchorMap` (never a byte in it), emitted
+    by a `{{@name}}` template directive. Declared via `@name = anchor`. Lowers to the
+    `NAMED_ANCHOR` opcode; see docs/HMK.md."""
+
+    name: str
+    negate: bool = False
+    type: Literal["named_anchor"] = "named_anchor"
 
 
 @dataclass(slots=True)
@@ -280,7 +293,8 @@ SemanticNode: TypeAlias = (
     | ValueRangeNode
     | UnionNode
     | ComplementNode
-    | AnchorNode
+    | LookaroundNode
+    | NamedAnchorNode
     | GroupClassNode
     | SequenceNode
     | BackRefNode

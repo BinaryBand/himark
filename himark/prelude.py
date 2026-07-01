@@ -89,13 +89,23 @@ def _is_filter_body(rhs: str) -> bool:
     return False
 
 
-def _load() -> tuple[dict[str, str], dict[str, str]]:
-    """Parse `std.hmk` into a `(variables, filter_srcs)` pair — the alphabet table
-    and an ordered `name -> body-source` map of filter declarations. A line that is
-    not a `@name` declaration is a `CompileError` — the prelude is declarations only,
-    so a stray statement is a typo, not silent input."""
+def _is_anchor_body(rhs: str) -> bool:
+    """Classify a `@name =` body as an **out-of-band named-anchor** declaration: the
+    body is exactly the keyword `anchor` (`@keysep = anchor`). Such a name matches as
+    a zero-width `{@name}` mark and is emitted by a `{{@name}}` template directive --
+    it holds no alphabet or pipeline."""
+    return rhs.strip() == "anchor"
+
+
+def _load() -> tuple[dict[str, str], dict[str, str], set[str]]:
+    """Parse `std.hmk` into `(variables, filter_srcs, anchor_names)` — the alphabet
+    table, an ordered `name -> body-source` map of filter declarations, and the set of
+    named-anchor declarations. A line that is not a `@name` declaration is a
+    `CompileError` — the prelude is declarations only, so a stray statement is a typo,
+    not silent input."""
     variables: dict[str, str] = {}
     filter_srcs: dict[str, str] = {}
+    anchor_names: set[str] = set()
     for raw in PRELUDE_PATH.read_text("utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("//"):
@@ -104,11 +114,13 @@ def _load() -> tuple[dict[str, str], dict[str, str]]:
             raise CompileError(f"{PRELUDE_PATH.name}: not a declaration: {line!r}")
         name = m.group(1)
         body = _strip_inline_comment(m.group(2).strip())
-        if _is_filter_body(body):
+        if _is_anchor_body(body):
+            anchor_names.add(name)
+        elif _is_filter_body(body):
             filter_srcs[name] = body
         else:
             variables[name] = body
-    return variables, filter_srcs
+    return variables, filter_srcs, anchor_names
 
 
 def compile_filter_body(
@@ -147,7 +159,9 @@ def _compile_filters(
 
 
 # name -> Himark source, expanded into the pattern before tokenizing (phase 1).
-VARIABLES, _FILTER_SRCS = _load()
+VARIABLES, _FILTER_SRCS, ANCHORS = _load()
 # name -> compiled filter body (an `Expr` or a `list[list[Step]]` pipeline),
 # resolved by the moustache compiler when it lowers a `| name` pipe.
 FILTERS = _compile_filters(_FILTER_SRCS, VARIABLES)
+# The set of prelude-declared named anchors (`{@name}` marks). Empty in the shipped
+# prelude -- scripts declare their own (e.g. dedup's `@keysep`, `@protected`).

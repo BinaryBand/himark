@@ -14,7 +14,7 @@ A compiled `.hmk` file is a **pipeline**: an ordered list of **statements**, eac
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "statements": [
     [ <step>, <step>, ... ],
     ...
@@ -47,22 +47,22 @@ Each step is either a **query** (a matcher `Program`) or a **template** (a rende
 {
   "kind": "template",
   "fixed_point": <bool>,
-  "template": [ <part>, ... ]  // each part: a literal string, or {"m": <expr>}
+  "template": [ <part>, ... ]  // literal str, {"m": <expr>}, {"emit": name}, {"clear": name}
 }
 ```
 
-A literal part is emitted verbatim. A `{"m": <expr>}` part is an interpolated moustache (`{{ … }}`); the executor evaluates `<expr>` (§7) and records where its value lands so it can flow downstream as its own branch.
+A literal part is emitted verbatim. A `{"m": <expr>}` part is an interpolated moustache (`{{ … }}`); the executor evaluates `<expr>` (§7) and records where its value lands so it can flow downstream as its own branch. An `{"emit": name}` (`{{@name}}`) or `{"clear": name}` (`{{/name}}`) part is a zero-width out-of-band anchor op (§6): it renders **no** text -- `emit` drops a `name` mark at that output offset, `clear` removes `name` marks from the splice's output.
 
 ## 3. Instruction
 
-An instruction is an array `[opcode, <operand>, ...]`. The first element is the integer opcode (§4); the remaining elements are its operands in the fixed order given below. Most opcodes end with a **reps** operand (§5); `LIT` and `ANCHOR` are zero-width/uncounted and carry none.
+An instruction is an array `[opcode, <operand>, ...]`. The first element is the integer opcode (§4); the remaining elements are its operands in the fixed order given below. Most opcodes end with a **reps** operand (§5); `LIT`, `LOOKAROUND`, and `NAMED_ANCHOR` are zero-width/uncounted and carry none.
 
 ## 4. Opcodes
 
 | # | Name | Operands (after the opcode) |
 |---|------|------------------------------|
 | 0 | `LIT` | `text: str` — literal text matched verbatim. *(no reps)* |
-| 1 | `ANCHOR` | `kind: int` — zero-width anchor; see §6. *(no reps)* |
+| 1 | `LOOKAROUND` | `direction: int` (0 behind, 1 ahead), `negate: bool`, `lo: int`, `hi: int`, `excl` (§8)`\|null` — zero-width: succeeds when the adjacent code point is (or, negated, is not) in `[lo, hi]` minus `excl`; see §6. *(no reps)* |
 | 2 | `CHAR` | `lo: int`, `hi: int`, `excl` (§8), `reps` (§5) — one code point in `[lo, hi]`. |
 | 3 | `GROUP` | `groups` (§9), `het: bool`, `reps` — one position from an explicit symbol set. |
 | 4 | `BACK_REF` | `group: int`, `reps` — re-match the text captured by group `group`. |
@@ -70,7 +70,7 @@ An instruction is an array `[opcode, <operand>, ...]`. The first element is the 
 | 6 | `STAGE_REF` | `stage: int`, `path: [int]`, `reps` — match the text of pipeline `stage`'s capture at `path`. |
 | 7 | `VALUE_RANGE` | `alph` (§10), `lo_val: int\|null`, `hi_val: int\|null`, `wmin: int`, `wmax: int\|null`, `excl` (§8), `reps` — static positional-value band. |
 | 8 | `DYN_RANGE` | `alph` (§10), `lo_static: str\|null`, `hi_static: str\|null`, `lo_ref` (§11)`\|null`, `hi_ref` (§11)`\|null`, `excl` (§8), `reps` — value band with a reference endpoint resolved at match time. |
-| 9 | *(reserved)* | unused — no opcode `9` is emitted. |
+| 9 | `NAMED_ANCHOR` | `name: str`, `negate: bool` — zero-width: succeeds when the current position is (or, negated, is not) a `name` mark in the document's out-of-band `AnchorMap`; see §6. *(no reps)* |
 | 10 | `COMPLEMENT` | `inner_groups` (§9), `reps` — one position whose value is **not** in the inner alphabet. |
 | 11 | `SEQ_GROUP` | `children: [<instruction>, ...]`, `reps` — a grouping brace: a sub-program that is one capture group whose inner instructions become sub-captures. |
 
@@ -88,16 +88,26 @@ The repetition operand is one of:
 
 `null` is accepted as a synonym for `[1, 1]`, but the compiler always emits an explicit form.
 
-## 6. Anchor kinds (`ANCHOR`)
+## 6. Anchors: `LOOKAROUND` and `NAMED_ANCHOR`
 
-| kind | Meaning |
-|------|---------|
-| 0 | line start |
-| 1 | line end |
-| 2 | document start |
-| 3 | document end |
+Both anchor opcodes are zero-width and non-capturing. There is **no** dedicated
+line/doc anchor opcode: the four anchors are declared in `std.hmk` as lookarounds.
 
-Anchors are zero-width and non-capturing.
+- `LOOKAROUND` (`direction`, `negate`, `lo`, `hi`, `excl`) tests the code point
+  *behind* (`direction 0`) or *ahead* (`direction 1`) of the cursor against the class
+  `[lo, hi]` minus `excl` (§8; `excl` may be `null` for none). Missing a character
+  (past a document boundary) counts as no match, so a **negative** lookaround of any
+  char is true only at that boundary. The shipped anchors: doc-start =
+  `[1, 0, true, 0, 1114111, null]` (nothing behind), doc-end = the ahead form,
+  line-start = the behind form with `excl` excluding `\n` (nothing non-newline
+  behind), line-end its ahead form.
+- `NAMED_ANCHOR` (`name`, `negate`) consults the document's **out-of-band anchor
+  map** — a runtime `name -> positions` structure carried beside the text, **not**
+  serialised. A `{{@name}}` template directive (§2.2) drops a mark; `{@name}` matches
+  where one sits, `!{@name}` where none does. The executor maintains the map: seed it
+  empty, add a mark at each emit's output offset, remap every position on each splice
+  (a mark strictly inside a replaced span is dropped), and clear a name on a `clear`
+  directive. Because marks never enter the text, input can never forge one.
 
 ## 7. Moustache expression (`Expr`)
 
@@ -160,7 +170,7 @@ Source: `@<{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then w
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "statements": [
     [
       {
@@ -168,7 +178,7 @@ Source: `@<{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then w
         "groups": 1,
         "fixed_point": false,
         "elements": [
-          [1, 0],
+          [1, 0, true, 0, 1114111, [[["\n"]], [], []]],
           [3, [["a"], ["b"]], false, [1, 1]]
         ]
       },
@@ -182,7 +192,7 @@ Source: `@<{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then w
 }
 ```
 
-- `[1, 0]` — `ANCHOR` line-start.
+- `[1, 0, true, 0, 1114111, [[["\n"]], [], []]]` — `LOOKAROUND` line-start: a negative lookbehind (`direction 0`, `negate true`) of any non-`\n` code point (`0..1114111` with `\n` excluded), i.e. position 0 or just after a newline.
 - `[3, [["a"], ["b"]], false, [1, 1]]` — `GROUP` over `{a, b}`, homogeneous, exactly once.
 - Template parts: literal `"["`, moustache `{{$}}` (current subject), literal `"]"`.
 

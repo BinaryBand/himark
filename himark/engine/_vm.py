@@ -17,7 +17,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from himark.models.opcodes import (
-    ANCHOR,
     BACK_REF,
     CHAR,
     COMPLEMENT,
@@ -25,6 +24,9 @@ from himark.models.opcodes import (
     DYN_RANGE,
     GROUP,
     LIT,
+    LOOK_BEHIND,
+    LOOKAROUND,
+    NAMED_ANCHOR,
     SEQ_GROUP,
     STAGE_REF,
     VALUE_RANGE,
@@ -42,14 +44,20 @@ Cont = Callable[[int], "int | None"]
 
 
 class _State:
-    __slots__ = ("captures", "root", "stages")
+    __slots__ = ("captures", "root", "stages", "anchors")
 
     def __init__(
-        self, root: "_State | None" = None, stages: tuple[Match, ...] = ()
+        self,
+        root: "_State | None" = None,
+        stages: tuple[Match, ...] = (),
+        anchors: "dict[str, frozenset[int]] | None" = None,
     ) -> None:
         self.captures: list[Capture] = []
         self.root = root if root is not None else self
         self.stages = stages
+        # Out-of-band named-anchor positions in the text being matched (NAMED_ANCHOR
+        # consults `state.root.anchors`); frozensets for O(1) membership.
+        self.anchors: dict[str, frozenset[int]] = anchors or {}
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -59,14 +67,17 @@ def find_matches(
     prepared: list[Instruction],
     text: str,
     stages: tuple[Match, ...] = (),
+    anchors: "dict[str, tuple[int, ...]] | None" = None,
 ) -> list[Match]:
-    """All matches in ``text`` of a program already lowered by ``prepare``."""
+    """All matches in ``text`` of a program already lowered by ``prepare``. ``anchors``
+    are the out-of-band named-anchor positions a ``NAMED_ANCHOR`` opcode consults."""
+    anchor_sets = {k: frozenset(v) for k, v in (anchors or {}).items()}
     matches: list[Match] = []
     n = len(text)
     limit = n
     pos = 0
     while pos < limit:
-        state = _State(stages=stages)
+        state = _State(stages=stages, anchors=anchor_sets)
         end = _run_program(prepared, 0, text, pos, state)
         if end is not None and end > pos:
             matches.append(_finalize(text, pos, end, state))
@@ -85,8 +96,8 @@ def find_matches(
 # Runtime), so the hot loop only ever *interprets* baked operands. The serialised
 # `Program` is untouched — it stays portable (JSON / pickle / the Rust seam).
 
-# Opcodes whose last operand is a reps spec (so it is baked). LIT and ANCHOR carry no
-# reps. The order of the other operands is unchanged — only their *values* are baked.
+# Opcodes whose last operand is a reps spec (so it is baked). LIT and LOOKAROUND carry
+# no reps. The order of the other operands is unchanged — only their *values* are baked.
 _REPS_OPCODES = frozenset(
     {
         CHAR,
@@ -112,7 +123,7 @@ def _prepare_elements(elements: tuple[Instruction, ...]) -> list[Instruction]:
     for el in elements:
         opcode = el[0]
         if opcode not in _REPS_OPCODES:
-            out.append(el)  # LIT / ANCHOR — nothing to bake
+            out.append(el)  # LIT / LOOKAROUND — nothing to bake
             continue
         args = list(el[1:])
         args[-1] = reps_from_tuple(args[-1])  # reps is always the last operand
@@ -148,10 +159,15 @@ def _run_program(
             return cont(pos + len(s))
         return None
 
-    if opcode == ANCHOR:
-        kind: int = args[0]
-        ok = _check_anchor(kind, text, pos)
+    if opcode == LOOKAROUND:
+        direction, negate, lo, hi, excl = args
+        ok = _lookaround(direction, negate, lo, hi, excl, text, pos)
         return cont(pos) if ok else None
+
+    if opcode == NAMED_ANCHOR:
+        name, negate = args
+        present = pos in state.root.anchors.get(name, frozenset())
+        return cont(pos) if (present != negate) else None
 
     if opcode == CHAR:
         lo, hi, excl_list, reps_spec = args
@@ -256,17 +272,21 @@ def _run_program(
     raise ValueError(f"Unknown opcode: {opcode}")
 
 
-# ── Anchor ─────────────────────────────────────────────────────────────────────
+# ── Lookaround ───────────────────────────────────────────────────────────────
 
 
-def _check_anchor(kind: int, text: str, pos: int) -> bool:
-    if kind == 0:
-        return pos == 0 or text[pos - 1] == "\n"
-    if kind == 1:
-        return pos == len(text) or text[pos] == "\n"
-    if kind == 2:
-        return pos == 0
-    return pos == len(text)
+def _lookaround(
+    direction, negate: bool, lo: int, hi: int, excl, text: str, pos: int
+) -> bool:
+    """Zero-width boundary assertion (the four anchors lower to this). Test whether
+    the adjacent code point is in `[lo, hi]` minus `excl`; `negate` flips the result.
+    Missing (past a doc boundary) counts as no match, so a *negative* lookaround is
+    true there -- which is how a negative lookbehind of any char gives `pos == 0`."""
+    if direction == LOOK_BEHIND:
+        matched = pos > 0 and _char_match(text, pos - 1, lo, hi, excl) is not None
+    else:  # LOOK_AHEAD
+        matched = pos < len(text) and _char_match(text, pos, lo, hi, excl) is not None
+    return (not matched) if negate else matched
 
 
 # ── Char range ─────────────────────────────────────────────────────────────────

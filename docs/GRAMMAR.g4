@@ -106,7 +106,8 @@ arm       : term                             # single
           ;
 term      : atom+ ;
 
-atom      : braceGroup count?
+atom      : lookaround
+          | braceGroup count?
           | complement count?
           | reference
           | anchor
@@ -128,6 +129,12 @@ reference : INT (DOLLAR | HASH) INT?
           ;
 anchor    : AT (LT LT? | GT GT?) ;
 macro     : AT NAME ;
+// A zero-width negative lookaround: `!<{X}` asserts the char *behind* the cursor is
+// not in X, `!>{X}` the char *ahead*. Negative-only (all four line/doc anchors are
+// negative -- see himark/std.hmk), and unambiguous: `!<`/`!>` never began anything
+// (complement is `!{`). The operand is a `{…}` class or a `!{…}` complement, so
+// `!<!{\n}` reads "not preceded by a non-newline" (i.e. line start).
+lookaround : BANG (LT | GT) (braceGroup | complement) ;
 
 // The interior of one `{{ … }}` moustache (a second-layer entry rule). A tiny
 // whitespace-insensitive expression: accessors (`.`, `$i`, `#i`, `2$0.1` a
