@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TypeAlias
 
+from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.opcodes import Program
 
 
@@ -91,14 +92,36 @@ class ExFilter:
 @dataclass(slots=True)
 class ExBinOp:
     """A binary value operator `lhs OP rhs` — arithmetic (`+ - * / %`) or bitwise
-    (`& ^ << >>` and backtick-or). Evaluated on the operands' universe values;
-    the result takes the LHS alphabet + band, then normalize + encode (LHS wins).
-    See docs/ALGEBRA.md. `op` is the operator spelling (`<<`/`>>` for the shifts,
-    a backtick for or)."""
+    (`& ^ << >>` and backtick-or). Evaluated on the operands' universe values; the
+    result's **codec is the RHS alphabet** when present (else LHS) -- the `| name`
+    cast mechanic -- while its **band (value domain) is the LHS** when present (else
+    RHS), so a cast recodes losslessly. Then normalize + encode. See docs/ALGEBRA.md.
+    `op` is the operator spelling (`<<`/`>>` for the shifts, a backtick for or)."""
 
     op: str
     lhs: Expr
     rhs: Expr
+
+
+@dataclass(slots=True)
+class ExAlpha:
+    """A named alphabet reference in a template expression. Evaluates to a universe
+    whose value is 0 — a codec carrier for operator join semantics (docs/ALGEBRA.md:
+    a named alphabet declaration `@alpha = {...}` is a universe used as a codec).
+    Desugared from `| name` by the moustache compiler when the pipe name resolves to
+    a named alphabet rather than a declared filter, forming `value + <this>`: value 0
+    makes the `+` an identity, and as the RHS its alphabet becomes the result's codec
+    (a cast). It carries **no wrapping band** as an operand -- a cast is lossless, so
+    the value keeps the LHS domain (see `engine/_render._encode`); `band` records the
+    alphabet's full range for reference only.
+
+    `alphabet` and `band` are compile-time attachments: they do not serialise
+    (the wire form names the alphabet; an executor resolves it from its own
+    std.hmk — see PAYLOAD.md)."""
+
+    name: str
+    alphabet: Alphabet | RangeAlphabet
+    band: tuple[int, int]
 
 
 @dataclass(slots=True)
@@ -110,7 +133,9 @@ class ExUnOp:
     operand: Expr
 
 
-Expr: TypeAlias = ExLit | ExCurrent | ExRef | ExConcat | ExFilter | ExBinOp | ExUnOp
+Expr: TypeAlias = (
+    ExLit | ExCurrent | ExRef | ExConcat | ExFilter | ExBinOp | ExAlpha | ExUnOp
+)
 
 
 def _expr_to_json(e: Expr) -> dict:
@@ -125,6 +150,8 @@ def _expr_to_json(e: Expr) -> dict:
         return {"cat": [_expr_to_json(p) for p in e.parts]}
     if isinstance(e, ExBinOp):
         return {"binop": [e.op, _expr_to_json(e.lhs), _expr_to_json(e.rhs)]}
+    if isinstance(e, ExAlpha):
+        return {"alpha": e.name}
     if isinstance(e, ExUnOp):
         return {"unop": [e.op, _expr_to_json(e.operand)]}
     return {"filter": e.name, "src": _expr_to_json(e.src)}

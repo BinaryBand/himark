@@ -34,4 +34,4 @@ The five `sandbox/` ports (rust, go, cpp, java, and the standalone `engine.py`) 
 ## Maybe
 
 - [x] Add Go and C/C++ single-file engine implementations -- Go (`sandbox/engine.go`) and C++ (`sandbox/engine.cpp`) both ship; all five engines are byte-identical on the golden corpus. (Now archived -- see above.)
-- [ ] Consider updating arithmetic universes joined by an operator adopt the RHS alphabet. That way `| @alpha` goes from being readable sugar to a first class mechanic.
+- [x] Arithmetic universes joined by an operator adopt the **RHS alphabet** (the codec), keeping the **LHS band** (the value domain). This makes `| name` (where `name` is a declared alphabet) a first-class **cast** -- the moustache compiler desugars `$0 | hex` to `$0 + hex`, and the RHS alphabet spells the result; the recode is lossless (the value keeps the LHS band, so `255` over `{@d::0..255}` casts to `ff`, not a wrapped `f`). New `ExAlpha` codec-carrier node + `ALPHABETS` prelude registry; `engine/_render._encode` splits the codec/band channels. Tests in `tests/test_operators.py`. See docs/ALGEBRA.md ("Casts: the RHS alphabet is the cast").

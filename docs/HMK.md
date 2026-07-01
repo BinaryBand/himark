@@ -324,13 +324,15 @@ A moustache evaluates to one **value**, rendered to text. Operands: accessors (`
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
-All left-associative; parens override. So `2 + 3 * 4` is `14`, `("<h", #0, ">")` is one value (the three concatenated), and `$2 | trim` pipes group 2 through a filter. Operators are **total** (they never trap: `x / 0 = x % 0 = 0`); the result takes the left operand's alphabet and band, then wraps onto the band and encodes. See [ALGEBRA.md](ALGEBRA.md) for the full value rules (LHS-wins, modular normalize, bitwise-over-$2^k$). The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
+All left-associative; parens override. So `2 + 3 * 4` is `14`, `("<h", #0, ">")` is one value (the three concatenated), and `$2 | trim` pipes group 2 through a filter. Operators are **total** (they never trap: `x / 0 = x % 0 = 0`); the result's **codec is the right operand's alphabet** (RHS-wins) while its **band is the left operand's** (the value domain), then it wraps onto that band and encodes. See [ALGEBRA.md](ALGEBRA.md) for the full value rules (RHS-alphabet cast, LHS-band domain, modular normalize, bitwise-over-$2^k$). The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
 
 ### Filters
 
 A moustache value may be piped through **filters**: `{{ accessor | f | g }}`, left-to-right. Filters are **declared in L2**, not a native engine set -- each is an ordinary himark pipeline named in [`std.hmk`](../himark/std.hmk) (or a script-local `@name =` definition). `x | name` applies the declared pipeline `name` to the subject `x`, so a filter and a query are the same thing: a pipeline over a subject.
 
 The shipped set is `trim` (strip leading/trailing whitespace) and `indent` (prefix every line with one tab). `indent` accumulates under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
+
+A `| name` pipe whose `name` is a declared **alphabet** (not a filter) is a **cast** -- `$0 | hex` recodes the value under `hex`. It is the same left-to-right pipe, desugared to `$0 + hex` so the RHS alphabet becomes the codec (see [ALGEBRA.md](ALGEBRA.md#casts-the-rhs-alphabet-is-the-cast)); the recode is lossless (the value keeps its own band), so a `{@d::0..255}` capture of `255` casts to `ff`, not a wrapped `f`.
 
 #### Declaring a filter
 

@@ -21,6 +21,7 @@ from typing import cast
 
 from himark.models.compiled import (
     AnchorOp,
+    ExAlpha,
     ExBinOp,
     ExConcat,
     ExCurrent,
@@ -473,8 +474,13 @@ class _ExprVisitor(GRAMMARVisitor):
     its compiled body onto the `ExFilter`, so the renderer needs no registry and an
     unknown filter is caught at compile time."""
 
-    def __init__(self, filters: dict[str, object] | None = None) -> None:
+    def __init__(
+        self,
+        filters: dict[str, object] | None = None,
+        alphabets: dict[str, tuple] | None = None,
+    ) -> None:
         self.filters = filters or {}
+        self.alphabets = alphabets or {}
 
     def visitMoustacheExpression(
         self, ctx: GRAMMARParser.MoustacheExpressionContext
@@ -485,10 +491,18 @@ class _ExprVisitor(GRAMMARVisitor):
         value = self.visit(ctx.orExpr())
         for f in ctx.filter_():  # `| name` pipes, left-associative
             name = f.NAME().getText()
-            if name not in self.filters:
-                raise CompileError(f"Unknown template filter: '{name}'")
-            body = cast("Expr | list[list[Step]]", self.filters[name])
-            value = ExFilter(value, name, body)
+            if name in self.filters:
+                # It's a filter
+                body = cast("Expr | list[list[Step]]", self.filters[name])
+                value = ExFilter(value, name, body)
+            elif name in self.alphabets:
+                # It's an alphabet - desugar to ExBinOp("+", value, ExAlpha(...))
+                # This implements the "RHS wins" semantics for | @alpha
+                alph_obj, band = self.alphabets[name]
+                alpha_ref = ExAlpha(name, alph_obj, band)
+                value = ExBinOp("+", value, alpha_ref)
+            else:
+                raise CompileError(f"Unknown template filter or alphabet: '{name}'")
         return value
 
     def _binop_chain(self, ctx) -> Expr:
@@ -512,8 +526,8 @@ class _ExprVisitor(GRAMMARVisitor):
     visitMulExpr = _binop_chain
 
     def visitShiftExpr(self, ctx: GRAMMARParser.ShiftExprContext) -> Expr:
-        """`<<`/`>>` are two tokens (`LT LT` / `GT GT`) to keep the `@<<` anchor
-        intact, so the operator spans two children -- fold with a stride of three."""
+        """`<<`/`>>` are two tokens (`LT LT` / `GT GT`) -- the lexer has no combined
+        shift token -- so the operator spans two children; fold with a stride of three."""
         children = list(ctx.getChildren())
         value = self.visit(children[0])
         i = 1
@@ -566,16 +580,21 @@ class _ExprVisitor(GRAMMARVisitor):
         return ExRef(stage=stage, is_count=is_count, path=path)
 
 
-def _compile_moustache(body: str, filters: dict[str, object] | None = None) -> Expr:
+def _compile_moustache(
+    body: str,
+    filters: dict[str, object] | None = None,
+    alphabets: dict[str, tuple] | None = None,
+) -> Expr:
     """Parse one `{{ … }}` body into an `Expr`. The moustache is whitespace-
     insensitive but the shared lexer treats a space as a token, so insignificant
     whitespace is stripped first (the mirror of `strip_insignificant_ws`); then the
     grammar's `moustacheExpression` rule parses it and `_ExprVisitor` lowers it,
-    resolving any `| name` filter pipe against `filters`."""
+    resolving any `| name` filter pipe against `filters`, or `| @alpha` against
+    `alphabets` (desugared to an `ExBinOp` with RHS-wins semantics)."""
     from himark.parser import _make_parser  # deferred: __init__ imports this module
 
     tree = _make_parser(_strip_moustache_ws(body)).moustacheExpression()
-    return _ExprVisitor(filters).visit(tree)
+    return _ExprVisitor(filters, alphabets).visit(tree)
 
 
 def _strip_moustache_ws(body: str) -> str:
@@ -595,7 +614,9 @@ def _strip_moustache_ws(body: str) -> str:
 
 
 def compile_template_text(
-    text: str, filters: dict[str, object] | None = None
+    text: str,
+    filters: dict[str, object] | None = None,
+    alphabets: dict[str, tuple] | None = None,
 ) -> Template:
     """Lower a template body (the already-unescaped literal text of a `"…"` template,
     or of a brace-free pattern step) into a ``Template``.
@@ -604,17 +625,53 @@ def compile_template_text(
     references, and ``AnchorOp`` directives — the structure the renderer used to
     recompute by regex on every render. Works straight off text, so it needs no AST
     node. `filters` is the declared-filter registry a `| name` moustache pipe
-    resolves against."""
+    resolves against. `alphabets` is the declared-alphabet registry a `| @alpha`
+    moustache pipe resolves against (desugared to an `ExBinOp` with RHS-wins)."""
     parts: list[str | Moustache | AnchorOp] = []
     last = 0
     for mo in _MOUSTACHE_RE.finditer(text):
         if mo.start() > last:
             parts.append(text[last : mo.start()])
-        parts.append(_compile_moustache_part(mo.group(1), filters))
+        parts.append(_compile_moustache_part(mo.group(1), filters, alphabets))
         last = mo.end()
     if last < len(text):
         parts.append(text[last:])
     return Template(parts=parts)
+
+
+def compile_alphabet(
+    source: str, variables: dict[str, str] | None = None
+) -> tuple[Alphabet | RangeAlphabet, tuple[int, int]]:
+    """Compile an alphabet declaration source into an Alphabet object and its band.
+
+    The source is parsed as a pattern (e.g., "0..9", "a..z"), which yields a typed
+    AST node. That node is compiled into an Alphabet (for materialized alphabets) or
+    RangeAlphabet (for larger ranges).
+
+    Returns (alphabet, band) where band is (0, max_ordinal).
+    """
+    from himark.parser import _parse_pattern_tree
+    from himark.parser._builder import _AstBuilder
+
+    # Wrap in braces so it parses as a complete group/band
+    tree = _parse_pattern_tree("{" + source + "}")
+
+    # Provide the required env argument
+    env = variables if variables is not None else {}
+    builder = _AstBuilder(env)
+
+    # The first factor is our brace group
+    brace = tree.pattern().factor()[0].braceGroup()
+    node = builder.visit(brace.band())
+
+    # Extract the alphabet and compute its band
+    alph = _value_alphabet(node)
+    if isinstance(alph, RangeAlphabet):
+        band = (0, alph.hi - alph.lo)
+    else:
+        band = (0, len(alph.groups) - 1)
+
+    return alph, band
 
 
 # A `{{ ... }}` body that is a bare `@name` is an out-of-band anchor **emit** and
@@ -625,7 +682,9 @@ _CLEAR_RE = re.compile(r"/(\w+)")
 
 
 def _compile_moustache_part(
-    body: str, filters: dict[str, object] | None
+    body: str,
+    filters: dict[str, object] | None,
+    alphabets: dict[str, tuple] | None = None,
 ) -> "Moustache | AnchorOp":
     """One `{{ … }}` body -> an anchor emit/clear directive (`{{@g}}` / `{{/g}}`) or,
     otherwise, a value `Moustache`."""
@@ -634,4 +693,4 @@ def _compile_moustache_part(
         return AnchorOp(name=m.group(1), clear=False)
     if (m := _CLEAR_RE.fullmatch(stripped)) is not None:
         return AnchorOp(name=m.group(1), clear=True)
-    return Moustache(expr=_compile_moustache(body, filters))
+    return Moustache(expr=_compile_moustache(body, filters, alphabets))

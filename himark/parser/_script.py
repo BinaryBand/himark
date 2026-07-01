@@ -28,6 +28,7 @@ def compile_script(source: str) -> list[list[Step]]:
     shape, exactly as in the prelude. Both leave no trace in the compiled pipeline.
     Shadowing a prelude variable or redefining a local is a `CompileError`."""
     from himark.parser import _parse_script_tree, parse
+    from himark.parser._compiler import compile_alphabet
     from himark.prelude import (
         ANCHORS,
         FILTERS,
@@ -41,6 +42,7 @@ def compile_script(source: str) -> list[list[Step]]:
     local: dict[str, str] = {}
     filters: dict[str, object] = dict(FILTERS)
     anchors: set[str] = set(ANCHORS)
+    local_alphabets: dict[str, tuple] = {}
     pipeline: list[list[Step]] = []
     for item in _parse_script_tree(source).scriptItem():
         defn = item.definition()
@@ -58,11 +60,21 @@ def compile_script(source: str) -> list[list[Step]]:
                 filters[name] = compile_filter_body(body_src, local, filters)
             else:
                 local[name] = body_src
+                try:
+                    local_alphabets[name] = compile_alphabet(body_src, local)
+                except CompileError:
+                    pass  # not a value alphabet; a `| name` cast diagnoses at use
             continue
         stmt = item.statement()
         stmt_src = source[stmt.start.start : stmt.stop.stop + 1]
         pipeline.append(
-            parse(stmt_src, variables=local or None, filters=filters, anchors=anchors)
+            parse(
+                stmt_src,
+                variables=local or None,
+                filters=filters,
+                anchors=anchors,
+                alphabets=local_alphabets or None,
+            )
         )
     return pipeline
 

@@ -76,5 +76,7 @@ def test_indent_tabs_every_line():
 
 
 def test_unknown_filter_is_a_compile_error():
-    with pytest.raises(CompileError, match="Unknown template filter: 'nope'"):
+    with pytest.raises(
+        CompileError, match="Unknown template filter or alphabet: 'nope'"
+    ):
         parser.compile_script('!{x}[1..] => "{{ $ | nope }}"')

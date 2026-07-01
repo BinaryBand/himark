@@ -158,10 +158,31 @@ def _compile_filters(
     return filters
 
 
+def _compile_alphabets(variables: dict[str, str]) -> dict[str, tuple]:
+    """Compile each named alphabet's source into an `(Alphabet, band)` pair. The
+    moustache compiler resolves a `| name` cast pipe against this registry, desugaring
+    it to `ExBinOp("+", value, ExAlpha(name, alphabet, band))` -- the RHS alphabet
+    becomes the result's codec (docs/ALGEBRA.md). A name whose source is not a value
+    alphabet (e.g. a whitespace set) or references others circularly is skipped -- the
+    full diagnostic surfaces at the use site instead of poisoning prelude load."""
+    from himark.parser._compiler import compile_alphabet
+
+    alphabets: dict[str, tuple] = {}
+    for name, body in variables.items():
+        try:
+            alphabets[name] = compile_alphabet(body, variables)
+        except CompileError:
+            pass
+    return alphabets
+
+
 # name -> Himark source, expanded into the pattern before tokenizing (phase 1).
 VARIABLES, _FILTER_SRCS, ANCHORS = _load()
+# name -> (Alphabet, band): the codec registry a `| name` cast pipe resolves against.
+ALPHABETS = _compile_alphabets(VARIABLES)
 # name -> compiled filter body (an `Expr` or a `list[list[Step]]` pipeline),
 # resolved by the moustache compiler when it lowers a `| name` pipe.
 FILTERS = _compile_filters(_FILTER_SRCS, VARIABLES)
+
 # The set of prelude-declared named anchors (`{@name}` marks). Empty in the shipped
 # prelude -- scripts declare their own (e.g. dedup's `@keysep`, `@protected`).

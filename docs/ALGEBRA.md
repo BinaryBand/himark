@@ -25,14 +25,14 @@ A universe's value is its **absolute positional ordinal** (base-$b$, most-signif
 
 ## Operators are total
 
-Every binary operator is defined over **any** two universes. The engine computes on the integer values with a fixed alphabet rule and **never traps**. Whether a given combination is *meaningful* is a separate, static concern pushed to an L2/lint layer that never touches the engine -- the same stance the spec already takes for alphabets ("the engine holds no built-in alphabet knowledge"). So `@uni * @hex` evaluates ($0 \cdot 0 = 0$, rendered under `@uni`): total, deterministic, harmless, and flagged as non-meaningful upstream if anyone cares.
+Every binary operator is defined over **any** two universes. The engine computes on the integer values with a fixed alphabet rule and **never traps**. Whether a given combination is *meaningful* is a separate, static concern pushed to an L2/lint layer that never touches the engine -- the same stance the spec already takes for alphabets ("the engine holds no built-in alphabet knowledge"). So `hex * @uni` evaluates ($0 \cdot 0 = 0$): total, deterministic, harmless, and flagged as non-meaningful upstream if anyone cares.
 
-Evaluation of a binary node `a OP b`:
+Evaluation of a binary node `a OP b` splits the two channels of the result universe by operand:
 
 1. **Value:** integer `value(a) OP value(b)` (in $\mathbb{Z}$; may be negative or exceed any band).
-2. **Alphabet:** the result takes the **left operand's alphabet** (LHS wins). Threaded through the precedence tree, so `$0 + $1 * $2` is deterministic (each node inherits its own LHS operand's alphabet).
-3. **Band:** the result takes the left operand's band.
-4. **Render:** normalize the raw integer onto that band (below), then encode through the alphabet + width.
+2. **Alphabet (codec) -- RHS wins:** the result takes the **right operand's alphabet** when it has one, else the left's. This is what makes `a + hex` a **cast** to hex (the codec you are casting *to* is written on the right, so the pipe `a | hex` reads left-to-right). Threaded through the precedence tree, so each node picks up its own RHS codec.
+3. **Band (value domain) -- LHS wins:** the result takes the **left operand's band** when it has one, else the right's. A cast is a *lossless recode* -- the number you hold does not change, only its spelling -- so the target codec never shrinks the domain: `$0 | hex` re-spells the whole value rather than wrapping onto hex's own range. (A named alphabet used as the RHS of a cast carries no band of its own; see below.)
+4. **Render:** normalize the raw integer onto that band (below), then encode through the alphabet at the alphabet-supplying operand's width (grown to fit the value).
 
 Because operators are total, **render must be total too**: it must map *any* integer in $\mathbb{Z}$ onto `[lo, hi]`.
 
@@ -91,20 +91,20 @@ Consequently:
 
 This is the one place the `(min..max)` band does not carry everything for free: bit-width wants a power-of-two cardinality. Everywhere else the algebra is uniform.
 
-## Casts: LHS-wins is the cast
+## Casts: the RHS alphabet is the cast
 
-Because a binary op **must** choose a result alphabet anyway, "LHS wins" **is** the casting mechanism -- no separate semantic is needed. With alphabets carrying value $0$, `@hex + $0` evaluates to `value($0)` rendered under `@hex`: an identity op that forces the alphabet, i.e. a cast to hex.
+Because a binary op **must** choose a result codec anyway, "RHS-alphabet wins" **is** the casting mechanism -- no separate semantic is needed. With alphabets carrying value $0$, `$0 + hex` evaluates to `value($0)` rendered under `hex`: an identity op (the `+ 0`) that forces the codec, i.e. a cast to hex.
 
-For readability, `{{ $0 | @hex }}` is **sugar** for the same LHS-wins render ("recode `$0` under hex"). It reuses the existing filter pipe and avoids making the reader recall that `+` is identity and alphabets are value-$0$. Same single semantic, one clearer spelling.
+This makes `{{ $0 | hex }}` a **first-class mechanic**, not sugar: the moustache compiler resolves a `| name` pipe whose name is a declared alphabet (rather than a filter) and desugars it to `$0 + name`. The pipe reads left-to-right -- the value on the left, the codec you cast *to* on the right -- exactly because the RHS alphabet wins. A named alphabet used this way contributes only its codec, **no band**: the recode keeps the value's own (LHS) domain, so it is lossless (`$0` of value $255$ over `{@d::0..255}` casts to `ff`, not a wrapped `f`).
 
 ## Summary
 
 - Universe = `<alphabet, band, value>`; captures, alphabets, and literals are one type.
 - Value stays **absolute** (band-independent). Never offset-encode.
-- Operators are **total**: integer op on values, **LHS alphabet wins**, result band from LHS, then normalize + render. Or is the backtick (`|` is the filter pipe); `x/0 = x \bmod 0 = 0`.
+- Operators are **total**: integer op on values, **RHS alphabet wins** (codec) with the **LHS band** (value domain), then normalize + render. Or is the backtick (`|` is the filter pipe); `x/0 = x \bmod 0 = 0`.
 - Normalize is $lo + ((v - lo) \bmod n)$ with floored mod. Additive ops (`+`, `-`, `*`, `%`) are meaningful over any band.
 - Bitwise ops are total everywhere but meaningful only over $2^k$ bands; lint-flag the rest.
-- Casts fall out of LHS-wins; `| @alpha` is readable sugar.
+- Casts are the RHS-alphabet rule; `| name` (a declared alphabet) is a first-class recode, not sugar.
 - **Meaningfulness is an L2/lint concern; the engine never traps.**
 
 ## Open questions

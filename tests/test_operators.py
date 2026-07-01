@@ -91,6 +91,39 @@ def test_left_associative_chain():
     assert ex('!{x}[1..] => "{{ 1 - 2 - 3 }}"', "z") == ["-4"]
 
 
+# ── Alphabet cast via pipe operator ─────────────────────────────────────────────
+
+
+def test_pipe_to_alphabet_casts_to_hex():
+    """The `| @alpha` syntax casts the LHS value to the RHS alphabet's codec.
+    This is a first-class mechanic: the compiler desugars `| alpha` to an
+    `ExBinOp("+", value, ExAlpha(...))` with RHS-wins semantics."""
+    from himark import parser
+    from himark.engine import execute
+
+    # Use the prelude's @d and @hex definitions (already available)
+    # Cast decimal 255 to hex: should produce "ff" (2 chars, width from LHS)
+    src = '{@d::0..255} => "{{ $0 | hex }}"'
+    assert execute(parser.parse(src), "255") == ["ff"]
+
+    # Cast decimal 10 to hex: should produce "a" (1 char, minimal width)
+    assert execute(parser.parse(src), "010") == ["a"]
+
+    # Cast decimal 16 to hex: should produce "10" (2 chars)
+    assert execute(parser.parse(src), "016") == ["10"]
+
+
+def test_pipe_to_alphabet_with_band_wrapping():
+    """The band comes from the RHS alphabet, so wrapping uses the target alphabet's range."""
+    from himark import parser
+    from himark.engine import execute
+
+    # Use the prelude's @d and @hex definitions (already available)
+    # Cast 256 to hex: should wrap to 0 (256 mod 256 = 0), produce "0"
+    src = '{@d::0..255} => "{{ $0 + 1 | hex }}"'
+    assert execute(parser.parse(src), "255") == ["0"]
+
+
 # ── Unbanded (plain-literal) arithmetic renders as decimal ─────────────────────
 
 

@@ -36,6 +36,7 @@ from himark.engine._types import Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.compiled import (
     AnchorOp,
+    ExAlpha,
     ExBinOp,
     ExConcat,
     ExCurrent,
@@ -150,16 +151,25 @@ def _eval(
         return Universe(
             "".join(_eval(p, current, stages, subject).render() for p in expr.parts)
         )
+    if isinstance(expr, ExAlpha):
+        # A named alphabet reference -- ``| name`` desugared to a codec carrier
+        # (docs/ALGEBRA.md: a named alphabet is a universe whose value is 0). The
+        # text is the alphabet's encoding of zero at width 1 so it carries a sane
+        # width for `_encode`; the value of 0 makes it an identity operand in binary
+        # ops -- ``a + hex`` is ``value(a) + 0`` rendered under ``hex``. Its band is
+        # **None**: a cast is a lossless recode, so the codec never imposes a wrap --
+        # the value's domain stays the LHS band (``_encode`` prefers it).
+        return Universe(expr.alphabet.encode(0, 1), expr.alphabet, None)
     if isinstance(expr, ExFilter):
         return _apply_filter(expr, current, stages, subject)
     if isinstance(expr, ExBinOp):
         lhs = _eval(expr.lhs, current, stages, subject)
         rhs = _eval(expr.rhs, current, stages, subject)
         raw = _BINOPS[expr.op](_operand_value(lhs), _operand_value(rhs))
-        return _encode(raw, lhs)  # LHS alphabet + band win
+        return _encode(raw, lhs, rhs)  # RHS alphabet wins, band from RHS or LHS
     if isinstance(expr, ExUnOp):
         operand = _eval(expr.operand, current, stages, subject)
-        return _encode(~_operand_value(operand), operand)  # only `~` today
+        return _encode(~_operand_value(operand), operand, operand)  # only `~` today
     raise CompileError(f"Unknown moustache expression: {type(expr).__name__}")
 
 
@@ -204,21 +214,35 @@ def _normalize(v: int, lo: int, hi: int) -> int:
     return lo + (v - lo) % n
 
 
-def _encode(raw: int, lhs: Universe) -> Universe:
-    """Render an operator's raw integer back to a `Universe`, LHS-wins: normalize
-    onto the LHS band (if any), then encode through the LHS alphabet at the LHS
-    operand's width (grown if the result needs more symbols). With no LHS alphabet
-    the value has no positional codec, so it renders as its decimal spelling."""
-    alph, band = lhs.alphabet, lhs.band
+def _encode(raw: int, lhs: Universe, rhs: Universe) -> Universe:
+    """Render an operator's raw integer back into a `Universe`, splitting the two
+    channels of the result universe by operand:
+
+      * **alphabet (codec) -- RHS wins** when the RHS carries one, else LHS. This is
+        the `| name` cast mechanic: `$0 | hex` desugars to `$0 + hex`, and the hex
+        codec (the RHS) spells the result.
+      * **band (value domain) -- LHS wins** when the LHS carries one, else RHS. A
+        cast is a lossless recode, so the target codec never shrinks the domain: the
+        value keeps the LHS band (or none), so `$0 | hex` re-spells the whole value
+        rather than wrapping onto the alphabet's own tiny range.
+
+    Width comes from the operand that supplied the alphabet (grown to fit the value).
+    With no alphabet at all, the value has no positional codec and renders decimal."""
+    if rhs.alphabet is not None:
+        alph, text_len = rhs.alphabet, len(rhs.text)
+    elif lhs.alphabet is not None:
+        alph, text_len = lhs.alphabet, len(lhs.text)
+    else:
+        return Universe(str(raw))  # no positional codec -> decimal
+    band = lhs.band if lhs.band is not None else rhs.band
+
     res = _normalize(raw, band[0], band[1]) if band is not None else raw
-    if alph is None:
-        return Universe(str(res))
     if res < 0:
         # Unbanded underflow: no `n` to wrap onto, so no positional spelling --
         # fall back to a signed decimal (banded arithmetic wraps and never lands
         # here). A documented edge of the total algebra.
         return Universe(str(res), alph, band)
-    width = max(len(lhs.text), alph.canonical_len(res))
+    width = max(text_len, alph.canonical_len(res))
     return Universe(alph.encode(res, width), alph, band)
 
 

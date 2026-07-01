@@ -132,8 +132,9 @@ def test_doc_filters():
 
 
 def test_doc_filters_omit_deferred_crypto():
-    # Hashes are deferred to a layer above the primitives — not core filters.
-    for gone in ("sha256", "sha512", "head", "tail", "hex"):
+    # Hashes are deferred to a layer above the primitives — not core filters. (`hex`
+    # is *not* here: `| hex` is a first-class alphabet cast now, see test_operators.)
+    for gone in ("sha256", "sha512", "head", "tail"):
         with pytest.raises(CompileError):
             execute(parser.parse(f'{{@l}}[1..] => "{{{{ . | {gone} }}}}"'), "abc")
 

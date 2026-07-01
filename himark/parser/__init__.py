@@ -78,6 +78,7 @@ def parse(
     variables: dict[str, str] | None = None,
     filters: dict[str, object] | None = None,
     anchors: set[str] | None = None,
+    alphabets: dict[str, tuple] | None = None,
 ) -> list[Step]:
     """Parse and **compile** one statement into the product the engine VM consumes:
     a `Program` per query step, a `Template` per template step. The compiler builds a
@@ -87,8 +88,11 @@ def parse(
 
     `filters` is the declared-filter registry (prelude globals plus any script-local
     filters) a `| name` moustache pipe resolves against; `anchors` is the set of
-    declared named anchors a `{@name}` mark match resolves against. Both default to
-    the prelude registries so a bare `parse(...)` still sees the standard set."""
+    declared named anchors a `{@name}` mark match resolves against; `alphabets` is
+    the compiled-alphabet registry a `| @alpha` moustache pipe resolves against
+    (desugared to an `ExBinOp("+", value, ExAlpha(...))` with RHS-wins semantics).
+    All three default to the prelude registries so a bare `parse(...)` still sees
+    the standard set."""
     from himark.prelude import VARIABLES
 
     if filters is None:
@@ -99,6 +103,10 @@ def parse(
         from himark.prelude import ANCHORS
 
         anchors = ANCHORS
+    if alphabets is None:
+        from himark.prelude import ALPHABETS
+
+        alphabets = ALPHABETS
     builder = _AstBuilder({**VARIABLES, **(variables or {})}, anchors=anchors)
     steps: list[Step] = []
     text = strip_insignificant_ws(text)
@@ -108,7 +116,9 @@ def parse(
         template = step.template()
         if template is not None:
             steps.append(
-                compile_template_text(unescape(template.getText()[1:-1]), filters)
+                compile_template_text(
+                    unescape(template.getText()[1:-1]), filters, alphabets
+                )
             )
             continue
         pattern = step.pattern()
@@ -127,7 +137,7 @@ def parse(
                 _resolve_leaf_escapes(f.literalRun().getText())
                 for f in pattern.factor()
             )
-            steps.append(compile_template_text(literal, filters))
+            steps.append(compile_template_text(literal, filters, alphabets))
         else:
             steps.append(builder.compile_pattern(pattern))
     if fixed_point and steps:
