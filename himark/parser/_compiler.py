@@ -479,7 +479,7 @@ class _ExprVisitor(GRAMMARVisitor):
     def visitAccessor(self, ctx: GRAMMARParser.AccessorContext) -> Expr:
         sigil = ctx.DOLLAR() or ctx.HASH()
         if sigil is None:
-            return ExCurrent()  # the lone `.`
+            return ExCurrent()  # `.` — a deprecated spelling of bare `$`
         # `INT? (DOLLAR|HASH) (INT (DOT INT)*)?`: an INT before the sigil is the
         # cross-stage index; INTs after it are the dotted capture path.
         sigil_pos = sigil.getSymbol().tokenIndex
@@ -495,7 +495,12 @@ class _ExprVisitor(GRAMMARVisitor):
         if not path:
             if is_count:
                 raise CompileError("A '#' moustache reference needs a capture index")
-            return ExRef(stage=stage, is_count=is_count, path=None)
+            # Bare `$` (no stage, no path) is the pipe's current subject -- the text
+            # flowing into this step -- so it is `ExCurrent`, the same value `.` gave.
+            # `N$` keeps its cross-stage meaning: stage N's whole match.
+            if stage is None:
+                return ExCurrent()
+            return ExRef(stage=stage, is_count=False, path=None)
         return ExRef(stage=stage, is_count=is_count, path=path)
 
 

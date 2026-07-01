@@ -45,46 +45,12 @@ def _run_tool(cmd: list[str], label: str) -> None:
 
 
 def pytest_sessionstart(session: object) -> None:
-    """Proactively fix trivial format/lint/type issues before the suite runs."""
+    """Proactively fix trivial format/lint/type issues before the suite runs.
+
+    The suite runs the **in-process** Python engine (`himark.engine.run_pipeline`),
+    the single implementation while the grammar settles, so no engine build hooks run
+    here. The `sandbox/` ports are archived; to validate a re-port, build the port by
+    hand and select it with `HMK_ENGINE` (e.g. `HMK_ENGINE=rust`)."""
     _run_tool([str(_BIN / "ruff"), "format", str(ROOT)], "ruff format")
     _run_tool([str(_BIN / "ruff"), "check", "--fix", str(ROOT)], "ruff check --fix")
     _run_tool([str(_BIN / "ty"), "check", "--fix"], "ty check --fix")
-    rust_dir = ROOT / "sandbox" / "rust"
-    cargo = Path.home() / ".cargo" / "bin" / "cargo"
-    if not cargo.exists():
-        cargo = Path("cargo")
-    subprocess.run([str(cargo), "build", "--release"], cwd=rust_dir, check=True)
-
-    java_build_dir = ROOT / "sandbox" / "build" / "java"
-    java_build_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["javac", "-d", str(java_build_dir), str(ROOT / "sandbox" / "engine.java")],
-        check=True,
-    )
-
-    go_build_dir = ROOT / "sandbox" / "build" / "go"
-    go_build_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "go",
-            "build",
-            "-o",
-            str(go_build_dir / "himark-engine"),
-            str(ROOT / "sandbox" / "engine.go"),
-        ],
-        check=True,
-    )
-
-    cpp_build_dir = ROOT / "sandbox" / "build" / "cpp"
-    cpp_build_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "g++",
-            "-std=c++17",
-            "-O2",
-            "-o",
-            str(cpp_build_dir / "himark-engine"),
-            str(ROOT / "sandbox" / "engine.cpp"),
-        ],
-        check=True,
-    )

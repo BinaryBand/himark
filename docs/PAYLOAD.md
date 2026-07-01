@@ -106,7 +106,7 @@ A `{{ … }}` body compiles to a small expression tree. Each node is a JSON obje
 | Node | Encoding | Meaning |
 |------|----------|---------|
 | literal | `{"lit": "<text>"}` | a string/integer literal, rendered as its own text. |
-| current | `{"cur": true}` | `.` — the whole text flowing into this step (`{{.}}`). |
+| current | `{"cur": true}` | `$` — the pipe's current subject, the whole text flowing into this step (`{{$}}`); `.` is a deprecated spelling. |
 | reference | `{"ref": [stage, is_count, path]}` | a capture accessor. `stage`: pipeline stage index, or `null` for the current stage. `is_count`: `true` for the `#` sigil (a repetition count) vs `false` for `$` (text). `path`: dotted capture path as `[int]`, or `null` for the stage's whole text. A `#` always carries a `path`. |
 | concat | `{"cat": [<expr>, ...]}` | parenthesised comma-concatenation `( a, b, … )` — parts joined. |
 | filter | `{"filter": "<name>", "src": <expr>}` | a filter pipe `src \| name`. |
@@ -154,7 +154,7 @@ A dynamic band endpoint resolves against earlier match state:
 
 ## 12. Worked example
 
-Source: `@<{a,b} => "[{{.}}]"` — at a line start, match one `a` or `b`, then wrap it in brackets.
+Source: `@<{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then wrap it in brackets.
 
 ```json
 {
@@ -182,7 +182,7 @@ Source: `@<{a,b} => "[{{.}}]"` — at a line start, match one `a` or `b`, then w
 
 - `[1, 0]` — `ANCHOR` line-start.
 - `[3, [["a"], ["b"]], false, [1, 1]]` — `GROUP` over `{a, b}`, homogeneous, exactly once.
-- Template parts: literal `"["`, moustache `{{.}}` (current text), literal `"]"`.
+- Template parts: literal `"["`, moustache `{{$}}` (current subject), literal `"]"`.
 
 ---
 

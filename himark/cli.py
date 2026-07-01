@@ -114,7 +114,7 @@ def run(
 @app.command(name="exec")
 def exec_cmd(
     expr: str = typer.Argument(
-        ..., help="A single HMK statement (e.g. '{a..z} => \"[{{.}}]\"')."
+        ..., help="A single HMK statement (e.g. '{a..z} => \"[{{$}}]\"')."
     ),
     target: str = typer.Argument(..., help="Target string to transform."),
     matches: bool = typer.Option(

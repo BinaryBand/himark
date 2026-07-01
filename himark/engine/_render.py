@@ -2,9 +2,10 @@
 
 A template step is literal text that may contain **moustache** references:
 
-  * `{{ . }}` — the whole text flowing into this step. After a query it is the
-    matched text; after a template it is that template's render — so `{{.}}`
-    composes through templates (each wraps the previous one's output).
+  * `{{ $ }}` — the pipe's current subject: the whole text flowing into this step.
+    After a query it is the matched text; after a template it is that template's
+    render — so `{{$}}` composes through templates (each wraps the previous one's
+    output). (`.` is a deprecated spelling of the same thing.)
   * `{{ i$j }}` — capture group `j` of pipeline stage `i`
   * `{{ i$ }}`  — the whole match of stage `i`
   * `{{ i#j }}` — the repetition count of group `j` of stage `i`
@@ -17,9 +18,20 @@ Stages are numbered by `=>` position from 0; a template stage carries its render
 but no captures. The pipeline index `i` may be omitted to mean the current stage,
 and the capture path may be omitted with `$` to mean the whole match. Literal text
 (everything outside `{{ }}`) is constant.
+
+Evaluation flows **universes**, not raw strings (see `Universe`): each moustache
+node yields a `<alphabet, band, value>` object and is only collapsed to text at
+the `render` boundary. Today every universe renders to its own text (identity), so
+output is byte-for-byte what the string evaluator produced; the value channel is
+scaffolding for the template operators in docs/ALGEBRA.md.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
+
 from himark.engine._types import Match
+from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.compiled import (
     ExConcat,
     ExCurrent,
@@ -31,6 +43,33 @@ from himark.models.compiled import (
     Template,
 )
 from himark.models.exceptions import CompileError
+
+
+# ── Universe: the one render-time value ────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class Universe:
+    """A render-time value: text plus, when known, the `alphabet` codec the text was
+    captured under. This is the `<alphabet, band, value>` object of docs/ALGEBRA.md
+    in its Step-1 form -- band and operator arithmetic arrive with the template
+    operators; for now a universe carries its text and (optionally) its codec, and
+    `render` is identity, so threading it changes no output.
+
+    A universe with no alphabet is a plain `@uni` string (a match spanning several
+    alphabets, a literal, a concatenation) -- text with no positional value."""
+
+    text: str
+    alphabet: Alphabet | RangeAlphabet | None = None
+
+    def render(self) -> str:
+        return self.text
+
+    @property
+    def value(self) -> int | None:
+        """The positional ordinal of `text` under its alphabet, or None for a plain
+        string universe. Unused until operators consume it (docs/ALGEBRA.md)."""
+        return self.alphabet.value(self.text) if self.alphabet is not None else None
 
 
 def _indent(s: str) -> str:
@@ -59,7 +98,7 @@ def render(
     spliced back over its own span, with the literal text between (decoration) kept
     -- the same splice a query runs, with each moustache playing the part of a match.
     A template with **no** moustaches has nothing to single out, so its whole render
-    flows as one branch -- signalled by `spans` being None. `current` is `{{.}}`.
+    flows as one branch -- signalled by `spans` being None. `current` is `{{$}}`.
 
     The literal/moustache split and the moustache expressions were both compiled
     up front (`compile_template_text`); this only *evaluates* each `Expr`
@@ -69,7 +108,7 @@ def render(
     spans: list[tuple[int, int]] = []
     for part in template.parts:
         if isinstance(part, Moustache):
-            value = _eval(part.expr, current, stages)
+            value = _eval(part.expr, current, stages).render()
             start = length
             out.append(value)
             length += len(value)
@@ -84,34 +123,40 @@ def render(
 # ── Expression evaluation (the parser already built the `Expr`) ────────────────
 
 
-def _eval(expr: Expr, current: str, stages: list[Match]) -> str:
-    """Evaluate a compiled moustache `Expr` to text against the pipeline stages."""
+def _eval(expr: Expr, current: str, stages: list[Match]) -> Universe:
+    """Evaluate a compiled moustache `Expr` to a `Universe` against the stages."""
     if isinstance(expr, ExLit):
-        return expr.text
+        return Universe(expr.text)
     if isinstance(expr, ExCurrent):
-        return current  # `{{.}}` — the whole flowing text
+        return Universe(current)  # `{{$}}` — the flowing subject (a @uni string)
     if isinstance(expr, ExRef):
         return _eval_ref(expr, stages)
     if isinstance(expr, ExConcat):
-        return "".join(_eval(p, current, stages) for p in expr.parts)
+        # A concatenation is always a plain @uni string (docs/ALGEBRA.md).
+        return Universe("".join(_eval(p, current, stages).render() for p in expr.parts))
     if isinstance(expr, ExFilter):
-        return _apply_filter(expr.name, _eval(expr.src, current, stages))
+        text = _apply_filter(expr.name, _eval(expr.src, current, stages).render())
+        return Universe(text)
     raise CompileError(f"Unknown moustache expression: {type(expr).__name__}")
 
 
-def _eval_ref(ref: ExRef, stages: list[Match]) -> str:
+def _eval_ref(ref: ExRef, stages: list[Match]) -> Universe:
     """Resolve a capture accessor against the stages — the one part that genuinely
-    needs run-time data (the stages), so it stays here, not in the parser."""
+    needs run-time data (the stages), so it stays here, not in the parser. A group
+    matched under a `{A::x..y}` bound carries its alphabet `A` forward; the whole
+    match and a count are plain strings (no single positional alphabet)."""
     pipe_idx = ref.stage if ref.stage is not None else len(stages) - 1
     if not 0 <= pipe_idx < len(stages):
         raise CompileError(f"Moustache stage {pipe_idx} is out of range")
     stage = stages[pipe_idx]
     if ref.path is None:
-        return stage.text  # `$` / `N$` — the stage's whole text
+        return Universe(stage.text)  # `$` / `N$` — the stage's whole text
     capture = stage.capture_at(ref.path)
     if capture is None:
         raise CompileError(f"Moustache capture {ref.path} is out of range")
-    return str(len(capture.reps)) if ref.is_count else capture.text
+    if ref.is_count:
+        return Universe(str(len(capture.reps)))
+    return Universe(capture.text, capture.alphabet)
 
 
 def _apply_filter(name: str, text: str) -> str:

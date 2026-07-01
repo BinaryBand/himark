@@ -1,7 +1,9 @@
 """Subprocess runner — delegates run_pipeline to an external engine process.
 
-The external engine is selected by the HMK_ENGINE env var: "rust" (default),
-"java", or "python".
+**Archived seam.** While the grammar settles, `himark.engine.run_pipeline` runs the
+in-process Python engine; this subprocess path is only taken when `HMK_ENGINE` names
+one of the `sandbox/` ports ("rust", "java", "python", "go", "cpp") for a re-port
+check. The named port must be built by hand first (the conftest no longer builds any).
 
 Protocol (stdin → stdout, newline-delimited JSON):
   in:  {"pipeline": [[[step], ...], ...], "target": "..."}

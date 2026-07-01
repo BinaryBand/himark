@@ -26,7 +26,7 @@ from himark.models.opcodes import Program
 
 
 # ── Moustache expression AST ──────────────────────────────────────────────────
-# A `{{ … }}` body is a tiny expression: accessors (`.`, `$i`, `#i`, `2$0.1`),
+# A `{{ … }}` body is a tiny expression: accessors (`$`, `$i`, `#i`, `2$0.1`),
 # string/int literals, parenthesised `,`-concatenation, and `|` filter pipes. The
 # parser compiles the body into this `Expr` tree once; the renderer evaluates it.
 
@@ -40,7 +40,8 @@ class ExLit:
 
 @dataclass(slots=True)
 class ExCurrent:
-    """The `.` accessor — the whole text flowing into this step (`{{.}}`)."""
+    """The bare `$` accessor — the pipe's current subject, the whole text flowing
+    into this step (`{{$}}`). `.` is a deprecated spelling of the same node."""
 
 
 @dataclass(slots=True)
@@ -48,7 +49,8 @@ class ExRef:
     """A capture accessor `[stage]$|#[path]`. `stage` is the pipeline stage index, or
     None for the current stage; `is_count` is the `#` sigil (a repetition count) vs
     `$` (text); `path` is the dotted capture path, or None for the stage's whole
-    text (`$`). A `#` always carries a path (enforced at compile)."""
+    text (`N$`). A `#` always carries a path (enforced at compile). Bare `$` (no
+    stage, no path) is not an `ExRef` -- it compiles to `ExCurrent`."""
 
     stage: int | None
     is_count: bool

@@ -146,8 +146,8 @@ if __name__ == "__main__":
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     rows_in = (RESOURCES / "podcasts.csv").read_text("utf-8").splitlines(keepends=True)
-    src = "".join(rows_in[:])
-    label = "full dedup"
+    src = "".join(rows_in[:25])
+    label = "python, 24-row slice"
     ctx = nullcontext()
     with ctx:
         t0 = time.perf_counter()

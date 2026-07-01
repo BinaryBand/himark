@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.12.2 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
+**Version:** 0.12.3 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
 
 <!-- cspell:words himark -->
 
@@ -43,7 +43,7 @@ A bare `{...}` is **always an alphabet**; its punctuation picks which set: **lit
 | Operator      | Name      | Role                                          |
 | ------------- | --------- | --------------------------------------------- |
 | `{{ ... }}`   | Moustache | emit a captured value into output             |
-| `$i` `#i` `.` | Accessor  | a group's text / count, or the current match  |
+| `$i` `#i` `$` | Accessor  | a group's text / count, or `$` the current match  |
 | `\|`          | Filter    | transform an emitted value (`trim`, `indent`) |
 | `,`           | Concat    | join values in a moustache (parens only)      |
 
@@ -250,7 +250,7 @@ An index names a **top-level group** of the addressed step, resolved at **compil
 
 ## :repeat: Transformers
 
-`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The first step **bootstraps the branches**: a **query** starts one branch per match, while a leading **template** starts a single branch over the **whole document** (`{{.}}` is the entire input) -- so a bare leading template replaces the document and `"<wrap>{{.}}</wrap>"` wraps it. After the first step, **each step may be either, in any order**. Each branch is transformed independently and outputs **whatever it commits**:
+`=>` runs a chain of steps -- each a **query** (matcher) or a **template** (plain text, no matchable `{...}`). The first step **bootstraps the branches**: a **query** starts one branch per match, while a leading **template** starts a single branch over the **whole document** (`{{$}}` is the entire input) -- so a bare leading template replaces the document and `"<wrap>{{$}}</wrap>"` wraps it. After the first step, **each step may be either, in any order**. Each branch is transformed independently and outputs **whatever it commits**:
 
 - a **query** matches within the branch and commits each transform in place, keeping the text between. A query that matches nothing **stops** the branch (no output) -- so a leading query is a **guard**. To gate on a _computed_ value, a template emits it and a following query re-matches it (`{$0}` for equality, `{@d::0..$0}` for magnitude).
 - a **template** renders and **commits** (never rolled back) and is **not** terminal: a later query matches the rendered text, a later template wraps it.
@@ -266,7 +266,7 @@ A statement's result is **(span, output)** pairs. The semantics is **splice**: e
 ```proto
 {#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"   // "# Hello" -> "<h1>Hello</h1>"
 {@d::0..}{=}{$0} => "ok" // gate: '7=7' passes, '7=8' is dropped
-"<html>{{.}}</html>"     // leading template: wrap the whole document
+"<html>{{$}}</html>"     // leading template: wrap the whole document
 ```
 
 ### Fixed point
@@ -284,7 +284,7 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-A moustache evaluates to one **value**, rendered to text. Operands: accessors (`.` the current match, `$`, `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. Two operators, tightest to loosest:
+A moustache evaluates to one **value**, rendered to text. Operands: accessors (`$` the current subject -- the whole text flowing into this step; `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. A bare `$` is the whole match, so it differs from `$0`, the **first capture group** (groups are 0-based, not 1-based, so there is no "`$0` is the whole match" convention). `.` is a deprecated spelling of bare `$`. Two operators, tightest to loosest:
 
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**

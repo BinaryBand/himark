@@ -36,6 +36,30 @@ Evaluation of a binary node `a OP b`:
 
 Because operators are total, **render must be total too**: it must map *any* integer in $\mathbb{Z}$ onto `[lo, hi]`.
 
+## The operator set
+
+The primitives exposed inside `{{ ... }}`, over universe values:
+
+- `|` -- filter pipe (applies to everything on its left).
+- `,` -- concatenate (parens only; result is always a `@uni` string).
+- `+` `-` `*` `/` `%` -- arithmetic.
+- `&` `` ` `` `^` `~` `<<` `>>` -- bitwise and, or, xor, not, left shift, right shift.
+
+Two spellings are forced by existing syntax:
+
+- **Or is the backtick `` ` ``, not `|`.** `|` is the filter pipe, so infix or cannot reuse it.
+- **`%` is modulo** -- the same reduction [Normalize](#normalize-one-modular-map) performs, exposed as an operator. It is free because the filter-declaration sigil moved to a keyword.
+
+Every arithmetic result is "unsigned" only in the sense of this algebra: the raw integer is [normalized](#normalize-one-modular-map) onto the LHS band's $\mathbb{Z}/n\mathbb{Z}$ ring, so a subtraction that would go negative wraps by $\bmod\ n$ rather than producing a signed value. This requires a band to supply $n$; bitwise additionally wants that band to be a power of two (below).
+
+### Division and modulo are total
+
+Operators never trap, so the zero cases must be defined, not errors:
+
+$$x / 0 = 0 \qquad x \bmod 0 = 0$$
+
+The choice of $0$ is arbitrary but fixed -- what matters is that `/` and `%` remain total maps like every other operator, so a pipeline never faults on data.
+
 ## Normalize: one modular map
 
 Collapsing a raw integer `v` onto band `[lo, hi]` with cardinality $n = hi - lo + 1$ is a single operation:
@@ -58,7 +82,7 @@ This makes **additive** ops (`+`, `-`, `*`) meaningful over **any** band -- each
 
 ## Bitwise ops: total everywhere, meaningful only over $2^k$
 
-Bitwise ops (`&`, `|`, `^`, `~`, `<<`, `>>`) run on the raw integer and then go through the **same** normalize step, so they are total on every band. But they are only **meaningful** when $n$ is a power of two. Over `{@d::0..200}`, `x << 1` normalizes to `(2x) mod 201` -- multiply-mod-$n$ in a bitwise costume; the "bits" never existed because the band is not a bit-field.
+Bitwise ops (`&`, `` ` ``, `^`, `~`, `<<`, `>>`) run on the raw integer and then go through the **same** normalize step, so they are total on every band. But they are only **meaningful** when $n$ is a power of two. Over `{@d::0..200}`, `x << 1` normalizes to `(2x) mod 201` -- multiply-mod-$n$ in a bitwise costume; the "bits" never existed because the band is not a bit-field.
 
 Consequently:
 
@@ -77,14 +101,14 @@ For readability, `{{ $0 | @hex }}` is **sugar** for the same LHS-wins render ("r
 
 - Universe = `<alphabet, band, value>`; captures, alphabets, and literals are one type.
 - Value stays **absolute** (band-independent). Never offset-encode.
-- Operators are **total**: integer op on values, **LHS alphabet wins**, result band from LHS, then normalize + render.
-- Normalize is $lo + ((v - lo) \bmod n)$ with floored mod. Additive ops are meaningful over any band.
+- Operators are **total**: integer op on values, **LHS alphabet wins**, result band from LHS, then normalize + render. Or is the backtick (`|` is the filter pipe); `x/0 = x \bmod 0 = 0`.
+- Normalize is $lo + ((v - lo) \bmod n)$ with floored mod. Additive ops (`+`, `-`, `*`, `%`) are meaningful over any band.
 - Bitwise ops are total everywhere but meaningful only over $2^k$ bands; lint-flag the rest.
 - Casts fall out of LHS-wins; `| @alpha` is readable sugar.
 - **Meaningfulness is an L2/lint concern; the engine never traps.**
 
 ## Open questions
 
-- The exact **operator set** and a **precedence/associativity table** (must interleave cleanly with the existing `|` filter pipe and the parens-only `,` concat).
+- A **precedence/associativity table** for [the operator set](#the-operator-set) (must interleave cleanly with the existing `|` filter pipe and the parens-only `,` concat).
 - A **custom-filter declaration** form for `himark/std.hmk` (`@filter name = <expr over a distinguished input>`), distinct from the `@name = <source>` alphabet binding.
 - **SHA-256 in L2** (far future). It needs iteration + multi-register state, which a unary expression cannot express; the likely path is a multi-pass `<=>` pipeline with state materialized as text, or an unrolled form with local bindings. A text-splice hash is a **completeness demo**, not a throughput path -- a native fast lane behind the same L2 signature stays an option.

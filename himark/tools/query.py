@@ -36,7 +36,7 @@ def _emit_json_error(exc: CompileError) -> None:
 
 def execute_cmd(
     pattern: str = typer.Argument(
-        help="HMK pattern with template (e.g. '{a..z}[1..] => <b>{{.}}</b>'), file path, or '-' for stdin"
+        help="HMK pattern with template (e.g. '{a..z}[1..] => <b>{{$}}</b>'), file path, or '-' for stdin"
     ),
     target: str = typer.Argument(help="String to match against, or a file path"),
     json_out: bool = typer.Option(

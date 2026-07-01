@@ -5,7 +5,7 @@ or a **template** (plain text with no matchable `{...}`).
 
 Execution is a **branch model**. The first step bootstraps the branches: a **query**
 starts one per match, while a leading **template** starts a single branch over the
-whole document (`{{.}}` is the entire input). The rest of the chain transforms each
+whole document (`{{$}}` is the entire input). The rest of the chain transforms each
 branch's text independently:
 
 * a **query** matches within the branch's text and splices each match's transform
@@ -13,7 +13,7 @@ branch's text independently:
   drops the branch — that is how filtering works;
 * a **template** renders, and the chain continues on its render — so templates are
   *not* terminal: a later query matches the rendered text, and a later template
-  wraps it (`{{.}}` is the flowing text, so templates compose).
+  wraps it (`{{$}}` is the flowing text, so templates compose).
 
 Stages are numbered by `=>` position; each step (query or template) appends one,
 so `{{ i$j }}` / `{N$M}` address any earlier step by position.
@@ -25,8 +25,10 @@ The branches render two ways, neither privileged:
   between branches kept verbatim (in-place transform).
 """
 
+import os
+
 from himark.engine._render import render as _render
-from himark.engine._runner import run_pipeline
+from himark.engine._runner import run_pipeline as _subprocess_run_pipeline
 from himark.engine._types import Match
 from himark.engine._vm import find_matches as _vm_find_matches, prepare
 from himark.models.compiled import Program, Step, Template
@@ -144,7 +146,7 @@ def deltas(
     head = steps[0]
     if isinstance(head, Template):
         # A leading template has no query to locate matches: the whole document is
-        # one branch, with `{{.}}` the entire input. Render the chain over it.
+        # one branch, with `{{$}}` the entire input. Render the chain over it.
         text = _transform(steps, target, ())
         return [] if text is None else [(0, len(target), text)]
     rest = steps[1:]
@@ -205,4 +207,26 @@ def splice_to_fixed_point(steps: list[Step], target: str) -> str:
     )
 
 
-# run_pipeline is imported from _runner (subprocess engine seam).
+def run_pipeline(pipeline: list[list[Step]], target: str) -> str:
+    """Run each statement of `pipeline` as a splice pass over `target`, feeding one
+    statement's output into the next -- the `.hmk` pipeline. A statement whose head
+    step is a fixed point (`<=>`) re-splices to convergence; otherwise it is a single
+    pass.
+
+    Runs **in-process** by default: while the grammar is settling the Python engine
+    in this package is the single implementation, so the demo/golden suite exercises
+    the same code the CLI does. The archived subprocess ports under `sandbox/` are
+    still reachable for a re-port check by naming one explicitly, e.g.
+    `HMK_ENGINE=rust` (that engine must be built first -- the conftest no longer does
+    it). An unset `HMK_ENGINE` (or `inprocess`/`python-inprocess`) stays in-process."""
+    name = os.environ.get("HMK_ENGINE")
+    if name and name not in ("inprocess", "python-inprocess"):
+        return _subprocess_run_pipeline(pipeline, target)
+    text = target
+    for statement in pipeline:
+        head = statement[0]
+        if head.fixed_point:
+            text = splice_to_fixed_point(statement, text)
+        else:
+            text = splice(statement, text)
+    return text
