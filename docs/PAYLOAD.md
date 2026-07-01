@@ -110,6 +110,8 @@ A `{{ … }}` body compiles to a small expression tree. Each node is a JSON obje
 | reference | `{"ref": [stage, is_count, path]}` | a capture accessor. `stage`: pipeline stage index, or `null` for the current stage. `is_count`: `true` for the `#` sigil (a repetition count) vs `false` for `$` (text). `path`: dotted capture path as `[int]`, or `null` for the stage's whole text. A `#` always carries a `path`. |
 | concat | `{"cat": [<expr>, ...]}` | parenthesised comma-concatenation `( a, b, … )` — parts joined. |
 | filter | `{"filter": "<name>", "src": <expr>}` | a filter pipe `src \| name`. |
+| binop | `{"binop": [op, <lhs>, <rhs>]}` | a binary value operator. `op` is the spelling: arithmetic `+ - * / %`, bitwise `& ^ << >>`, or a backtick for or. Computed on the operands' values, LHS alphabet+band win, then normalize+encode (see [ALGEBRA.md](ALGEBRA.md)). Total: `x/0 = x%0 = 0`. |
+| unop | `{"unop": [op, <operand>]}` | a unary value operator -- only `~` (bitwise not) today. Complement then normalize+encode under the operand's own alphabet+band. |
 
 Filter names are a closed set: **`trim`**, **`indent`**. An executor must implement exactly these; an unknown filter is a payload it cannot run (treat as a version mismatch).
 

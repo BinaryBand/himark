@@ -206,7 +206,12 @@ def _run_program(
         if reps is None:
             return None
         matcher = _ValueMatcher(alph, lo_val, hi_val, wmin, wmax, excl_list)
-        return _run_matcher(matcher, reps, state, text, pos, cont, alphabet=alph)
+        # A closed band (both bounds given) supplies the cardinality a template
+        # operator normalizes onto; an open band has no `n` (docs/ALGEBRA.md).
+        band = (lo_val, hi_val) if lo_val is not None and hi_val is not None else None
+        return _run_matcher(
+            matcher, reps, state, text, pos, cont, alphabet=alph, band=band
+        )
 
     if opcode == DYN_RANGE:
         (
@@ -230,7 +235,16 @@ def _run_program(
         matcher = _build_dyn_matcher(alph, lower, upper, excl_list)
         if matcher is None:
             return None
-        return _run_matcher(matcher, reps, state, text, pos, cont)
+        # The resolved endpoints give a band when both sides are bounded, same as
+        # a static VALUE_RANGE -- so an operator over a `{A::$0..$1}` capture wraps.
+        band = (
+            (matcher.lo_val, matcher.hi_val)
+            if matcher.lo_val is not None and matcher.hi_val is not None
+            else None
+        )
+        return _run_matcher(
+            matcher, reps, state, text, pos, cont, alphabet=alph, band=band
+        )
 
     if opcode == SEQ_GROUP:
         children, reps_spec = args
@@ -556,12 +570,15 @@ def _run_matcher(
     pos: int,
     cont: Cont,
     alphabet=None,
+    band: tuple[int, int] | None = None,
 ) -> int | None:
     caps = state.captures
 
     def attempt(end: int, rep_list: list[str], k: int) -> int | None:
         mark = len(caps)
-        caps.append(Capture("", (pos, end), rep_list, count=k, alphabet=alphabet))
+        caps.append(
+            Capture("", (pos, end), rep_list, count=k, alphabet=alphabet, band=band)
+        )
         r = cont(end)
         if r is not None:
             return r

@@ -284,12 +284,21 @@ The rule must **contract** toward a fixed point; one that grows the document (`{
 
 A `{{ ... }}` moustache holds one **expression** over captured values, and is recognised **only inside a quoted template**. Outside a quote, `{{` is two nested universe braces (an object) and carries no expression meaning -- a query never reads moustache syntax, and a template never reads universe syntax. To match a literal `{{` inside a quote, escape it (`\{{`).
 
-A moustache evaluates to one **value**, rendered to text. Operands: accessors (`$` the current subject -- the whole text flowing into this step; `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. A bare `$` is the whole match, so it differs from `$0`, the **first capture group** (groups are 0-based, not 1-based, so there is no "`$0` is the whole match" convention). `.` is a deprecated spelling of bare `$`. Two operators, tightest to loosest:
+A moustache evaluates to one **value**, rendered to text. Operands: accessors (`$` the current subject -- the whole text flowing into this step; `$i`, `#i`, `i$`, `i$j`, `i#j`), integer/string literals, and parentheses. A bare `$` is the whole match, so it differs from `$0`, the **first capture group** (groups are 0-based, not 1-based, so there is no "`$0` is the whole match" convention). `.` is a deprecated spelling of bare `$`.
 
+**Value operators** compute on the operands' positional values, tightest to loosest:
+
+- `~` -- bitwise not (unary)
+- `* / %` -- multiply, divide, modulo
+- `+ -` -- add, subtract
+- `<< >>` -- left/right shift
+- `&` -- bitwise and
+- `^` -- bitwise xor
+- `` ` `` -- bitwise or (a backtick, because `|` is the filter pipe)
 - `|` -- filter pipe (applies to everything on its left)
 - `,` -- concatenate, **inside parentheses only**
 
-Both left-associative; parens override. So `("<h", #0, ">")` is one value (the three concatenated), and `$2 | trim` pipes group 2 through a filter. The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
+All left-associative; parens override. So `2 + 3 * 4` is `14`, `("<h", #0, ">")` is one value (the three concatenated), and `$2 | trim` pipes group 2 through a filter. Operators are **total** (they never trap: `x / 0 = x % 0 = 0`); the result takes the left operand's alphabet and band, then wraps onto the band and encodes. See [ALGEBRA.md](ALGEBRA.md) for the full value rules (LHS-wins, modular normalize, bitwise-over-$2^k$). The `{{`/`}}` boundaries set the expression context, so quotes inside are string delimiters.
 
 ### Filters
 

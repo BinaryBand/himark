@@ -29,6 +29,11 @@ class Capture:
     # (else None). It lets a downstream value filter (e.g. `b256`) read the
     # capture as a number in `A`, not just its raw text.
     alphabet: Alphabet | RangeAlphabet | None = None
+    # The closed value band `(lo, hi)` (positional values in `alphabet`) the group
+    # matched under, when BOTH bounds were given (`{A::lo..hi}`); None for an open
+    # or absent band. It supplies the cardinality `n = hi - lo + 1` a template
+    # operator normalizes onto (docs/ALGEBRA.md); an open band has no `n`.
+    band: tuple[int, int] | None = None
 
 
 @dataclass

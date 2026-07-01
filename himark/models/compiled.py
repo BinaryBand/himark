@@ -27,7 +27,8 @@ from himark.models.opcodes import Program
 
 # ── Moustache expression AST ──────────────────────────────────────────────────
 # A `{{ … }}` body is a tiny expression: accessors (`$`, `$i`, `#i`, `2$0.1`),
-# string/int literals, parenthesised `,`-concatenation, and `|` filter pipes. The
+# string/int literals, parenthesised `,`-concatenation, `|` filter pipes, and value
+# operators (arithmetic `+ - * / %`, bitwise `& ^ ~ << >>` and backtick-or). The
 # parser compiles the body into this `Expr` tree once; the renderer evaluates it.
 
 
@@ -73,7 +74,29 @@ class ExFilter:
     name: str
 
 
-Expr: TypeAlias = ExLit | ExCurrent | ExRef | ExConcat | ExFilter
+@dataclass(slots=True)
+class ExBinOp:
+    """A binary value operator `lhs OP rhs` — arithmetic (`+ - * / %`) or bitwise
+    (`& ^ << >>` and backtick-or). Evaluated on the operands' universe values;
+    the result takes the LHS alphabet + band, then normalize + encode (LHS wins).
+    See docs/ALGEBRA.md. `op` is the operator spelling (`<<`/`>>` for the shifts,
+    a backtick for or)."""
+
+    op: str
+    lhs: Expr
+    rhs: Expr
+
+
+@dataclass(slots=True)
+class ExUnOp:
+    """A unary value operator — only bitwise not `~` today. `~a` complements the
+    operand's value, then normalize + encode under its own alphabet + band."""
+
+    op: str
+    operand: Expr
+
+
+Expr: TypeAlias = ExLit | ExCurrent | ExRef | ExConcat | ExFilter | ExBinOp | ExUnOp
 
 
 def _expr_to_json(e: Expr) -> dict:
@@ -86,6 +109,10 @@ def _expr_to_json(e: Expr) -> dict:
         return {"ref": [e.stage, e.is_count, path]}
     if isinstance(e, ExConcat):
         return {"cat": [_expr_to_json(p) for p in e.parts]}
+    if isinstance(e, ExBinOp):
+        return {"binop": [e.op, _expr_to_json(e.lhs), _expr_to_json(e.rhs)]}
+    if isinstance(e, ExUnOp):
+        return {"unop": [e.op, _expr_to_json(e.operand)]}
     return {"filter": e.name, "src": _expr_to_json(e.src)}
 
 

@@ -68,6 +68,18 @@ class Alphabet:
             length += 1
         return length
 
+    def encode(self, value: int, width: int) -> str:
+        """Format `value` as `width` symbols, most-significant first, left-padded
+        with the zero symbol. The inverse of `value` (a congruence class renders as
+        its first member). `value` must be non-negative."""
+        chars = [self.groups[0][0]] * width
+        v, pos = value, width - 1
+        while v > 0 and pos >= 0:
+            chars[pos] = self.groups[v % self.base][0]
+            v //= self.base
+            pos -= 1
+        return "".join(chars)
+
 
 class RangeAlphabet:
     """A virtual positional alphabet over a contiguous code-point range too large
@@ -98,3 +110,12 @@ class RangeAlphabet:
             ceiling *= self.base
             length += 1
         return length
+
+    def encode(self, value: int, width: int) -> str:
+        chars = [chr(self.lo)] * width
+        v, pos = value, width - 1
+        while v > 0 and pos >= 0:
+            chars[pos] = chr(self.lo + v % self.base)
+            v //= self.base
+            pos -= 1
+        return "".join(chars)

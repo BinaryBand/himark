@@ -9,7 +9,6 @@
 - [x] Bake matcher objects into prepared instructions -- `Char`/`Complement`/`ValueRange` now carry their baked matcher, dropping the per-call `excl`/`inner_groups`/`alph` clone from the hot loop (~3.75x on the base58 value-band workload)
 - [x] A/B test various engines, optimizations, and languages -- `tests/benchmarks/bench.py`
 - [ ] Remember where each pass's last real change ended and let the next pass only *begin* matches before that point -- holds for fixed-point passes; semantically delicate (would diverge the Rust engine's strategy from the Python oracle), needs its own validated change
-- [ ] Memoize dynamic-range endpoints within a match pass -- low value; endpoints resolve from per-position backtracking state, so a naive cache is unsafe
 
 ## Language evolution (per docs/.PROPOSAL.md, docs/ALGEBRA.md)
 
@@ -17,7 +16,7 @@ The through-line: shrink the engine to a minimal primitive core (the universe ob
 
 - [x] **Step 0 -- `$` is the pipe subject.** Bare `$` now compiles to `ExCurrent` (the flowing subject); `.` kept as a deprecated alias (no grammar regen). Migrated `scripts/md_html.hmk` and the docs/help text; `$`-vs-`$0` gotcha documented in HMK.md.
 - [x] **Step 1 -- value-aware evaluator (keystone).** `Universe` render value added in `engine/_render.py`; `_eval` returns a `Universe` and `render()` collapses it at the boundary. Captures carry their alphabet forward; identity `render`, so output is byte-identical (373 tests green). Band + operators are Step 2.
-- [ ] **Step 2 -- operators, one vertical slice then the set.** Add `ExBinOp` + grammar for a single operator (`+`) end to end over the value-aware evaluator, using the existing `Alphabet.value` / `_format_value` codec and the ALGEBRA normalize rule; then fan out to the full set (arithmetic `+ - * / %`, bitwise `& ^ ~ << >>` plus backtick-or, with total `/` and `%`).
+- [x] **Step 2 -- operators, one vertical slice then the set.** `ExBinOp`/`ExUnOp` + a moustache precedence cascade (filter `|` loosest down to unary `~`) with the full set live: arithmetic `+ - * / %`, bitwise `& ^ ~ << >>` and backtick-or, total (`x/0 = x%0 = 0`). Bands now thread from `VALUE_RANGE`/`DYN_RANGE` onto `Capture.band` and into `Universe`, so a `{A::lo..hi}` capture wraps mod `n` per ALGEBRA; the codec moved to `Alphabet.encode`/`RangeAlphabet.encode` (keeping the engine free of any parser import). `<<`/`>>` stay `LT LT`/`GT GT` so the `@<<` anchor is untouched. Tests in `tests/test_operators.py`.
 - [ ] **Step 3 -- declared filters in L2.** A filter-declaration form for `himark/std.hmk`; move `trim`/`indent` (and the value filters) out of the engine, unifying filter and query as one declared pipeline.
 - [ ] **Step 4 -- declarative anchors.** Zero-width, queryable, non-rendering anchors carried out-of-band (parallel offset structure updated on every splice), with named classes; retire `scripts/dedup.hmk`'s Unicode sentinels and drop the hardcoded `@<`/`@>>` in favor of L2 declarations over the one primitive doc-boundary anchor.
 
@@ -30,3 +29,4 @@ The five `sandbox/` ports (rust, go, cpp, java, and the standalone `engine.py`) 
 ## Maybe
 
 - [x] Add Go and C/C++ single-file engine implementations -- Go (`sandbox/engine.go`) and C++ (`sandbox/engine.cpp`) both ship; all five engines are byte-identical on the golden corpus. (Now archived -- see above.)
+- [ ] Consider updating arithmetic universes joined by an operator adopt the RHS alphabet. That way `| @alpha` goes from being readable sugar to a first class mechanic.

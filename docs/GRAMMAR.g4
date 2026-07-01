@@ -54,7 +54,9 @@ braceGroup : LBRACE band RBRACE ;
 
 literalRun : (TEXT | ESC | HEX_ESC | DOT | RANGE | BAND | COMMA
              | NAME | INT | AT | DOLLAR | HASH | LT | GT
-             | PIPE | LPAREN | RPAREN)+ ;
+             | PIPE | LPAREN | RPAREN
+             | PLUS | MINUS | STAR | SLASH | PERCENT
+             | AMP | CARET | TILDE | BACKTICK)+ ;
 
 count     : LBRACK countBody RBRACK ;
 countBody : countArm (COMMA countArm)* ;
@@ -86,7 +88,9 @@ seqAtom   : reference | anchor | macro | HEX_ESC | ESC | seqLit ;
 // (a `seqUnit`), never literal text, matching the bareAlphabet `atom` precedence.
 seqLit    : NAME | INT | TEXT | DOT | LT | GT | EQ
           | LPAREN | RPAREN | PIPE | AT | DOLLAR | HASH
-          | LBRACK | RBRACK | ARROW | FIXARROW | NL ;
+          | LBRACK | RBRACK | ARROW | FIXARROW | NL
+          | PLUS | MINUS | STAR | SLASH | PERCENT
+          | AMP | CARET | TILDE | BACKTICK ;
 
 universe  : arm (COMMA arm)* ;
 arm       : term                             # single
@@ -109,7 +113,9 @@ atom      : braceGroup count?
 litToken  : NAME | INT | TEXT | DOT | LT | GT | EQ
           | LPAREN | RPAREN | PIPE | BANG
           | AT | DOLLAR | HASH | LBRACK | RBRACK
-          | ARROW | FIXARROW | NL ;
+          | ARROW | FIXARROW | NL
+          | PLUS | MINUS | STAR | SLASH | PERCENT
+          | AMP | CARET | TILDE | BACKTICK ;
 
 reference : INT (DOLLAR | HASH) INT?
           | (DOLLAR | HASH) INT
@@ -120,10 +126,19 @@ macro     : AT NAME ;
 // The interior of one `{{ … }}` moustache (a second-layer entry rule). A tiny
 // whitespace-insensitive expression: accessors (`.`, `$i`, `#i`, `2$0.1` a
 // cross-stage dotted sub-capture), string/int literals, parenthesised
-// `,`-concatenation, and `|` filter pipes. `_compiler` extracts the body and
-// strips insignificant whitespace before this lexer sees it.
+// `,`-concatenation, `|` filter pipes, and value operators (arithmetic
+// `+ - * / %`, bitwise `& ^ ~ << >>` and backtick-or, in the precedence cascade
+// below -- see docs/ALGEBRA.md). `_compiler` extracts the body and strips
+// insignificant whitespace before this lexer sees it.
 moustacheExpression : pipeExpr EOF ;
-pipeExpr  : primary (PIPE filter)* ;
+pipeExpr  : orExpr (PIPE filter)* ;
+orExpr    : xorExpr (BACKTICK xorExpr)* ;
+xorExpr   : andExpr (CARET andExpr)* ;
+andExpr   : shiftExpr (AMP shiftExpr)* ;
+shiftExpr : addExpr ((LT LT | GT GT) addExpr)* ;
+addExpr   : mulExpr ((PLUS | MINUS) mulExpr)* ;
+mulExpr   : unary ((STAR | SLASH | PERCENT) unary)* ;
+unary     : TILDE unary | primary ;
 primary   : LPAREN pipeExpr (COMMA pipeExpr)* RPAREN
           | accessor
           | INT
@@ -159,6 +174,15 @@ RPAREN   : ')' ;
 EQ       : '=' ;
 LT       : '<' ;
 GT       : '>' ;
+PLUS     : '+' ;
+MINUS    : '-' ;
+STAR     : '*' ;
+SLASH    : '/' ;
+PERCENT  : '%' ;
+AMP      : '&' ;
+CARET    : '^' ;
+TILDE    : '~' ;
+BACKTICK : '`' ;
 HEX_ESC  : '\\' ( 'x' HEXDIGIT HEXDIGIT
                 | 'u' HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT
                 | 'U' HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT HEXDIGIT ) ;

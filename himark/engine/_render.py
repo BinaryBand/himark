@@ -33,11 +33,13 @@ from dataclasses import dataclass
 from himark.engine._types import Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.compiled import (
+    ExBinOp,
     ExConcat,
     ExCurrent,
     ExFilter,
     ExLit,
     ExRef,
+    ExUnOp,
     Expr,
     Moustache,
     Template,
@@ -57,10 +59,15 @@ class Universe:
     `render` is identity, so threading it changes no output.
 
     A universe with no alphabet is a plain `@uni` string (a match spanning several
-    alphabets, a literal, a concatenation) -- text with no positional value."""
+    alphabets, a literal, a concatenation) -- text with no positional value.
+
+    `band` is the closed value band `(lo, hi)` the text was captured under, when
+    known -- the cardinality `n = hi - lo + 1` an operator normalizes onto; None
+    for an open/absent band (no wrap)."""
 
     text: str
     alphabet: Alphabet | RangeAlphabet | None = None
+    band: tuple[int, int] | None = None
 
     def render(self) -> str:
         return self.text
@@ -137,7 +144,74 @@ def _eval(expr: Expr, current: str, stages: list[Match]) -> Universe:
     if isinstance(expr, ExFilter):
         text = _apply_filter(expr.name, _eval(expr.src, current, stages).render())
         return Universe(text)
+    if isinstance(expr, ExBinOp):
+        lhs = _eval(expr.lhs, current, stages)
+        rhs = _eval(expr.rhs, current, stages)
+        raw = _BINOPS[expr.op](_operand_value(lhs), _operand_value(rhs))
+        return _encode(raw, lhs)  # LHS alphabet + band win
+    if isinstance(expr, ExUnOp):
+        operand = _eval(expr.operand, current, stages)
+        return _encode(~_operand_value(operand), operand)  # only `~` today
     raise CompileError(f"Unknown moustache expression: {type(expr).__name__}")
+
+
+# ── Value operators (docs/ALGEBRA.md) ──────────────────────────────────────────
+
+# Every operator is total: it computes on the operands' integer values and never
+# traps. `/` and `%` are defined at zero (`x/0 = x%0 = 0`); "or" is the backtick
+# (`|` is the filter pipe). Meaningfulness (e.g. bitwise over a non-2^k band) is a
+# separate L2/lint concern -- the engine just computes.
+_BINOPS = {
+    "+": lambda a, b: a + b,
+    "-": lambda a, b: a - b,
+    "*": lambda a, b: a * b,
+    "/": lambda a, b: a // b if b != 0 else 0,
+    "%": lambda a, b: a % b if b != 0 else 0,
+    "&": lambda a, b: a & b,
+    "^": lambda a, b: a ^ b,
+    "`": lambda a, b: a | b,  # backtick-or
+    "<<": lambda a, b: a << b,
+    ">>": lambda a, b: a >> b,
+}
+
+
+def _operand_value(u: Universe) -> int:
+    """The integer an operand contributes. A universe with an alphabet reads its
+    positional value; a bare decimal literal reads in base 10; anything else (a
+    general `@uni` string) contributes 0 -- total but non-meaningful (an L2 lint
+    concern, not an engine trap)."""
+    if u.alphabet is not None:
+        v = u.value
+        return v if v is not None else 0
+    try:
+        return int(u.text)  # a bare (possibly signed) decimal literal or result
+    except ValueError:
+        return 0
+
+
+def _normalize(v: int, lo: int, hi: int) -> int:
+    """Collapse a raw integer onto band `[lo, hi]`: `lo + (v - lo) mod n` with
+    `n = hi - lo + 1`, using floored mod so negatives wrap correctly (ALGEBRA)."""
+    n = hi - lo + 1
+    return lo + (v - lo) % n
+
+
+def _encode(raw: int, lhs: Universe) -> Universe:
+    """Render an operator's raw integer back to a `Universe`, LHS-wins: normalize
+    onto the LHS band (if any), then encode through the LHS alphabet at the LHS
+    operand's width (grown if the result needs more symbols). With no LHS alphabet
+    the value has no positional codec, so it renders as its decimal spelling."""
+    alph, band = lhs.alphabet, lhs.band
+    res = _normalize(raw, band[0], band[1]) if band is not None else raw
+    if alph is None:
+        return Universe(str(res))
+    if res < 0:
+        # Unbanded underflow: no `n` to wrap onto, so no positional spelling --
+        # fall back to a signed decimal (banded arithmetic wraps and never lands
+        # here). A documented edge of the total algebra.
+        return Universe(str(res), alph, band)
+    width = max(len(lhs.text), alph.canonical_len(res))
+    return Universe(alph.encode(res, width), alph, band)
 
 
 def _eval_ref(ref: ExRef, stages: list[Match]) -> Universe:
@@ -156,7 +230,7 @@ def _eval_ref(ref: ExRef, stages: list[Match]) -> Universe:
         raise CompileError(f"Moustache capture {ref.path} is out of range")
     if ref.is_count:
         return Universe(str(len(capture.reps)))
-    return Universe(capture.text, capture.alphabet)
+    return Universe(capture.text, capture.alphabet, capture.band)
 
 
 def _apply_filter(name: str, text: str) -> str:

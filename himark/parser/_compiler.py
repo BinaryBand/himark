@@ -18,11 +18,13 @@ from __future__ import annotations
 import re
 
 from himark.models.compiled import (
+    ExBinOp,
     ExConcat,
     ExCurrent,
     ExFilter,
     ExLit,
     ExRef,
+    ExUnOp,
     Expr,
     Moustache,
     Template,
@@ -259,33 +261,9 @@ def _ref_descriptor(ref: t.SemanticNode) -> tuple:
 
 def _format_value(alph: Alphabet | RangeAlphabet, value: int, width: int) -> str:
     """Format `value` as a canonical string of `width` in `alph` (most-significant
-    first, zero-padded with the alphabet's zero symbol)."""
-    if isinstance(alph, RangeAlphabet):
-        zero = chr(alph.lo)
-        chars: list[str] = []
-        for _ in range(width):
-            chars.append(zero)
-        v = value
-        pos = width - 1
-        while v > 0 and pos >= 0:
-            idx = v % alph.base
-            chars[pos] = chr(alph.lo + idx)
-            v //= alph.base
-            pos -= 1
-        return "".join(chars)
-    # Materialized Alphabet path
-    zero = alph.groups[0][0]
-    chars = []
-    for _ in range(width):
-        chars.append(zero)
-    v = value
-    pos = width - 1
-    while v > 0 and pos >= 0:
-        idx = v % alph.base
-        chars[pos] = alph.groups[idx][0]  # first member of the group
-        v //= alph.base
-        pos -= 1
-    return "".join(chars)
+    first, zero-padded with the alphabet's zero symbol). Both alphabet kinds own
+    the codec; this thin wrapper keeps the existing call sites."""
+    return alph.encode(value, width)
 
 
 # ── Group lowering (LiteralNode / UnionNode / GroupClassNode → groups) ────────
@@ -461,10 +439,47 @@ class _ExprVisitor(GRAMMARVisitor):
         return self.visit(ctx.pipeExpr())
 
     def visitPipeExpr(self, ctx: GRAMMARParser.PipeExprContext) -> Expr:
-        value = self.visit(ctx.primary())
+        value = self.visit(ctx.orExpr())
         for f in ctx.filter_():  # `| name` pipes, left-associative
             value = ExFilter(value, f.NAME().getText())
         return value
+
+    def _binop_chain(self, ctx) -> Expr:
+        """Fold a `operand (OP operand)*` cascade rule left-associatively into
+        nested `ExBinOp`s. The operator is a single token between operands; a
+        lone operand (no operators) returns its own value untouched."""
+        children = list(ctx.getChildren())
+        value = self.visit(children[0])
+        i = 1
+        while i < len(children):
+            op = children[i].getText()
+            value = ExBinOp(op, value, self.visit(children[i + 1]))
+            i += 2
+        return value
+
+    # or / xor / and / add / mul all share the single-token fold above.
+    visitOrExpr = _binop_chain
+    visitXorExpr = _binop_chain
+    visitAndExpr = _binop_chain
+    visitAddExpr = _binop_chain
+    visitMulExpr = _binop_chain
+
+    def visitShiftExpr(self, ctx: GRAMMARParser.ShiftExprContext) -> Expr:
+        """`<<`/`>>` are two tokens (`LT LT` / `GT GT`) to keep the `@<<` anchor
+        intact, so the operator spans two children -- fold with a stride of three."""
+        children = list(ctx.getChildren())
+        value = self.visit(children[0])
+        i = 1
+        while i < len(children):
+            op = children[i].getText() + children[i + 1].getText()  # '<<' or '>>'
+            value = ExBinOp(op, value, self.visit(children[i + 2]))
+            i += 3
+        return value
+
+    def visitUnary(self, ctx: GRAMMARParser.UnaryContext) -> Expr:
+        if ctx.TILDE() is not None:
+            return ExUnOp("~", self.visit(ctx.unary()))
+        return self.visit(ctx.primary())
 
     def visitPrimary(self, ctx: GRAMMARParser.PrimaryContext) -> Expr:
         if ctx.LPAREN() is not None:
