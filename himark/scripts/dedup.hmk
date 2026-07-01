@@ -37,10 +37,8 @@
 //                for the same episode share a key. A Y keeps its original title
 //                after the tag; a P's key already *is* its title, so it stores no
 //                copy — the merge reads the P column straight from the shared key.
-//   4. MATCH   — merge an equal-key Y/P pair onto one row `yt,pod` (both orders),
-//                in two stages: a cheap bounded QUICK pass (twins within a small
-//                look-ahead) clears the bulk, then the robust unbounded pass
-//                catches the far-apart stragglers. Same result, ~3x faster.
+//   4. MATCH   — merge any equal-key Y/P pair onto one row `yt,pod` (both column
+//                orders), re-spliced to a fixed point until no pairs remain.
 //   5. CLEANUP — write each surviving unmatched line as a one-cell row.
 //   6. RESTORE the masked commas, then re-add the header.
 //
@@ -48,12 +46,10 @@
 //   * Match is **exact after normalization**: near-misses (case, punctuation —
 //     `MAY BONUS EPISODE- …` vs `May Bonus Episode: …`) stay distinct. Fuzzy
 //     (edit-distance) matching is a different, host-assisted problem.
-//   * The robust merge is a cross-document self-reference search: every unmatched
-//     line pays a full backtracking search each pass, so cost grows ~quadratically.
-//     The QUICK pass bounds that scan to cut it ~3x, but the floor is still the
-//     unbounded sweeps — feasible for the whole 859-row file on the native
-//     backend (~4s), a slice on the Python one. HMK has no fast (or linear) sort
-//     to lean on; its only sort is the O(n²) bubble_sort.hmk.
+//   * The merge is a cross-document self-reference search: every unmatched line
+//     pays a full backtracking search each pass, so cost grows ~quadratically.
+//     HMK has no fast (or linear) sort to lean on; its only sort is the O(n²)
+//     bubble_sort.hmk.
 //   * One Y pairs with one P per key; extra copies fall through to CLEANUP.
 //  The sentinels ¤ (key separator), § (skip guard), and ⸴ (masked comma) are
 //  assumed absent from the input.
@@ -77,18 +73,8 @@
 {@<}{Y\t}!{\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
 {@<}{P\t}!{\n}[1..]{\n} => "{{$1}}¤P\t\n"
 
-// ── QUICK MATCH ── a cheap first pass: merge only twins whose partner is within
-// a small look-ahead ([..3000], ~40 rows) instead of scanning the whole document.
-// Most twins are near each other, so this clears the bulk of the pairs fast; the
-// robust pass below then settles in far fewer sweeps. Same merge rule, only the
-// scan is bounded — so it can never merge a pair the robust pass wouldn't, and the
-// final result is identical (just reached ~3x faster on the full file).
-{@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}!{§}[..3000]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@<}!{¤,\n}[1..]{¤P\t}{\n}!{§}[..3000]{@<}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
-
-// ── MATCH ── the robust pass: merge any equal-key Y/P pair, anywhere (fixed
-// point, both orders). The unbounded `[..]` guarantees full recall — it catches
-// the few twins the quick pass left (partners far apart in the file).
+// ── MATCH ── merge any equal-key Y/P pair, anywhere in the file (fixed point,
+// both column orders). The unbounded `[..]` guarantees full recall.
 {@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}!{§}[..]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
 {@<}!{¤,\n}[1..]{¤P\t}{\n}!{§}[..]{@<}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
