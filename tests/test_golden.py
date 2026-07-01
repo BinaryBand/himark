@@ -98,7 +98,7 @@ MATCHER = [
     ("count_ref", r"{a}[2..]{-}[#0]", "aaa--- then aa--"),
     ("complement_break", r"!{x,y}[1..]", "abxcdyef"),
     ("multichar_break", r"{<!--}!{-->}[1..]{-->}", "<!--note-->tail"),
-    ("anchored_line", r"{@<}!{\n}[1..]{\n}", "one\ntwo\nthree\n"),
+    ("anchored_line", r"{@line_start}!{\n}[1..]{\n}", "one\ntwo\nthree\n"),
     ("value_range_uni", r"{aa..zz}", "  aa zz mid"),
     ("grouping_subs", r"{of {black} {quartz}}", "of black quartz here"),
     (

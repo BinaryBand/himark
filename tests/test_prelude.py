@@ -60,7 +60,7 @@ def test_pipeline_body_is_classified_as_a_filter(tmp_path, monkeypatch):
     # filter, held apart from the textual alphabets by body shape.
     path = tmp_path / "p.hmk"
     path.write_text(
-        '@d = 0..9\n@rstrip = {{@s}}[1..]{@>>} => ""\n@double = "{{ $ * 2 }}"\n',
+        '@d = 0..9\n@rstrip = {{@s}}[1..]{@doc_end} => ""\n@double = "{{ $ * 2 }}"\n',
         "utf-8",
     )
     monkeypatch.setattr(prelude, "PRELUDE_PATH", path)

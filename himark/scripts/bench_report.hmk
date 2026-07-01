@@ -61,15 +61,15 @@
 // ============================================================================
 
 // -- TITLE -- the document opens with `{\n`; make it the report heading. -------
-{@<<}{\{\n} => "# Benchmark Results\n\n"
+{@doc_start}{\{\n} => "# Benchmark Results\n\n"
 
 // -- META -- the three scalar header fields become a bullet list. --------------
-{@<}{  \"timestamp\": \"}!{\"}[1..]{\"\,\n} => "- **Generated:** {{$1}}\n"
-{@<}{  \"n\": }!{\,,\n}[1..]{\,\n} => "- **Iterations (n):** {{$1}}\n"
-{@<}{  \"warmup\": }!{\,,\n}[1..]{\,\n} => "- **Warmup:** {{$1}}\n"
+{@line_start}{  \"timestamp\": \"}!{\"}[1..]{\"\,\n} => "- **Generated:** {{$1}}\n"
+{@line_start}{  \"n\": }!{\,,\n}[1..]{\,\n} => "- **Iterations (n):** {{$1}}\n"
+{@line_start}{  \"warmup\": }!{\,,\n}[1..]{\,\n} => "- **Warmup:** {{$1}}\n"
 
 // -- HEADER -- the `"results": [` opener becomes the table head + alignment rule.
-{@<}{  \"results\": \[\n}
+{@line_start}{  \"results\": \[\n}
     => "\n| Engine | Workload | Mean (ms) | Min (ms) | Max (ms) | Stdev (ms) |\n| --- | --- | ---: | ---: | ---: | ---: |\n"
 
 // -- ROWS -- each result object (matched whole, on one line) becomes one row.
@@ -77,9 +77,9 @@
 // the trailing `times_ms` array is matched (to drop it) but never emitted. The
 // captured values are: engine $2, workload $5, mean $8, min $11, max $14,
 // stdev $17.
-{@<}{    \{\n}{      \"engine\": \"}!{\"}[1..]{\"\,\n}{      \"workload\": \"}!{\"}[1..]{\"\,\n}{      \"mean_ms\": }!{\,,\n}[1..]{\,\n}{      \"min_ms\": }!{\,,\n}[1..]{\,\n}{      \"max_ms\": }!{\,,\n}[1..]{\,\n}{      \"stdev_ms\": }!{\,,\n}[1..]{\,\n}{      \"times_ms\": \[\n}!{\]}[1..]{\]\n}{    \}}{\,}[0..1]{\n}
+{@line_start}{    \{\n}{      \"engine\": \"}!{\"}[1..]{\"\,\n}{      \"workload\": \"}!{\"}[1..]{\"\,\n}{      \"mean_ms\": }!{\,,\n}[1..]{\,\n}{      \"min_ms\": }!{\,,\n}[1..]{\,\n}{      \"max_ms\": }!{\,,\n}[1..]{\,\n}{      \"stdev_ms\": }!{\,,\n}[1..]{\,\n}{      \"times_ms\": \[\n}!{\]}[1..]{\]\n}{    \}}{\,}[0..1]{\n}
     => "| {{$2}} | {{$5}} | {{$8}} | {{$11}} | {{$14}} | {{$17}} |\n"
 
 // -- CLEANUP -- drop the JSON array/object close lines. ------------------------
-{@<}{  \]\n} => ""
-{\}}{\n}[0..]{@>>} => ""
+{@line_start}{  \]\n} => ""
+{\}}{\n}[0..]{@doc_end} => ""

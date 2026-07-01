@@ -810,7 +810,7 @@
     ]
   },
   "anchored_line": {
-    "pattern": "{@<}!{\\n}[1..]{\\n}",
+    "pattern": "{@line_start}!{\\n}[1..]{\\n}",
     "text": "one\ntwo\nthree\n",
     "matches": [
       {

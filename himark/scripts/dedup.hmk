@@ -64,34 +64,34 @@
 // ============================================================================
 
 // ── HEADER ── drop the column-name row ───────────────────────────────────────
-{@<}{youtube_title\,podcast_title\n} => ""
+{@line_start}{youtube_title\,podcast_title\n} => ""
 
 // ── MASK ── shield commas inside "…" quoted fields from the FLATTEN split ─────
 {\"}!{\",\n}[..]{\,}!{\",\n}[..]{\"} <=> "\"{{$1}}⸴{{$3}}\""
 
 // ── FLATTEN ── source-tag each title onto its own line (YouTube, then feed) ───
-{@<}!{\,,\n}[1..]{\,}!{\n}[1..]{\n} => "Y\t{{$0}}\nP\t{{$2}}\n"
+{@line_start}!{\,,\n}[1..]{\,}!{\n}[1..]{\n} => "Y\t{{$0}}\nP\t{{$2}}\n"
 // A `,pod` row (no YouTube title) keeps just the feed title.
-{@<}{\,}!{\n}[1..]{\n} => "P\t{{$1}}\n"
+{@line_start}{\,}!{\n}[1..]{\n} => "P\t{{$1}}\n"
 
 // ── KEY ── prepend `<normalized-key>¤`. A Y keeps its original title (counter and
 // all) after the tag; a P's key already *is* its title, so it stores no copy. ─────
-{@<}{Y\t}{Episode\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@<}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@<}{Y\t}!{\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
-{@<}{P\t}!{\n}[1..]{\n} => "{{$1}}¤P\t\n"
+{@line_start}{Y\t}{Episode\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@line_start}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@line_start}{Y\t}!{\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
+{@line_start}{P\t}!{\n}[1..]{\n} => "{{$1}}¤P\t\n"
 
 // ── MATCH ── merge any equal-key Y/P pair, anywhere in the file (fixed point,
 // both column orders). The unbounded `[..]` guarantees full recall.
-{@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}{{@uni}}[..]{@<}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@<}!{¤,\n}[1..]{¤P\t}{\n}{{@uni}}[..]{@<}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
+{@line_start}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}{{@uni}}[..]{@line_start}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
+{@line_start}!{¤,\n}[1..]{¤P\t}{\n}{{@uni}}[..]{@line_start}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
 // ── CLEANUP ── each unmatched keyed line becomes a one-cell row ───────────────
-{@<}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n} => "{{$2}}\,\n"
-{@<}!{¤,\n}[1..]{¤P\t}{\n} => "\,{{$0}}\n"
+{@line_start}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n} => "{{$2}}\,\n"
+{@line_start}!{¤,\n}[1..]{¤P\t}{\n} => "\,{{$0}}\n"
 
 // ── RESTORE ── masked commas back inside their quoted fields ──────────────────
 {⸴} => "\,"
 
 // ── HEADER ── re-add the column names ────────────────────────────────────────
-{@<<}{{@uni}}[..] => "youtube_title\,podcast_title\n{{$0}}"
+{@doc_start}{{@uni}}[..] => "youtube_title\,podcast_title\n{{$0}}"

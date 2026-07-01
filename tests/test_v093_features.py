@@ -1,6 +1,6 @@
 """Tests for the v0.9.3 engine features: count unions, the homogeneity
 flip, and the transformer rework (eager-commit branches, `|` filters,
-branch-per-moustache flow, `@<`/`@>` anchors)."""
+branch-per-moustache flow, `@line_start`/`@line_end` anchors)."""
 
 from himark import parser
 from himark.engine import execute, find_matches
@@ -162,23 +162,25 @@ def test_leading_template_is_the_whole_document_branch():
 
 
 def test_line_anchor_start():
-    # @< is a line start: position 0 or just after a newline.
-    assert m("{@<}{x}", "x yx x") == ["x"]
-    assert m("{@<}{x}", "ax\nx y") == ["x"]  # the line-start x, not the mid-line one
+    # @line_start is a line start: position 0 or just after a newline.
+    assert m("{@line_start}{x}", "x yx x") == ["x"]
+    assert m("{@line_start}{x}", "ax\nx y") == [
+        "x"
+    ]  # line-start x, not the mid-line one
 
 
 def test_line_anchor_end():
-    # @> is a line end: end of text or just before a newline.
-    assert m("{x}{@>}", "ax\nbx") == ["x", "x"]  # before the \n, and at the end
-    assert m("{x}{@>}", "xa\nxb") == []  # neither x is at a line end
+    # @line_end is a line end: end of text or just before a newline.
+    assert m("{x}{@line_end}", "ax\nbx") == ["x", "x"]  # before the \n, and at the end
+    assert m("{x}{@line_end}", "xa\nxb") == []  # neither x is at a line end
 
 
 def test_document_anchor_start():
-    # @<< is the document start: position 0 only, never mid-document.
-    assert m("{@<<}{x}", "x\nx x") == ["x"]
-    assert m("{@<<}{x}", "ax\nx") == []  # no x at position 0
+    # @doc_start is the document start: position 0 only, never mid-document.
+    assert m("{@doc_start}{x}", "x\nx x") == ["x"]
+    assert m("{@doc_start}{x}", "ax\nx") == []  # no x at position 0
 
 
 def test_document_anchor_end():
-    # @>> is the document end: the very end of the text, not a line break.
-    assert m("{x}{@>>}", "x\nx") == ["x"]  # only the final x
+    # @doc_end is the document end: the very end of the text, not a line break.
+    assert m("{x}{@doc_end}", "x\nx") == ["x"]  # only the final x

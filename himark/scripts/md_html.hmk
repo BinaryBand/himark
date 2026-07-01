@@ -66,40 +66,40 @@
 // that tells a table from prose with a stray '|'), then 0+ body lines -- each with
 // a '|'. Every such line not already starting with '|' gets a leading + trailing
 // one; Phase 4 then handles both forms with the same machinery.
-{@<}!{\n,|}[..]{|}!{\n}[..]{\n}{@<}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@>}{\n}{{@<}!{\n,|}[..]{|}!{\n}[..]{\n}[0,1]}[0..]
+{@line_start}!{\n,|}[..]{|}!{\n}[..]{\n}{@line_start}{{ ,:,-}}[..]{|}{{ ,:,-,|}}[..]{@line_end}{\n}{{@line_start}!{\n,|}[..]{|}!{\n}[..]{\n}[0,1]}[0..]
     => "{{$}}"
-    => {@<}!{|,\n}!{\n}[..]
+    => {@line_start}!{|,\n}!{\n}[..]
     => "|{{$}}|"
 
-// Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@<}` is a line
+// Headings: ATX, 1-6 '#'s, a required space, to end of line. `{@line_start}` is a line
 // start, so a mid-line or in-word '#' (e.g. `a # b`, `[x](#y)`) is never a head.
-{@<}{#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
+{@line_start}{#}[1..6]{ }[1..]!{\n}[1..] => "<h{{#0}}>{{$2}}</h{{#0}}>"
 
 // Setext headings: a text line underlined by a whole line of `=` (h1) or 2+ `-`
 // (h2). Placed before the rule below so a `text\n---` underline becomes a heading
 // rather than an `<hr/>`; a standalone rule line (no text above) still falls to it.
-{@<}!{<,#,>,\n}!{\n}[..]{\n}{=}[1..]{@>} => "<h1>{{$0}}{{$1}}</h1>"
-{@<}!{<,#,>,-,\n}!{\n}[..]{\n}{-}[2..]{@>} => "<h2>{{$0}}{{$1}}</h2>"
+{@line_start}!{<,#,>,\n}!{\n}[..]{\n}{=}[1..]{@line_end} => "<h1>{{$0}}{{$1}}</h1>"
+{@line_start}!{<,#,>,-,\n}!{\n}[..]{\n}{-}[2..]{@line_end} => "<h2>{{$0}}{{$1}}</h2>"
 
 // Horizontal rule: a whole line of 3+ of the same -, *, or _.
-{@<}{-,*,_}[3..]{@>} => "<hr/>"
+{@line_start}{-,*,_}[3..]{@line_end} => "<hr/>"
 
 // Blockquote: a run of '>' lines, joined inside one <blockquote>.
-{{@<}{>}{ }[0,1]!{\n}[1..]{\n}[0,1]}[1..]
+{{@line_start}{>}{ }[0,1]!{\n}[1..]{\n}[0,1]}[1..]
     => "<blockquote>{{$}}</blockquote>"
-    => {@<}{>}{ }[0,1]!{\n}[1..]
+    => {@line_start}{>}{ }[0,1]!{\n}[1..]
     => "{{$2}} "
 
 // Unordered list: a run of -, *, or + bullet lines, wrapped in <ul>.
-{{@<}{-,*,+}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
+{{@line_start}{-,*,+}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
     => "<ul>{{$}}</ul>"
-    => {@<}{-,*,+}{ }[1..]!{\n}[1..]
+    => {@line_start}{-,*,+}{ }[1..]!{\n}[1..]
     => "<li>{{$2}}</li>"
 
 // Ordered list: a run of `N.` lines, wrapped in <ol> (renumbered by the browser).
-{{@<}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
+{{@line_start}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]{\n}[0,1]}[1..]
     => "<ol>{{$}}</ol>"
-    => {@<}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]
+    => {@line_start}{{@d}}[1..]{.}{ }[1..]!{\n}[1..]
     => "<li>{{$3}}</li>"
 
 // --- Phase 4: tables --------------------------------------------------------
@@ -108,10 +108,10 @@
 // '|', trimmed, and the outer pipes dropped. The trim is structural, not a filter:
 // the leading and trailing `{ }[0..]` consume surrounding spaces, while the inner
 // grouping brace `{!{|,\n}[0..]!{|,\n, ,\t}}` captures a core ending on a non-space.
-{@<}{ }[0..]{|}{{ ,:,-,|}}[3..]{@>}{\n} => ""
-{{@<}{ }[0..]{|}!{\n}[0..]{\n}[0,1]}[2..]
+{@line_start}{ }[0..]{|}{{ ,:,-,|}}[3..]{@line_end}{\n} => ""
+{{@line_start}{ }[0..]{|}!{\n}[0..]{\n}[0,1]}[2..]
     => "<table>{{$}}</table>"
-    => {@<}!{\n}[1..]{|}{ }[0..]{@>}
+    => {@line_start}!{\n}[1..]{|}{ }[0..]{@line_end}
     => "<tr>{{ $0 }}</tr>"
     => {|}{ }[0..]{!{|,\n}[0..]!{|,\n, ,\t}}{ }[0..]
     => "<td>{{$2}}</td>"

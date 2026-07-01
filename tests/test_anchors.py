@@ -2,8 +2,9 @@
 
 The four line/doc anchors are no longer an engine primitive: each is declared in
 `himark/std.hmk` as a negative **lookaround** (`@doc_start = !<{@uni}`,
-`@line_start = !<!{\\n}`, ...) over the single zero-width `LOOKAROUND` opcode, with
-`@<`/`@>`/`@<<`/`@>>` as glyph sugar. Separately, a `@name = anchor` declaration
+`@line_start = !<!{\\n}`, ...) over the single zero-width `LOOKAROUND` opcode and
+named directly in a query (`{@line_start}`) -- there is no glyph sugar. Separately, a
+`@name = anchor` declaration
 introduces an **out-of-band named anchor**: a zero-width, non-rendering mark carried
 beside the text in a parallel `AnchorMap`, emitted by a `{{@name}}` template
 directive, matched by `{@name}` / `!{@name}`, and cleared by `{{/name}}`. Marks are
@@ -22,28 +23,35 @@ def _run(source: str, text: str = "") -> str:
 
 
 def test_line_anchors_bracket_each_line():
-    assert _run('{@<}!{\n}[1..]{@>} => "[{{$0}}]"', "ab\ncd\nef") == "[ab]\n[cd]\n[ef]"
+    assert (
+        _run('{@line_start}!{\n}[1..]{@line_end} => "[{{$0}}]"', "ab\ncd\nef")
+        == "[ab]\n[cd]\n[ef]"
+    )
 
 
 def test_doc_start_matches_only_the_first_line():
-    assert _run('{@<<}!{\n}[1..] => "X"', "ab\ncd") == "X\ncd"
+    assert _run('{@doc_start}!{\n}[1..] => "X"', "ab\ncd") == "X\ncd"
 
 
 def test_doc_end_matches_only_the_last_line():
-    assert _run('!{\n}[1..]{@>>} => "Y"', "ab\ncd") == "ab\nY"
+    assert _run('!{\n}[1..]{@doc_end} => "Y"', "ab\ncd") == "ab\nY"
 
 
 def test_line_start_after_consecutive_newlines():
-    # An empty middle line has no non-newline run, so [1..] skips it; `@<` still
-    # fires at the start of "a" and "b".
-    assert _run('{@<}!{\n}[1..]{@>} => "<{{$0}}>"', "a\n\nb") == "<a>\n\n<b>"
+    # An empty middle line has no non-newline run, so [1..] skips it; `@line_start`
+    # still fires at the start of "a" and "b".
+    assert (
+        _run('{@line_start}!{\n}[1..]{@line_end} => "<{{$0}}>"', "a\n\nb")
+        == "<a>\n\n<b>"
+    )
 
 
-def test_glyph_and_named_declaration_agree():
-    # `@<` is sugar for the std.hmk `@line_start`; both compile identically.
-    glyph = '{@<}!{\n}[1..]{@>} => "[{{$0}}]"'
+def test_named_anchor_equals_its_lookaround_definition():
+    # `@line_start` is declared as `!<!{\n}` in std.hmk; using the name and inlining
+    # its raw lookaround must compile to the same match.
     named = '{@line_start}!{\n}[1..]{@line_end} => "[{{$0}}]"'
-    assert _run(glyph, "a\nb") == _run(named, "a\nb") == "[a]\n[b]"
+    raw = '{!<!{\n}}!{\n}[1..]{!>!{\n}} => "[{{$0}}]"'
+    assert _run(named, "a\nb") == _run(raw, "a\nb") == "[a]\n[b]"
 
 
 def test_raw_negative_lookaround_is_a_line_start():

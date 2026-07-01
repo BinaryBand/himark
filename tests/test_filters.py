@@ -55,7 +55,7 @@ def test_document_filter_wraps_subject():
 
 def test_document_filter_query_pipeline():
     # A `=>` body is document-shaped: `@rstrip` runs over the whole matched subject.
-    src = '@rs = {{@s}}[1..]{@>>} => ""\n!{Q}[1..] => "[{{ $ | rs }}]"'
+    src = '@rs = {{@s}}[1..]{@doc_end} => ""\n!{Q}[1..] => "[{{ $ | rs }}]"'
     assert _run(src, "hi   ") == "[hi]"  # trailing whitespace stripped by the filter
 
 

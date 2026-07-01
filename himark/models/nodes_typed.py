@@ -141,8 +141,9 @@ class LookaroundNode:
     char *behind* the cursor is not in `inner`; `!>{X}` the char *ahead*. Matches a
     position without consuming or capturing. This is the sole boundary primitive --
     the four line/doc anchors are declared in `himark/std.hmk` as lookarounds over it
-    (`@doc_start = !<{@uni}`, `@line_start = !<!{\\n}`, ...), and `@<`/`@>`/`@<<`/`@>>`
-    are glyph sugar resolving to those names. Lowers to the `LOOKAROUND` opcode."""
+    (`@doc_start = !<{@uni}`, `@line_start = !<!{\\n}`, ...) and named directly in a
+    query (`{@line_start}`); there is no glyph sugar. Lowers to the `LOOKAROUND`
+    opcode."""
 
     direction: Literal["behind", "ahead"]
     inner: "SemanticNode"

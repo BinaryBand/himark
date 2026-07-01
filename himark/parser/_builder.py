@@ -125,16 +125,6 @@ def _resolve_reference_atom(ref: GRAMMARParser.ReferenceContext) -> t.SemanticNo
     )
 
 
-def _anchor_glyph_name(anchor: GRAMMARParser.AnchorContext) -> str:
-    """The std.hmk declaration name a `@<`/`@>`/`@<<`/`@>>` glyph is sugar for."""
-    lts = anchor.LT()
-    is_start = bool(lts)
-    is_document = len(lts or anchor.GT()) == 2
-    if is_document:
-        return "doc_start" if is_start else "doc_end"
-    return "line_start" if is_start else "line_end"
-
-
 def _count_int(
     term: GRAMMARParser.CountTermContext, count: GRAMMARParser.CountContext
 ) -> int:
@@ -341,13 +331,6 @@ class _AstBuilder(GRAMMARVisitor):
             elif atom.reference() is not None:
                 flush()
                 items.append(t.SeqItem(node=_resolve_reference_atom(atom.reference())))
-            elif atom.anchor() is not None:
-                flush()
-                items.append(
-                    t.SeqItem(
-                        node=self._resolve_variable(_anchor_glyph_name(atom.anchor()))
-                    )
-                )
             else:  # seqLit / ESC / HEX_ESC — literal text
                 buf.append(atom.getText())
         flush()
@@ -452,8 +435,6 @@ class _AstBuilder(GRAMMARVisitor):
         atoms = term.atom()
         if len(atoms) == 1 and atoms[0].reference() is not None:
             return _resolve_reference_atom(atoms[0].reference())
-        if len(atoms) == 1 and atoms[0].anchor() is not None:
-            return self._resolve_variable(_anchor_glyph_name(atoms[0].anchor()))
         if len(atoms) == 1 and atoms[0].lookaround() is not None:
             return self._resolve_lookaround(atoms[0].lookaround())
         if len(atoms) == 1 and atoms[0].macro() is not None:

@@ -166,7 +166,7 @@ A dynamic band endpoint resolves against earlier match state:
 
 ## 12. Worked example
 
-Source: `@<{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then wrap it in brackets.
+Source: `{@line_start}{a,b} => "[{{$}}]"` — at a line start, match one `a` or `b`, then wrap it in brackets.
 
 ```json
 {

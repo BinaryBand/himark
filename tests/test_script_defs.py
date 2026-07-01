@@ -18,7 +18,7 @@ def test_definition_expands_and_runs():
     # The DRY heading rule from the spec: two fragments compose into the full ATX
     # heading statement; anchors are unnumbered, so #0 is the level and $2 the text.
     src = (
-        "@head = {@<}{#}[1..6]{ }[1..]\n"
+        "@head = {@line_start}{#}[1..6]{ }[1..]\n"
         "@eol  = !{\\n}[1..]\n"
         '@head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"\n'
     )

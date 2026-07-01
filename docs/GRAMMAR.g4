@@ -89,7 +89,7 @@ band      : universe BAND universe           # valueBand
 sequence  : seqText? seqUnit (seqText | seqUnit)* ;
 seqUnit   : braceGroup count? | complement count? ;
 seqText   : seqAtom+ ;
-seqAtom   : reference | anchor | macro | HEX_ESC | ESC | seqLit ;
+seqAtom   : reference | macro | HEX_ESC | ESC | seqLit ;
 // BANG is intentionally absent: a `!{…}` in a sequence is always a `complement`
 // (a `seqUnit`), never literal text, matching the bareAlphabet `atom` precedence.
 seqLit    : NAME | INT | TEXT | DOT | LT | GT | EQ
@@ -110,7 +110,6 @@ atom      : lookaround
           | braceGroup count?
           | complement count?
           | reference
-          | anchor
           | macro
           | HEX_ESC
           | ESC
@@ -127,7 +126,6 @@ litToken  : NAME | INT | TEXT | DOT | LT | GT | EQ
 reference : INT (DOLLAR | HASH) INT?
           | (DOLLAR | HASH) INT
           ;
-anchor    : AT (LT LT? | GT GT?) ;
 macro     : AT NAME ;
 // A zero-width negative lookaround: `!<{X}` asserts the char *behind* the cursor is
 // not in X, `!>{X}` the char *ahead*. Negative-only (all four line/doc anchors are

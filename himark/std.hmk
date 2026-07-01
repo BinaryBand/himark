@@ -22,9 +22,9 @@
 // ── Anchors ───────────────────────────────────────────────────────────────────
 
 // The four line/doc anchors, declared over the single zero-width lookaround
-// primitive (`!<{X}` = "no X behind me", `!>{X}` = "no X ahead"). The `@<`/`@>`/
-// `@<<`/`@>>` glyphs are sugar that resolve to these names, so `{@<}` and
-// `{@line_start}` are the same match. The engine keeps no dedicated anchor opcode.
+// primitive (`!<{X}` = "no X behind me", `!>{X}` = "no X ahead"). A query names them
+// directly -- `{@line_start}`, `{@doc_end}`, etc. -- there is no glyph sugar and the
+// engine keeps no dedicated anchor opcode.
 @doc_start = !<{@uni}    // nothing before me  -> position 0
 @doc_end = !>{@uni}      // nothing after me   -> end of document
 @line_start = !<!{\n}    // no non-newline before -> position 0, or just after a \n
@@ -60,8 +60,8 @@
 // moustache), so `$ | trim` == str.strip over the subject text. `{{@s}}` is the
 // heterogeneous whitespace class -- a single `{@s}` matches a run of one repeated
 // char, so a mixed "\n\t" run would only half-strip.
-@lstrip = {@<<}{{@s}}[1..] => ""
-@rstrip = {{@s}}[1..]{@>>} => ""
+@lstrip = {@doc_start}{{@s}}[1..] => ""
+@rstrip = {{@s}}[1..]{@doc_end} => ""
 @trim = "{{ $ | lstrip | rstrip }}"
 
 // Indent: prefix a tab at every line start (an empty subject stays empty). A
@@ -69,6 +69,6 @@
 // a tab before the first character, then a tab after every newline -- composed.
 // Re-applied inside-out by an enclosing fixed-point pass, indentation accumulates
 // with nesting (see scripts/format_html).
-@headtab = {@<<}{@uni} => "\t{{$0}}"
+@headtab = {@doc_start}{@uni} => "\t{{$0}}"
 @nlindent = {\n} => "\n\t"
 @indent = "{{ $ | headtab | nlindent }}"

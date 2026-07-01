@@ -69,7 +69,7 @@ Named alphabets are declared in the **prelude** (`himark/std.hmk`), the single c
 | `@ascii` | `U+0000..U+007F`               |
 | `@uni`   | `U+0000..U+10FFFF`             |
 
-The prelude also declares the four **anchors** (below) as lookarounds -- they are variables too, resolvable directly (`{@line_start}`) as well as through their glyphs:
+The prelude also declares the four **anchors** (below) as lookarounds -- they are variables too, named directly in a query (`{@line_start}`):
 
 | Name          | Expands to  |
 | ------------- | ----------- |
@@ -82,16 +82,16 @@ The prelude also declares the four **anchors** (below) as lookarounds -- they ar
 
 ## :anchor: Anchors
 
-Zero-width, capture the empty string. A single angle is a **line** edge, a double angle the whole **document** edge; `<` is a start, `>` an end:
+Zero-width, capture the empty string. Named directly (there is no glyph sugar):
 
-| Anchor        | Matches                                    | Sugar for                   |
-| ------------- | ------------------------------------------ | --------------------------- |
-| `@<` / `@>`   | start / end of **line** (pos 0 or by `\n`) | `@line_start` / `@line_end` |
-| `@<<` / `@>>` | start / end of the **document**            | `@doc_start` / `@doc_end`   |
+| Anchor                        | Matches                                    |
+| ----------------------------- | ------------------------------------------ |
+| `@line_start` / `@line_end`   | start / end of **line** (pos 0 or by `\n`) |
+| `@doc_start` / `@doc_end`     | start / end of the **document**            |
 
-A whole line is `{@<}!{\n}[1..]{@>}`.
+A whole line is `{@line_start}!{\n}[1..]{@line_end}`.
 
-The anchors are not an engine primitive: each is declared in `himark/std.hmk` over the sole zero-width **lookaround** primitive `!<{X}` / `!>{X}` -- a negative assertion that the character _behind_ (`<`) or _ahead_ (`>`) is **not** in the class `X`. So `@doc_start = !<{@uni}` reads "no character before me" (position 0), and `@line_start = !<!{\n}` reads "no non-newline before me" (position 0, or just after a `\n`). The `@<` glyphs are pure sugar resolving to these names.
+The anchors are not an engine primitive: each is declared in `himark/std.hmk` over the sole zero-width **lookaround** primitive `!<{X}` / `!>{X}` -- a negative assertion that the character _behind_ (`<`) or _ahead_ (`>`) is **not** in the class `X`. So `@doc_start = !<{@uni}` reads "no character before me" (position 0), and `@line_start = !<!{\n}` reads "no non-newline before me" (position 0, or just after a `\n`).
 
 ---
 
@@ -236,7 +236,7 @@ Every `{...}` in matching position is a **capture group**, numbered from **0** i
 
 A **grouping brace** (a body that concatenates constructs) captures its full text as **one** group, one number; its inner braces aren't numbered (the same collapse `[count]` performs). A **bare** grouping brace is `{...}[1]`: `{1{am,pm}}` captures `1am`/`1pm` as one `$0`, where `{1}{am,pm}` captures the same text as two. Capture shape only.
 
-Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference -- are each **one** group regardless of inner braces. An **anchor** (`{@<}`) is the exception: zero-width and non-capturing, it takes **no** number, so the groups around it stay contiguous. A repeated group `{X}[n]` is one number, captured as one string.
+Single-position constructs -- object `{{a,A}}`, band `{A::x..y}`, subtractive `!{...}`, reference -- are each **one** group regardless of inner braces. An **anchor** (`{@line_start}`) is the exception: zero-width and non-capturing, it takes **no** number, so the groups around it stay contiguous. A repeated group `{X}[n]` is one number, captured as one string.
 
 Input `### Sphinxofblackquartz`, expression `{#}[1..]{ }{Sphinx}{of{black}{quartz}}`:
 
@@ -337,7 +337,7 @@ The shipped set is `trim` (strip leading/trailing whitespace) and `indent` (pref
 `@name = <body>` declares either an alphabet or a filter, told apart by the **body shape**:
 
 - a **bare pattern** body (`@d = 0..9`) is a named alphabet (textual, expanded at `@name`);
-- a body with a top-level arrow (`@rstrip = {{@s}}[1..]{@>>} => ""`) or a leading template (`@double = "{{ $ * 2 }}"`) is a **filter**, invoked at a `| name` pipe.
+- a body with a top-level arrow (`@rstrip = {{@s}}[1..]{@doc_end} => ""`) or a leading template (`@double = "{{ $ * 2 }}"`) is a **filter**, invoked at a `| name` pipe.
 
 Two application shapes fall out of the body:
 
@@ -364,7 +364,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 
 ```proto
 // tidy: one statement, wrapped onto continuation lines
-{@<}{#}[1..6]{ }[1..]!{\n}[1..]
+{@line_start}{#}[1..6]{ }[1..]!{\n}[1..]
   => "<h{{#0}}>{{$2}}</h{{#0}}>"     // a continuation line (leading arrow)
 
 { }[2..]{\n} => "<br/>\n"            // the next statement
@@ -373,7 +373,7 @@ himark transpile in.md --script pipeline.hmk --out out.md
 **Definitions.** A script line `@name = <body>` binds `@name` to Himark source -- the **same mechanism** as a [prelude alphabet](#variables), scoped to this file. It is a definition, not a statement: the lone `=` (never `=>`) after the name marks it. The body is any pattern fragment, so a recurring shape is named once and reused:
 
 ```proto
-@head = {@<}{#}[1..6]{ }[1..]      // an ATX head marker at line start
+@head = {@line_start}{#}[1..6]{ }[1..]      // an ATX head marker at line start
 @eol  = !{\n}[1..]                 // the rest of a line
 
 @head@eol => "<h{{#0}}>{{$2}}</h{{#0}}>"   // expands to the full heading rule
