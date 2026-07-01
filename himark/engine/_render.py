@@ -29,6 +29,7 @@ scaffolding for the template operators in docs/ALGEBRA.md.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from himark.engine._types import Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
@@ -42,6 +43,7 @@ from himark.models.compiled import (
     ExUnOp,
     Expr,
     Moustache,
+    Step,
     Template,
 )
 from himark.models.exceptions import CompileError
@@ -79,23 +81,6 @@ class Universe:
         return self.alphabet.value(self.text) if self.alphabet is not None else None
 
 
-def _indent(s: str) -> str:
-    """Prefix every line of `s` with one tab. A line filter (not a scalar one): it
-    reshapes multi-line text rather than the whole string at once, which is what
-    lets indentation **accumulate** under an inside-out wrap — text re-indented by
-    each enclosing pass ends up as deep as its nesting (see scripts/html_format.hmk)."""
-    return "" if s == "" else "\t" + s.replace("\n", "\n\t")
-
-
-# The native filter set — closed and string-only: `trim` strips surrounding
-# whitespace; `indent` tabs every line. Filters take no arguments (the parser
-# enforces that); the template layer only ever moves text.
-_FILTERS = {
-    "trim": str.strip,
-    "indent": _indent,
-}
-
-
 def render(
     template: Template, current: str, stages: list[Match]
 ) -> tuple[str, list[tuple[int, int]] | None]:
@@ -130,27 +115,39 @@ def render(
 # ── Expression evaluation (the parser already built the `Expr`) ────────────────
 
 
-def _eval(expr: Expr, current: str, stages: list[Match]) -> Universe:
-    """Evaluate a compiled moustache `Expr` to a `Universe` against the stages."""
+def _eval(
+    expr: Expr,
+    current: str,
+    stages: list[Match],
+    subject: Universe | None = None,
+) -> Universe:
+    """Evaluate a compiled moustache `Expr` to a `Universe` against the stages.
+
+    `subject` is the universe bound to `$` inside a **value-shaped filter body** —
+    the pipe's actual subject, carrying its alphabet + band so `$ * 2` keeps the
+    subject's width. It is None at the top level, where `$` is the flowing text."""
     if isinstance(expr, ExLit):
         return Universe(expr.text)
     if isinstance(expr, ExCurrent):
-        return Universe(current)  # `{{$}}` — the flowing subject (a @uni string)
+        # `{{$}}` — the pipe's subject: the filter subject inside a value-filter
+        # body, else the flowing text (a plain @uni string).
+        return subject if subject is not None else Universe(current)
     if isinstance(expr, ExRef):
         return _eval_ref(expr, stages)
     if isinstance(expr, ExConcat):
         # A concatenation is always a plain @uni string (docs/ALGEBRA.md).
-        return Universe("".join(_eval(p, current, stages).render() for p in expr.parts))
+        return Universe(
+            "".join(_eval(p, current, stages, subject).render() for p in expr.parts)
+        )
     if isinstance(expr, ExFilter):
-        text = _apply_filter(expr.name, _eval(expr.src, current, stages).render())
-        return Universe(text)
+        return _apply_filter(expr, current, stages, subject)
     if isinstance(expr, ExBinOp):
-        lhs = _eval(expr.lhs, current, stages)
-        rhs = _eval(expr.rhs, current, stages)
+        lhs = _eval(expr.lhs, current, stages, subject)
+        rhs = _eval(expr.rhs, current, stages, subject)
         raw = _BINOPS[expr.op](_operand_value(lhs), _operand_value(rhs))
         return _encode(raw, lhs)  # LHS alphabet + band win
     if isinstance(expr, ExUnOp):
-        operand = _eval(expr.operand, current, stages)
+        operand = _eval(expr.operand, current, stages, subject)
         return _encode(~_operand_value(operand), operand)  # only `~` today
     raise CompileError(f"Unknown moustache expression: {type(expr).__name__}")
 
@@ -233,10 +230,27 @@ def _eval_ref(ref: ExRef, stages: list[Match]) -> Universe:
     return Universe(capture.text, capture.alphabet, capture.band)
 
 
-def _apply_filter(name: str, text: str) -> str:
-    """Apply one named filter. The set is closed and native (`trim`, `indent`); an
-    unknown name is an error (the parser already rejected arguments)."""
-    fn = _FILTERS.get(name)
-    if fn is None:
-        raise CompileError(f"Unknown template filter: '{name}'")
-    return fn(text)
+def _apply_filter(
+    expr: ExFilter, current: str, stages: list[Match], subject: Universe | None
+) -> Universe:
+    """Apply a declared filter pipe `src | name`. The compiler baked the filter's
+    compiled body onto `expr.body` (docs/HMK.md), so there is no registry here:
+
+      * a value-shaped filter (`body` is an `Expr`, from a single `{{ … }}`
+        moustache) is evaluated with `$` bound to the subject universe, so the
+        subject's alphabet + band flow through the arithmetic;
+      * a document-shaped filter (`body` is a `list[list[Step]]` pipeline) runs over
+        the subject's rendered text, yielding a plain `@uni` string.
+
+    The pipeline runner is reached by a **deferred** import: `engine/__init__`
+    imports this module, so the cycle can only close at call time (and it keeps the
+    engine free of any parser import)."""
+    src = _eval(expr.src, current, stages, subject)
+    body = expr.body
+    if body is None:
+        raise CompileError(f"Unknown template filter: '{expr.name}'")
+    if isinstance(body, list):  # document-shaped: splice the pipeline over the text
+        from himark.engine import run_pipeline
+
+        return Universe(run_pipeline(cast("list[list[Step]]", body), src.render()))
+    return _eval(body, current, stages, subject=src)  # value-shaped: `$` is the subject

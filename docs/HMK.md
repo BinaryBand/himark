@@ -302,14 +302,23 @@ All left-associative; parens override. So `2 + 3 * 4` is `14`, `("<h", #0, ">")`
 
 ### Filters
 
-A moustache value may be piped through **filters** -- a small, fixed, native set of pure string transforms: `{{ accessor | f | g }}`. Filters are **template-only** (the matcher stays declarative) and take **no arguments**; everything in a template is text.
+A moustache value may be piped through **filters**: `{{ accessor | f | g }}`, left-to-right. Filters are **declared in L2**, not a native engine set -- each is an ordinary himark pipeline named in [`std.hmk`](../himark/std.hmk) (or a script-local `@name =` definition). `x | name` applies the declared pipeline `name` to the subject `x`, so a filter and a query are the same thing: a pipeline over a subject.
 
-| Filter   | Effect                            |
-| -------- | --------------------------------- |
-| `trim`   | strip leading/trailing whitespace |
-| `indent` | prefix every line with one tab    |
+The shipped set is `trim` (strip leading/trailing whitespace) and `indent` (prefix every line with one tab). `indent` accumulates under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
 
-`indent` is a **line** filter -- a tab on every line -- so indentation **accumulates** under an inside-out wrap (each enclosing pass re-indents the body), which is how a nested block ends up as deep as its nesting.
+#### Declaring a filter
+
+`@name = <body>` declares either an alphabet or a filter, told apart by the **body shape**:
+
+- a **bare pattern** body (`@d = 0..9`) is a named alphabet (textual, expanded at `@name`);
+- a body with a top-level arrow (`@rstrip = {{@s}}[1..]{@>>} => ""`) or a leading template (`@double = "{{ $ * 2 }}"`) is a **filter**, invoked at a `| name` pipe.
+
+Two application shapes fall out of the body:
+
+- **value-shaped** -- a body that is a single `{{ ... }}` moustache (`@double = "{{ $ * 2 }}"`). Applied by evaluating that expression with `$` bound to the subject **universe**, so the subject's alphabet and band survive: `$ * 2` over a `{@d::0..255}` capture stays banded (see [ALGEBRA.md](ALGEBRA.md)). This is the shape the L2 crypto primitives use.
+- **document-shaped** -- any richer body (a `=>` query chain, or a template with literals/multiple moustaches). Applied by running the pipeline over the subject's rendered **text**, yielding a plain `@uni` string. `trim` composes two document filters (`lstrip`, `rstrip`) through a single value-shaped moustache.
+
+Inside a filter body, `$` is the piped-in subject (the filter's argument -- no parameter list is needed). An unknown filter name is a compile-time error.
 
 ---
 

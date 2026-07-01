@@ -109,11 +109,11 @@ A `{{ … }}` body compiles to a small expression tree. Each node is a JSON obje
 | current | `{"cur": true}` | `$` — the pipe's current subject, the whole text flowing into this step (`{{$}}`); `.` is a deprecated spelling. |
 | reference | `{"ref": [stage, is_count, path]}` | a capture accessor. `stage`: pipeline stage index, or `null` for the current stage. `is_count`: `true` for the `#` sigil (a repetition count) vs `false` for `$` (text). `path`: dotted capture path as `[int]`, or `null` for the stage's whole text. A `#` always carries a `path`. |
 | concat | `{"cat": [<expr>, ...]}` | parenthesised comma-concatenation `( a, b, … )` — parts joined. |
-| filter | `{"filter": "<name>", "src": <expr>}` | a filter pipe `src \| name`. |
+| filter | `{"filter": "<name>", "src": <expr>}` | a filter pipe `src \| name`. The name resolves to a filter **declared in `std.hmk`** (or a script-local `@name =`); the wire form only names it. |
 | binop | `{"binop": [op, <lhs>, <rhs>]}` | a binary value operator. `op` is the spelling: arithmetic `+ - * / %`, bitwise `& ^ << >>`, or a backtick for or. Computed on the operands' values, LHS alphabet+band win, then normalize+encode (see [ALGEBRA.md](ALGEBRA.md)). Total: `x/0 = x%0 = 0`. |
 | unop | `{"unop": [op, <operand>]}` | a unary value operator -- only `~` (bitwise not) today. Complement then normalize+encode under the operand's own alphabet+band. |
 
-Filter names are a closed set: **`trim`**, **`indent`**. An executor must implement exactly these; an unknown filter is a payload it cannot run (treat as a version mismatch).
+Filters are **declared in L2** (`std.hmk`), not a closed engine set: a `filter` node names a filter an executor resolves from its own compiled `std.hmk` (the shipped set is `trim` and `indent`). The compiler bakes the declared body onto the node at compile time, so a self-contained payload could inline it; the named form keeps the wire compact and defers to the executor's prelude. An unknown name is a payload it cannot run.
 
 ## 8. Exclusions (`excl`)
 

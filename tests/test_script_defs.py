@@ -47,7 +47,7 @@ def test_definition_can_reference_earlier_definition_and_prelude():
 
 
 def test_definition_shadowing_prelude_variable_errors():
-    with pytest.raises(CompileError, match="shadows a prelude variable"):
+    with pytest.raises(CompileError, match="shadows a prelude declaration"):
         parser.compile_script("@d = {x}")
 
 

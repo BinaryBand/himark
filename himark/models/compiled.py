@@ -67,11 +67,25 @@ class ExConcat:
 
 @dataclass(slots=True)
 class ExFilter:
-    """A filter pipe `src | name` — `src`'s value transformed by the named filter
-    (`trim`, `indent`). The filter set lives in the renderer; this only names one."""
+    """A filter pipe `src | name` — `src`'s value transformed by the declared filter
+    `name`. Filters are declared in L2 (`himark/std.hmk`, or a script-local `@name =`
+    definition) as ordinary himark pipelines; the compiler resolves `name` and
+    attaches its **compiled body** here so the renderer never needs a registry:
+
+      * `body` is an `Expr` for a **value-shaped** filter — one whose pipeline is a
+        single bare `{{ … }}` moustache (`@double = "{{ $ * 2 }}"`). Applied by
+        evaluating that `Expr` with `$` bound to the subject universe, so the
+        subject's alphabet + band survive (docs/ALGEBRA.md).
+      * `body` is a compiled pipeline (`list[list[Step]]`) for a **document-shaped**
+        filter (`@trim = {@s}… => "…"`). Applied by running that pipeline over the
+        subject's rendered text, yielding a plain `@uni` string.
+
+    `body` is a compile-time attachment: it does not serialise (the wire form names
+    the filter; an executor resolves it from its own std.hmk — see PAYLOAD.md)."""
 
     src: Expr
     name: str
+    body: "Expr | list[list[Step]] | None" = None
 
 
 @dataclass(slots=True)

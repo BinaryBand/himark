@@ -1,17 +1,23 @@
 // Himark standard prelude — the centralized declaration file loaded before every
 // run. The single source of truth for named alphabets.
 //
-// This file holds DECLARATIONS, not match statements. One form:
+// This file holds DECLARATIONS, not match statements. `@name = <body>` declares
+// either a named alphabet or a filter, told apart by the body shape:
 //
-//   @name = <himark source>   a named alphabet — `@name` resolves to the source on
+//   @name = <bare pattern>    a named alphabet — `@name` resolves to the source on
 //                             the right before tokenizing. A variable may reference
 //                             others; resolution repeats until stable. The engine
 //                             has no built-in alphabet knowledge; it only sees the
 //                             ranges (`..`) and congruence classes (`,`) these
 //                             resolve to.
 //
-// (Filters are a closed, native set in `engine/_render`: `b256`/`uint`/`pad` plus
-// the `trim`/`indent` string conveniences. There is no declared filter form.)
+//   @name = <pipeline>        a declared filter — an ordinary himark pipeline (a
+//                             `=>`/`<=>` chain, or a `"…"` template) applied to a
+//                             subject at a `| name` use site. A single `{{ … }}`
+//                             moustache body is value-shaped (band-preserving, e.g.
+//                             `@double = "{{ $ * 2 }}"`); a query pipeline is
+//                             document-shaped, run over the subject's text. Filters
+//                             are L2 now, not an engine set (docs/HMK.md).
 
 // ── Named alphabets ───────────────────────────────────────────────────────────
 
@@ -33,6 +39,25 @@
 // Code-point ranges, written with fixed-width hex escapes (\xHH, \UHHHHHHHH).
 @ascii = \x00..\x7f
 @uni = \x00..\U0010ffff
-// base-256: every byte, an ordered value alphabet (`{@b256::x..y}`). Distinct from
-// the `b256` template filter (which re-encodes a value as base-256 bytes).
+// base-256: every byte, an ordered value alphabet (`{@b256::x..y}`).
 @b256 = \x00..\xff
+
+// ── Declared filters ──────────────────────────────────────────────────────────
+
+// Strip leading / trailing whitespace runs at the document boundaries. Each is a
+// one-statement document filter; `trim` composes them (a single value-shaped
+// moustache), so `$ | trim` == str.strip over the subject text. `{{@s}}` is the
+// heterogeneous whitespace class -- a single `{@s}` matches a run of one repeated
+// char, so a mixed "\n\t" run would only half-strip.
+@lstrip = {@<<}{{@s}}[1..] => ""
+@rstrip = {{@s}}[1..]{@>>} => ""
+@trim = "{{ $ | lstrip | rstrip }}"
+
+// Indent: prefix a tab at every line start (an empty subject stays empty). A
+// zero-width anchor never matches on its own, so this is two width-ful passes --
+// a tab before the first character, then a tab after every newline -- composed.
+// Re-applied inside-out by an enclosing fixed-point pass, indentation accumulates
+// with nesting (see scripts/format_html).
+@headtab = {@<<}{@uni} => "\t{{$0}}"
+@nlindent = {\n} => "\n\t"
+@indent = "{{ $ | headtab | nlindent }}"

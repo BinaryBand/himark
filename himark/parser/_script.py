@@ -21,30 +21,37 @@ from himark.parser._helpers import strip_insignificant_ws
 
 def compile_script(source: str) -> list[list[Step]]:
     """Compile a `.hmk` script — statements plus optional local `@name = <body>`
-    definitions — into a runnable pipeline. A definition resolves to its body
-    wherever `@name` is used (the same textual mechanism as a prelude alphabet),
-    leaving no trace in the compiled pipeline. Shadowing a prelude variable or
-    redefining a local is a `CompileError`."""
+    definitions — into a runnable pipeline. A local definition is either a textual
+    **alphabet** (a bare-pattern body, resolved wherever `@name` is used, the same
+    mechanism as a prelude alphabet) or a declared **filter** (a pipeline/template
+    body, compiled and invoked at a `| name` use site) — told apart by the body
+    shape, exactly as in the prelude. Both leave no trace in the compiled pipeline.
+    Shadowing a prelude variable or redefining a local is a `CompileError`."""
     from himark.parser import _parse_script_tree, parse
-    from himark.prelude import VARIABLES
+    from himark.prelude import FILTERS, VARIABLES, compile_filter_body, _is_filter_body
 
     source = strip_insignificant_ws(source)
     local: dict[str, str] = {}
+    filters: dict[str, object] = dict(FILTERS)
     pipeline: list[list[Step]] = []
     for item in _parse_script_tree(source).scriptItem():
         defn = item.definition()
         if defn is not None:
             name = defn.NAME().getText()
-            if name in VARIABLES:
-                raise CompileError(f"definition @{name} shadows a prelude variable")
-            if name in local:
+            if name in VARIABLES or name in FILTERS:
+                raise CompileError(f"definition @{name} shadows a prelude declaration")
+            if name in local or name in filters:
                 raise CompileError(f"@{name} is already defined")
-            body = defn.pattern()
-            local[name] = source[body.start.start : body.stop.stop + 1]
+            body = defn.definitionBody()
+            body_src = source[body.start.start : body.stop.stop + 1]
+            if _is_filter_body(body_src):
+                filters[name] = compile_filter_body(body_src, local, filters)
+            else:
+                local[name] = body_src
             continue
         stmt = item.statement()
         stmt_src = source[stmt.start.start : stmt.stop.stop + 1]
-        pipeline.append(parse(stmt_src, variables=local or None))
+        pipeline.append(parse(stmt_src, variables=local or None, filters=filters))
     return pipeline
 
 

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+from typing import cast
+
 from himark.models.compiled import (
     ExBinOp,
     ExConcat,
@@ -27,6 +29,7 @@ from himark.models.compiled import (
     ExUnOp,
     Expr,
     Moustache,
+    Step,
     Template,
 )
 from himark.parser._generated.GRAMMARParser import GRAMMARParser
@@ -431,7 +434,15 @@ class _ExprVisitor(GRAMMARVisitor):
     """Lower a `moustacheExpression` CST into an `Expr` tree — the moustache compiler,
     a thin walk over the grammar's own parse rather than a hand-rolled tokenizer and
     recursive descent. The leaf-value semantics the grammar can't state (a `#` needs
-    a capture index; a dotted path is a tuple of ints) live in `visitAccessor`."""
+    a capture index; a dotted path is a tuple of ints) live in `visitAccessor`.
+
+    `filters` is the declared-filter registry in scope (prelude globals plus any
+    script-local `@name =` filters): a `| name` pipe resolves `name` here and bakes
+    its compiled body onto the `ExFilter`, so the renderer needs no registry and an
+    unknown filter is caught at compile time."""
+
+    def __init__(self, filters: dict[str, object] | None = None) -> None:
+        self.filters = filters or {}
 
     def visitMoustacheExpression(
         self, ctx: GRAMMARParser.MoustacheExpressionContext
@@ -441,7 +452,11 @@ class _ExprVisitor(GRAMMARVisitor):
     def visitPipeExpr(self, ctx: GRAMMARParser.PipeExprContext) -> Expr:
         value = self.visit(ctx.orExpr())
         for f in ctx.filter_():  # `| name` pipes, left-associative
-            value = ExFilter(value, f.NAME().getText())
+            name = f.NAME().getText()
+            if name not in self.filters:
+                raise CompileError(f"Unknown template filter: '{name}'")
+            body = cast("Expr | list[list[Step]]", self.filters[name])
+            value = ExFilter(value, name, body)
         return value
 
     def _binop_chain(self, ctx) -> Expr:
@@ -519,15 +534,16 @@ class _ExprVisitor(GRAMMARVisitor):
         return ExRef(stage=stage, is_count=is_count, path=path)
 
 
-def _compile_moustache(body: str) -> Expr:
+def _compile_moustache(body: str, filters: dict[str, object] | None = None) -> Expr:
     """Parse one `{{ … }}` body into an `Expr`. The moustache is whitespace-
     insensitive but the shared lexer treats a space as a token, so insignificant
     whitespace is stripped first (the mirror of `strip_insignificant_ws`); then the
-    grammar's `moustacheExpression` rule parses it and `_ExprVisitor` lowers it."""
+    grammar's `moustacheExpression` rule parses it and `_ExprVisitor` lowers it,
+    resolving any `| name` filter pipe against `filters`."""
     from himark.parser import _make_parser  # deferred: __init__ imports this module
 
     tree = _make_parser(_strip_moustache_ws(body)).moustacheExpression()
-    return _ExprVisitor().visit(tree)
+    return _ExprVisitor(filters).visit(tree)
 
 
 def _strip_moustache_ws(body: str) -> str:
@@ -546,19 +562,22 @@ def _strip_moustache_ws(body: str) -> str:
     return "".join(out)
 
 
-def compile_template_text(text: str) -> Template:
+def compile_template_text(
+    text: str, filters: dict[str, object] | None = None
+) -> Template:
     """Lower a template body (the already-unescaped literal text of a `"…"` template,
     or of a brace-free pattern step) into a ``Template``.
 
     Splits the text into an ordered list of literal strings and ``Moustache``
     references — the structure the renderer used to recompute by regex on every
-    render. Works straight off text, so it needs no AST node."""
+    render. Works straight off text, so it needs no AST node. `filters` is the
+    declared-filter registry a `| name` moustache pipe resolves against."""
     parts: list[str | Moustache] = []
     last = 0
     for mo in _MOUSTACHE_RE.finditer(text):
         if mo.start() > last:
             parts.append(text[last : mo.start()])
-        parts.append(Moustache(expr=_compile_moustache(mo.group(1))))
+        parts.append(Moustache(expr=_compile_moustache(mo.group(1), filters)))
         last = mo.end()
     if last < len(text):
         parts.append(text[last:])

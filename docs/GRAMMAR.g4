@@ -37,7 +37,13 @@ snippet  : sp statement sp EOF ;
 patternOnly : sp pattern sp EOF ;
 
 scriptItem : definition | statement ;
-definition : AT NAME EQ pattern ;
+definition : AT NAME EQ definitionBody ;
+// A definition body is either a textual alphabet (a bare `pattern`) or a declared
+// filter (a `statement` -- a `=>`/`<=>` pipeline, or a lone `"…"` template step).
+// The two arms overlap for a bare single-step body; `_script`/`prelude` classify
+// alphabet-vs-filter by body shape (arrow or leading template), so which arm ANTLR
+// picks is immaterial -- both retain the source span the loader re-reads.
+definitionBody : statement | pattern ;
 sp        : NL* ;
 
 statement : step (sp arrow sp step)* ;

@@ -16,11 +16,13 @@ def test_shipped_prelude_loads():
 
 
 def _load(text, tmp_path, monkeypatch):
-    """Parse `text` as a prelude by pointing the loader at a temp file."""
+    """Parse `text` as a prelude by pointing the loader at a temp file. `_load` now
+    returns `(variables, filter_srcs)`; these tests only assert on the alphabets."""
     path = tmp_path / "p.hmk"
     path.write_text(text, "utf-8")
     monkeypatch.setattr(prelude, "PRELUDE_PATH", path)
-    return prelude._load()
+    variables, _filters = prelude._load()
+    return variables
 
 
 def test_parses_alphabet_declarations(tmp_path, monkeypatch):
@@ -46,7 +48,22 @@ def test_non_declaration_line_is_an_error(tmp_path, monkeypatch):
         _load("{a..z} => x\n", tmp_path, monkeypatch)
 
 
-def test_filter_declaration_is_now_rejected(tmp_path, monkeypatch):
-    # Derived filters were removed; a `filter …` line is no longer a declaration.
+def test_bare_filter_keyword_is_rejected(tmp_path, monkeypatch):
+    # A filter is declared with the `@name =` sigil, not a `filter …` keyword; a
+    # bare keyword line is still not a declaration.
     with pytest.raises(CompileError):
-        _load("filter trimmed = . | trim\n", tmp_path, monkeypatch)
+        _load("filter trimmed = $ | trim\n", tmp_path, monkeypatch)
+
+
+def test_pipeline_body_is_classified_as_a_filter(tmp_path, monkeypatch):
+    # `@name = <pipeline>` (an arrow body or a leading template) is a declared
+    # filter, held apart from the textual alphabets by body shape.
+    path = tmp_path / "p.hmk"
+    path.write_text(
+        '@d = 0..9\n@rstrip = {{@s}}[1..]{@>>} => ""\n@double = "{{ $ * 2 }}"\n',
+        "utf-8",
+    )
+    monkeypatch.setattr(prelude, "PRELUDE_PATH", path)
+    variables, filter_srcs = prelude._load()
+    assert variables == {"d": "0..9"}
+    assert set(filter_srcs) == {"rstrip", "double"}

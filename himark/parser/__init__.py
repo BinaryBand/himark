@@ -73,14 +73,26 @@ def _all_literal(pattern: GRAMMARParser.PatternContext) -> bool:
     return all(f.literalRun() is not None for f in pattern.factor())
 
 
-def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
+def parse(
+    text: str,
+    variables: dict[str, str] | None = None,
+    filters: dict[str, object] | None = None,
+) -> list[Step]:
     """Parse and **compile** one statement into the product the engine VM consumes:
     a `Program` per query step, a `Template` per template step. The compiler builds a
     transient semantic IR (`models.nodes_typed`) per construct and lowers it to
     opcodes; the engine never sees an AST node. A `<=>` (fixed-point) statement is
-    flagged on its first step from the `FIXARROW` token, so no caller rewrites arrows."""
+    flagged on its first step from the `FIXARROW` token, so no caller rewrites arrows.
+
+    `filters` is the declared-filter registry (prelude globals plus any script-local
+    filters) a `| name` moustache pipe resolves against; it defaults to the prelude
+    `FILTERS` so a bare `parse(...)` still sees the standard filters."""
     from himark.prelude import VARIABLES
 
+    if filters is None:
+        from himark.prelude import FILTERS  # deferred: prelude compiles its own
+
+        filters = FILTERS
     builder = _AstBuilder({**VARIABLES, **(variables or {})})
     steps: list[Step] = []
     text = strip_insignificant_ws(text)
@@ -89,7 +101,9 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
     for step in statement.step():
         template = step.template()
         if template is not None:
-            steps.append(compile_template_text(unescape(template.getText()[1:-1])))
+            steps.append(
+                compile_template_text(unescape(template.getText()[1:-1]), filters)
+            )
             continue
         pattern = step.pattern()
         if variables:
@@ -107,7 +121,7 @@ def parse(text: str, variables: dict[str, str] | None = None) -> list[Step]:
                 _resolve_leaf_escapes(f.literalRun().getText())
                 for f in pattern.factor()
             )
-            steps.append(compile_template_text(literal))
+            steps.append(compile_template_text(literal, filters))
         else:
             steps.append(builder.compile_pattern(pattern))
     if fixed_point and steps:
