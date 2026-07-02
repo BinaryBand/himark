@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-from himark.engine._anchors import AnchorMap
+from himark.engine._anchors import AnchorMap, place
 from himark.engine._types import Match
 from himark.models.alphabet import Alphabet, RangeAlphabet
 from himark.models.compiled import (
@@ -85,7 +85,10 @@ class Universe:
 
 
 def render(
-    template: Template, current: str, stages: list[Match]
+    template: Template,
+    current: str,
+    stages: list[Match],
+    anchors_in: AnchorMap | None = None,
 ) -> tuple[str, list[tuple[int, int]] | None, AnchorMap, frozenset[str]]:
     """Render a `Template` into `(full, spans, emitted, cleared)`. `full` is the whole
     render -- what **lands** in the document. `spans` are the `(start, end)` of each
@@ -95,11 +98,22 @@ def render(
     part of a match. A template with **no** moustaches has nothing to single out, so
     its whole render flows as one branch -- signalled by `spans` being None.
     `current` is `{{$}}`. `emitted` are the out-of-band marks a `{{@name}}` directive
-    drops (positions in `full`); `cleared` the names a `{{/name}}` directive removes.
+    drops **plus** the marks a passthrough moustache carries (below); `cleared` the
+    names a `{{/name}}` directive removes.
+
+    `anchors_in` are the out-of-band marks within `current` (its own `0..len` frame,
+    which is also the current stage's match-start frame). A moustache that is a bare
+    text **passthrough** -- `{{$}}` (the whole subject) or `{{$N}}` / `{{$N.M}}` (a
+    current-stage capture) -- re-emits source text verbatim, so its interior marks
+    ride along: they are placed into `emitted` at the moustache's output offset. That
+    is what lets a mark survive a capture-and-re-emit (a `{{$4}}` copy), so an
+    out-of-band anchor can delimit text that a splice moves around (see dedup.hmk). An
+    operator/filter/concat moustache transforms the text, so its marks do not apply.
 
     The literal/moustache split and the moustache expressions were both compiled
     up front (`compile_template_text`); this only *evaluates* each `Expr`
     against the pipeline stages — no lexing, no parsing."""
+    anchors_in = anchors_in or {}
     out: list[str] = []
     length = 0
     spans: list[tuple[int, int]] = []
@@ -110,18 +124,53 @@ def render(
             if part.clear:
                 cleared.add(part.name)
             else:
-                emitted[part.name] = (*emitted.get(part.name, ()), length)
+                place(emitted, {part.name: (0,)}, length)
         elif isinstance(part, Moustache):
             value = _eval(part.expr, current, stages).render()
             start = length
             out.append(value)
             length += len(value)
             spans.append((start, length))
+            carried = _passthrough_marks(part.expr, stages, anchors_in)
+            if carried:
+                place(emitted, carried, start)
         else:
             out.append(part)
             length += len(part)
     full = "".join(out)
     return full, (spans or None), emitted, frozenset(cleared)
+
+
+def _passthrough_marks(
+    expr: Expr, stages: list[Match], anchors_in: AnchorMap
+) -> AnchorMap | None:
+    """The out-of-band marks a **passthrough** moustache re-emits, in the value's own
+    `0..len` frame, or None if the moustache is not a verbatim text passthrough.
+
+    A passthrough copies source text unchanged, so its interior marks travel with it:
+    `{{$}}` (or `{{N$}}` for the current stage) carries the whole subject's marks;
+    `{{$N.M}}` a capture's interior marks (`[cs, ce)` of its span, rebased). A cross-
+    stage reference to an *earlier* stage is not a passthrough here -- that stage's
+    marks are not in `anchors_in` -- and anything computed (operator, filter, concat,
+    literal, count) is not verbatim, so both return None."""
+    if isinstance(expr, ExCurrent):
+        return dict(anchors_in)  # `{{$}}` — the whole current subject, marks and all
+    if not isinstance(expr, ExRef) or expr.is_count:
+        return None
+    if expr.stage is not None and expr.stage != len(stages) - 1:
+        return None  # an earlier stage's marks are not carried in this frame
+    if expr.path is None:
+        return dict(anchors_in)  # `{{$}}` / `{{N$}}` — the current stage's whole text
+    cap = stages[-1].capture_at(expr.path) if stages else None
+    if cap is None:
+        return None
+    cs, ce = cap.span
+    out: AnchorMap = {}
+    for name, positions in anchors_in.items():
+        local = tuple(p - cs for p in positions if cs <= p < ce)
+        if local:
+            out[name] = local
+    return out
 
 
 # ── Expression evaluation (the parser already built the `Expr`) ────────────────

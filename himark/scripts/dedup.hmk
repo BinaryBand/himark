@@ -32,8 +32,9 @@
 //   1. MASK    — shield commas *inside* `"…"` quoted fields (so step 2 splits on
 //                the real separator), restored at the end.
 //   2. FLATTEN — split each `yt,pod` row into a source-tagged `Y⇥…` / `P⇥…` line.
-//   3. KEY     — prepend `<normalized-key>¤` to each line (strip the `Episode NNN: `
-//                / `Listener Tales NNN: ` counter to form the key), so a Y and a P
+//   3. KEY     — prepend `<normalized-key>` + a `@keysep` mark to each line (strip
+//                the `Episode NNN: `/`Listener Tales NNN: ` counter to form the key),
+//                so a Y and a P
 //                for the same episode share a key. A Y keeps its original title
 //                after the tag; a P's key already *is* its title, so it stores no
 //                copy — the merge reads the P column straight from the shared key.
@@ -51,17 +52,26 @@
 //     HMK has no fast (or linear) sort to lean on; its only sort is the O(n²)
 //     bubble_sort.hmk.
 //   * One Y pairs with one P per key; extra copies fall through to CLEANUP.
-//  Two sentinels remain: ¤ (key separator) and ⸴ (masked comma), each assumed
-//  absent from the input. They stay *in-text* characters on purpose -- not the
-//  out-of-band named anchors of docs/TODO.md Step 4 -- because the MATCH merge below
-//  captures the text *between* a Y line and its P twin (the `{{@uni}}[..]` gap, `$4`)
-//  and re-emits it verbatim: a ¤ character rides along inside that captured text,
-//  but a zero-width mark, living beside the text, would be left behind and the
-//  intervening keyed lines would lose it. A delimiter that must survive a text
-//  capture-and-re-emit has to *be* text. (The old § "skip guard" was different -- a
-//  never-emitted stand-in for "any character" -- so `!{§}[..]` is now the honest
-//  heterogeneous wildcard `{{@uni}}[..]`, closing that one assumed-absent hole.)
+//  ANCHORS vs sentinels. The **key separator** is now an out-of-band named anchor
+//  (`@keysep`): a zero-width, non-rendering mark that cannot be spoofed by input. It
+//  survives the MATCH merge -- which captures the intervening keyed lines as `$4` and
+//  re-emits them -- because a captured span's marks now ride along when its text is
+//  re-emitted (docs/HMK.md "Named anchors"). One sentinel *remains*: ⸴ (masked
+//  comma). It cannot become a mark: the FLATTEN split must stop at the **first**
+//  top-level comma, which HMK expresses as a comma-**excluding run** (`!{\,,\n}[..]`)
+//  -- a run tests a character class, and a zero-width mark is not a character, so no
+//  mark can gate the run to skip only *inner* commas. MASK hides inner commas as ⸴ so
+//  the sole remaining comma is the separator; RESTORE brings them back at the end.
+//  Removing ⸴ would need structural quoted-field matching in FLATTEN, not an anchor.
+//  (The old § "skip guard" -- a never-emitted stand-in for "any character" -- is
+//  already gone: `!{§}[..]` is the honest heterogeneous wildcard `{{@uni}}[..]`.)
 // ============================================================================
+
+// The key separator is an out-of-band named anchor: a zero-width mark emitted by
+// `{{@keysep}}`, matched by `{@keysep}`, carried beside the text (never a byte in
+// it, so input cannot spoof it). It survives the MATCH merge because a captured
+// span's marks ride along when its text is re-emitted (`{{$4}}`), see docs/HMK.md.
+@keysep = anchor
 
 // ── HEADER ── drop the column-name row ───────────────────────────────────────
 {@line_start}{youtube_title\,podcast_title\n} => ""
@@ -74,21 +84,21 @@
 // A `,pod` row (no YouTube title) keeps just the feed title.
 {@line_start}{\,}!{\n}[1..]{\n} => "P\t{{$1}}\n"
 
-// ── KEY ── prepend `<normalized-key>¤`. A Y keeps its original title (counter and
-// all) after the tag; a P's key already *is* its title, so it stores no copy. ─────
-{@line_start}{Y\t}{Episode\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@line_start}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}¤Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
-{@line_start}{Y\t}!{\n}[1..]{\n} => "{{$1}}¤Y\t{{$1}}\n"
-{@line_start}{P\t}!{\n}[1..]{\n} => "{{$1}}¤P\t\n"
+// ── KEY ── prepend `<normalized-key>{@keysep}`. A Y keeps its original title
+// (counter and all) after the tag; a P's key already *is* its title, no copy. ─────
+{@line_start}{Y\t}{Episode\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}{{@keysep}}Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@line_start}{Y\t}{Listener\ Tales\ }{{@d}}[1..]{:\ }!{\n}[1..]{\n} => "{{$4}}{{@keysep}}Y\t{{$1}}{{$2}}{{$3}}{{$4}}\n"
+{@line_start}{Y\t}!{\n}[1..]{\n} => "{{$1}}{{@keysep}}Y\t{{$1}}\n"
+{@line_start}{P\t}!{\n}[1..]{\n} => "{{$1}}{{@keysep}}P\t\n"
 
 // ── MATCH ── merge any equal-key Y/P pair, anywhere in the file (fixed point,
 // both column orders). The unbounded `[..]` guarantees full recall.
-{@line_start}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n}{{@uni}}[..]{@line_start}{$0}{¤P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
-{@line_start}!{¤,\n}[1..]{¤P\t}{\n}{{@uni}}[..]{@line_start}{$0}{¤Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
+{@line_start}!{\n}[1..]{@keysep}{Y\t}!{\n}[1..]{\n}{{@uni}}[..]{@line_start}{$0}{@keysep}{P\t}{\n} <=> "{{$2}}\,{{$0}}\n{{$4}}"
+{@line_start}!{\n}[1..]{@keysep}{P\t}{\n}{{@uni}}[..]{@line_start}{$0}{@keysep}{Y\t}!{\n}[1..]{\n} <=> "{{$6}}\,{{$0}}\n{{$3}}"
 
 // ── CLEANUP ── each unmatched keyed line becomes a one-cell row ───────────────
-{@line_start}!{¤,\n}[1..]{¤Y\t}!{\n}[1..]{\n} => "{{$2}}\,\n"
-{@line_start}!{¤,\n}[1..]{¤P\t}{\n} => "\,{{$0}}\n"
+{@line_start}!{\n}[1..]{@keysep}{Y\t}!{\n}[1..]{\n} => "{{$2}}\,\n"
+{@line_start}!{\n}[1..]{@keysep}{P\t}{\n} => "\,{{$0}}\n"
 
 // ── RESTORE ── masked commas back inside their quoted fields ──────────────────
 {⸴} => "\,"

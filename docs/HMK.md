@@ -1,6 +1,6 @@
 # Himark Specification
 
-**Version:** 0.12.3 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
+**Version:** 0.13.0 | **Status:** Draft | **License:** CC0 1.0 Universal (Public Domain)
 
 <!-- cspell:words himark -->
 
@@ -106,7 +106,11 @@ A `@name = anchor` declaration introduces a **named anchor**: a zero-width, non-
 | `{{@name}}`  | template  | **emit** a `name` mark at this output position       |
 | `{{/name}}`  | template  | **clear** every `name` mark from the pass's output   |
 
-Marks are offset-remapped on every splice, so one a template emits survives -- correctly relocated -- into a later statement that matches or clears it; a mark strictly inside a replaced span is dropped. Because a `{@name}` match is zero-width, pair it with a width-ful construct (`{@name}!{\n}` = a marked line). One caveat: a mark does **not** ride along when its region is captured and re-emitted as text (`{{$0}}`), since the mark lives beside the text, not in it -- so a delimiter that must survive a text copy (like the sentinels in `scripts/dedup.hmk`) stays an in-text character, not a named anchor.
+Marks are offset-remapped on every splice, so one a template emits survives -- correctly relocated -- into a later statement that matches or clears it; a mark strictly inside a replaced span is dropped. Because a `{@name}` match is zero-width, pair it with a width-ful construct (`{@name}!{\n}` = a marked line).
+
+**A captured span's marks ride along when its text is re-emitted.** A passthrough moustache -- `{{$}}` (the whole subject) or `{{$N}}` / `{{$N.M}}` (a current-stage capture) -- copies source text verbatim, so the marks interior to that span are carried into the output at the emit position. This is what lets an anchor delimit text that a splice **relocates**: `scripts/dedup.hmk` marks each line's key/value boundary with a `@keysep` anchor, and the merge that captures the intervening keyed lines as `$4` and re-emits them keeps their marks, so those lines stay keyed. (An operator or filter moustache -- `{{ $0 + 1 }}`, `{{ $ | trim }}` -- transforms the text, so its marks do not apply.)
+
+What a mark still **cannot** do is gate a **run**. A run matches a character class (`!{\,,\n}[..]` = a run of non-comma, non-newline), and a zero-width mark is not a character, so no mark can make a run "skip only the marked positions." A delimiter that a run must stop on (dedup's masked comma) stays an in-text character.
 
 ---
 

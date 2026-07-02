@@ -105,7 +105,7 @@ def _transform(
     head, rest = steps[0], steps[1:]
 
     if isinstance(head, Template):
-        full, spans, emitted, cleared = _render(head, text, list(ancestors))
+        full, spans, emitted, cleared = _render(head, text, list(ancestors), anchors_in)
         if spans is None:  # no moustaches — the whole render flows on as one branch
             stage = Match(full, 0, len(full), [])
             sub = _transform(rest, full, (*ancestors, stage), True, emitted)

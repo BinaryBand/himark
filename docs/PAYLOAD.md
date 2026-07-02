@@ -108,6 +108,14 @@ line/doc anchor opcode: the four anchors are declared in `std.hmk` as lookaround
   empty, add a mark at each emit's output offset, remap every position on each splice
   (a mark strictly inside a replaced span is dropped), and clear a name on a `clear`
   directive. Because marks never enter the text, input can never forge one.
+  - **Marks ride along on a passthrough re-emit.** When a `reference` moustache (§7)
+    that is a verbatim text passthrough -- `{{$}}` / `{{N$}}` (the current stage's
+    whole text) or `{{$N.M}}` (a current-stage capture) -- lands its value, the
+    executor must copy the marks interior to that source span (`[cs, ce)`, rebased)
+    to the value's output offset. This is what lets a mark survive being captured and
+    re-spliced elsewhere (e.g. `dedup.hmk`'s `@keysep`). A moustache whose value is
+    **computed** (an operator, filter, or concat) is not a passthrough and carries no
+    marks.
 
 ## 7. Moustache expression (`Expr`)
 

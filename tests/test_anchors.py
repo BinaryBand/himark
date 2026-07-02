@@ -114,10 +114,39 @@ def test_mark_strictly_inside_a_replaced_span_is_destroyed():
     src = (
         "@g = anchor\n"
         '"a{{@g}}bc"\n'  # "abc", mark g at 1 (inside "abc")
-        '{abc} => "Z"\n'  # replace [0,3) with "Z" -> the interior mark is destroyed
+        '{abc} => "Z"\n'  # replace [0,3) with "Z" (no re-emit) -> the mark is destroyed
         '{@g}{@uni} => "[{{$0}}]"'
     )
     assert _run(src) == "Z"
+
+
+# ── Marks-through-capture: a re-emitted capture carries its interior marks ───────
+
+
+def test_mark_rides_along_when_captured_text_is_reemitted():
+    # A mark sits between "a" and "b"; a query captures the run and re-emits it after a
+    # prefix, so the marked text MOVES. The mark must ride with the re-emitted `{{$0}}`
+    # text (not stay at the old offset, and not vanish) -- this is what lets an
+    # out-of-band anchor delimit text a splice relocates (dedup.hmk's key separator).
+    src = (
+        "@g = anchor\n"
+        '"a{{@g}}b"\n'  # "ab", mark g at 1 (between a and b)
+        '{{@uni}}[1..] => "PRE{{$0}}"\n'  # -> "PREab"; $0="ab" re-emitted, g rides to 4
+        '{@g}{@uni} => "[{{$0}}]"'
+    )
+    assert _run(src) == "PREa[b]"
+
+
+def test_reemitted_capture_carries_an_interior_mark_between_two_copies():
+    # `{{$0}}` twice: the interior mark rides into BOTH copies, so a later query fires
+    # at each -- a mark is not consumed by being read, it is a property of the text.
+    src = (
+        "@g = anchor\n"
+        '"a{{@g}}b"\n'  # "ab", mark g at 1
+        '{{@uni}}[1..] => "{{$0}}{{$0}}"\n'  # -> "abab"; g rides into each copy (1 and 3)
+        '{@g}{@uni} => "[{{$0}}]"'
+    )
+    assert _run(src) == "a[b]a[b]"
 
 
 def test_mark_survives_a_fixed_point_loop():
